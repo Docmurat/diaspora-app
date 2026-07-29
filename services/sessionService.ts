@@ -1,4 +1,4 @@
-import { supabase } from '../lib/supabase';
+import { supabase } from "../lib/supabase";
 
 export async function signInUser(email: string, password: string) {
   const { data, error } = await supabase.auth.signInWithPassword({
@@ -37,14 +37,14 @@ export async function getCurrentProfile() {
   if (!user) return null;
 
   const { data, error } = await supabase
-    .from('users')
-    .select('*')
-    .eq('id', user.id)
-    .single();
+    .from("users")
+    .select("*")
+    .eq("id", user.id)
+    .maybeSingle();
 
   if (error) {
     throw new Error(error.message);
   }
 
-  return data;
+  return data ?? null;
 }
