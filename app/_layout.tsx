@@ -34,6 +34,7 @@ export default function RootLayout() {
           <Stack.Screen name="(tabs)" />
           <Stack.Screen name="chat" />
           <Stack.Screen name="notifications" />
+          <Stack.Screen name="settings" />
           <Stack.Screen name="user-profile" />
           <Stack.Screen name="edit-profile" />
           <Stack.Screen name="change-email" />

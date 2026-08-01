@@ -3,7 +3,7 @@ import {
   Philosopher_700Bold,
   useFonts,
 } from "@expo-google-fonts/philosopher";
-import { Feather } from "@expo/vector-icons";
+import { Ionicons } from "@expo/vector-icons";
 import * as Clipboard from "expo-clipboard";
 import { router, useFocusEffect } from "expo-router";
 import { StatusBar } from "expo-status-bar";
@@ -15,7 +15,6 @@ import {
   Linking,
   Modal,
   ScrollView,
-  Share,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -24,17 +23,42 @@ import {
 } from "react-native";
 
 import { Glass, Tekmet } from "../../components/mingi";
-import { createInvite, markInviteAsSent } from "../../services/inviteService";
+import {
+  getPendingComplaints,
+  getPendingUsers,
+} from "../../services/moderationService";
 import { DbUserProfile, getMyProfile } from "../../services/profileService";
-import { signOutUser } from "../../services/sessionService";
 import { getAgeFromBirthDate } from "../../store/user";
 
-const glassCardProps = {
-  radius: 18,
-  tintColor: "rgba(255,255,255,0.92)",
-  borderColor: "rgba(93,140,120,0.28)",
-  borderWidth: 0.75,
-} as const;
+type RowProps = {
+  icon: keyof typeof Ionicons.glyphMap;
+  label: string;
+  badge?: number;
+  onPress: () => void;
+  last?: boolean;
+};
+
+function SectionRow({ icon, label, badge, onPress, last }: RowProps) {
+  return (
+    <TouchableOpacity
+      activeOpacity={0.85}
+      onPress={onPress}
+      style={[styles.row, last && styles.rowLast]}
+    >
+      <Ionicons name={icon} size={20} color="#69B78D" style={styles.rowIcon} />
+
+      <Text style={styles.rowLabel}>{label}</Text>
+
+      {!!badge && badge > 0 && (
+        <View style={styles.rowBadge}>
+          <Text style={styles.rowBadgeText}>{badge > 99 ? "99+" : badge}</Text>
+        </View>
+      )}
+
+      <Ionicons name="chevron-forward" size={18} color="#A8BDB1" />
+    </TouchableOpacity>
+  );
+}
 
 export default function ProfileScreen() {
   const [fontsLoaded] = useFonts({
@@ -45,7 +69,7 @@ export default function ProfileScreen() {
   const [user, setUser] = useState<DbUserProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [avatarModalVisible, setAvatarModalVisible] = useState(false);
-  const [creatingInvite, setCreatingInvite] = useState(false);
+  const [moderationCount, setModerationCount] = useState(0);
 
   useFocusEffect(
     useCallback(() => {
@@ -54,6 +78,26 @@ export default function ProfileScreen() {
           setLoading(true);
           const profile = await getMyProfile();
           setUser(profile);
+
+          const isAdmin =
+            profile?.role === "owner" || profile?.role === "moderator";
+
+          if (isAdmin) {
+            try {
+              const [pendingUsers, pendingComplaints] = await Promise.all([
+                getPendingUsers(),
+                getPendingComplaints(),
+              ]);
+
+              setModerationCount(
+                (pendingUsers?.length || 0) + (pendingComplaints?.length || 0),
+              );
+            } catch (e) {
+              setModerationCount(0);
+            }
+          } else {
+            setModerationCount(0);
+          }
         } catch (e) {
           console.log("Ошибка загрузки профиля:", e);
           setUser(null);
@@ -68,7 +112,6 @@ export default function ProfileScreen() {
 
   const handleCopyText = async (label: string, value?: string | null) => {
     const text = value?.trim();
-
     if (!text) return;
 
     try {
@@ -86,9 +129,7 @@ export default function ProfileScreen() {
 
     try {
       const supported = await Linking.canOpenURL(url);
-      if (supported) {
-        await Linking.openURL(url);
-      }
+      if (supported) await Linking.openURL(url);
     } catch (e) {
       Alert.alert("Ошибка", "Не удалось открыть почту");
     }
@@ -98,56 +139,19 @@ export default function ProfileScreen() {
     if (!user?.telegram) return;
 
     const raw = user.telegram.trim().replace(/^@/, "");
-    const appUrl = `tg://resolve?domain=${raw}`;
-    const webUrl = `https://t.me/${raw}`;
 
     try {
+      const appUrl = `tg://resolve?domain=${raw}`;
       const canOpenApp = await Linking.canOpenURL(appUrl);
 
-      if (canOpenApp) {
-        await Linking.openURL(appUrl);
-      } else {
-        await Linking.openURL(webUrl);
-      }
+      await Linking.openURL(canOpenApp ? appUrl : `https://t.me/${raw}`);
     } catch (e) {
       Alert.alert("Ошибка", "Не удалось открыть Telegram");
     }
   };
 
-  const handleCreateInvite = async () => {
-    try {
-      setCreatingInvite(true);
-
-      const invite = await createInvite();
-
-      const result = await Share.share({
-        message: `Мой инвайт-код для «Минги-Тау»: ${invite.code}`,
-      });
-
-      if (result.action === Share.sharedAction) {
-        await markInviteAsSent(invite.id);
-      }
-    } catch (e) {
-      const message = e instanceof Error ? e.message : "Ошибка создания инвайта";
-      Alert.alert("Ошибка", message);
-    } finally {
-      setCreatingInvite(false);
-    }
-  };
-
-  const handleLogout = async () => {
-    try {
-      await signOutUser();
-      router.replace("/welcome");
-    } catch (e) {
-      Alert.alert("Ошибка", "Не удалось выйти");
-    }
-  };
-
   const renderTextWithLinks = (text?: string | null) => {
-    if (!text) {
-      return <Text style={styles.infoText}>—</Text>;
-    }
+    if (!text) return <Text style={styles.infoText}>—</Text>;
 
     const parts = text.split(
       /(\bhttps?:\/\/[^\s]+|\bwww\.[^\s]+|(?:^|\s)@[\w.]+|\b[\w.+-]+@[\w.-]+\.[A-Za-z]{2,}\b)/g,
@@ -159,7 +163,6 @@ export default function ProfileScreen() {
           if (!part) return null;
 
           const trimmed = part.trim();
-
           const isEmail = /^[\w.+-]+@[\w.-]+\.[A-Za-z]{2,}$/.test(trimmed);
           const isTelegram = /^@[\w.]+$/.test(trimmed);
           const isUrl = /^(https?:\/\/|www\.)/i.test(trimmed);
@@ -184,14 +187,10 @@ export default function ProfileScreen() {
                 style={styles.linkText}
                 onPress={async () => {
                   const appUrl = `tg://resolve?domain=${username}`;
-                  const webUrl = `https://t.me/${username}`;
                   const canOpenApp = await Linking.canOpenURL(appUrl);
-
-                  if (canOpenApp) {
-                    await Linking.openURL(appUrl);
-                  } else {
-                    await Linking.openURL(webUrl);
-                  }
+                  await Linking.openURL(
+                    canOpenApp ? appUrl : `https://t.me/${username}`,
+                  );
                 }}
               >
                 {part}
@@ -221,7 +220,7 @@ export default function ProfileScreen() {
   };
 
   if (!fontsLoaded) {
-    return <View style={styles.emptyBg} />;
+    return <View style={styles.screen} />;
   }
 
   if (loading) {
@@ -291,48 +290,20 @@ export default function ProfileScreen() {
             <Text style={styles.backLinkText}>← Назад</Text>
           </TouchableOpacity>
 
-          {!!roleBadgeText && (
-            <View style={styles.roleBadge}>
-              <Text style={styles.roleBadgeText}>{roleBadgeText}</Text>
-            </View>
-          )}
-
-          <View style={styles.avatarRow}>
-            <TouchableOpacity
-              style={[
-                styles.circleButton,
-                styles.inviteCircleButton,
-                creatingInvite && styles.disabled,
-              ]}
-              onPress={handleCreateInvite}
-              activeOpacity={0.8}
-              disabled={creatingInvite}
-            >
-              <Feather name="user-plus" size={22} color="#3F6B5B" />
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              activeOpacity={0.9}
-              onPress={() => setAvatarModalVisible(true)}
-            >
-              <Image
-                source={
-                  user.avatar_path
-                    ? { uri: user.avatar_path }
-                    : require("../../assets/default-avatar.png")
-                }
-                style={styles.avatar}
-              />
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={[styles.circleButton, styles.logoutCircleButton]}
-              onPress={handleLogout}
-              activeOpacity={0.8}
-            >
-              <Feather name="log-out" size={22} color="#C05B4D" />
-            </TouchableOpacity>
-          </View>
+          <TouchableOpacity
+            activeOpacity={0.9}
+            onPress={() => setAvatarModalVisible(true)}
+            style={styles.avatarWrap}
+          >
+            <Image
+              source={
+                user.avatar_path
+                  ? { uri: user.avatar_path }
+                  : require("../../assets/default-avatar.png")
+              }
+              style={styles.avatar}
+            />
+          </TouchableOpacity>
 
           <Text style={styles.name}>{fullName}</Text>
 
@@ -343,44 +314,11 @@ export default function ProfileScreen() {
 
           {!!age && <Text style={styles.age}>{age} лет</Text>}
 
-          <Tekmet style={styles.tekmet} />
-
-          <View style={styles.topButtonsRow}>
-            <TouchableOpacity
-              style={[styles.primaryShadow, styles.rowButton]}
-              onPress={() => router.push("/invites" as any)}
-              activeOpacity={0.85}
-            >
-              <Glass
-                radius={18}
-                tintColor="rgba(105,183,141,0.92)"
-                borderColor="rgba(255,255,255,0.85)"
-              >
-                <View style={styles.buttonInner}>
-                  <Text style={styles.primaryButtonText}>Инвайты</Text>
-                </View>
-              </Glass>
-            </TouchableOpacity>
-
-            {isAdmin && (
-              <TouchableOpacity
-                style={styles.rowButton}
-                onPress={() => router.push("/moderation")}
-                activeOpacity={0.85}
-              >
-                <Glass
-                  radius={18}
-                  tintColor="rgba(255,255,255,0.95)"
-                  borderColor="rgba(93,140,120,0.45)"
-                  borderWidth={0.75}
-                >
-                  <View style={styles.buttonInner}>
-                    <Text style={styles.secondaryButtonText}>Модерация</Text>
-                  </View>
-                </Glass>
-              </TouchableOpacity>
-            )}
-          </View>
+          {!!roleBadgeText && (
+            <View style={styles.roleBadge}>
+              <Text style={styles.roleBadgeText}>{roleBadgeText}</Text>
+            </View>
+          )}
 
           <TouchableOpacity
             onPress={() => router.push("/edit-profile")}
@@ -401,124 +339,148 @@ export default function ProfileScreen() {
             </Glass>
           </TouchableOpacity>
 
-          <Glass {...glassCardProps} style={styles.infoBlock}>
-            <TouchableOpacity
-              activeOpacity={0.9}
-              onLongPress={() =>
-                handleCopyText("Сфера деятельности", user.category)
-              }
-              delayLongPress={300}
-              style={styles.infoInner}
-            >
-              <Text style={styles.infoTitle}>СФЕРА ДЕЯТЕЛЬНОСТИ</Text>
-              <Text style={styles.infoText}>{user.category || "—"}</Text>
-            </TouchableOpacity>
-          </Glass>
+          <Tekmet style={styles.tekmet} />
 
-          <Glass {...glassCardProps} style={styles.infoBlock}>
-            <TouchableOpacity
-              activeOpacity={0.9}
-              onLongPress={() => handleCopyText("Профессия", user.profession)}
-              delayLongPress={300}
-              style={styles.infoInner}
-            >
-              <Text style={styles.infoTitle}>ПРОФЕССИЯ</Text>
-              <Text style={styles.infoText}>{user.profession || "—"}</Text>
-            </TouchableOpacity>
-          </Glass>
+          <View style={styles.sectionCard}>
+            <SectionRow
+              icon="mail-open-outline"
+              label="Мои инвайты"
+              onPress={() => router.push("/invites" as any)}
+            />
 
-          <Glass {...glassCardProps} style={styles.infoBlock}>
-            <TouchableOpacity
-              activeOpacity={0.9}
-              onLongPress={() =>
-                handleCopyText(
-                  "Локация",
-                  [user.city, user.country].filter(Boolean).join(", "),
-                )
-              }
-              delayLongPress={300}
-              style={styles.infoInner}
-            >
-              <Text style={styles.infoTitle}>ЛОКАЦИЯ</Text>
-              <Text style={styles.infoText}>
-                {[user.city, user.country].filter(Boolean).join(", ") || "—"}
-              </Text>
-            </TouchableOpacity>
-          </Glass>
+            {isAdmin && (
+              <SectionRow
+                icon="shield-checkmark-outline"
+                label="Модерация"
+                badge={moderationCount}
+                onPress={() => router.push("/moderation")}
+              />
+            )}
 
-          <Glass {...glassCardProps} style={styles.infoBlock}>
-            <TouchableOpacity
-              activeOpacity={0.9}
-              onLongPress={() => handleCopyText("Описание", user.bio)}
-              delayLongPress={300}
-              style={styles.infoInner}
-            >
-              <Text style={styles.infoTitle}>ЧЕМ МОГУ БЫТЬ ПОЛЕЗЕН</Text>
-              {renderTextWithLinks(user.bio)}
-            </TouchableOpacity>
-          </Glass>
+            <SectionRow
+              icon="settings-outline"
+              label="Настройки"
+              onPress={() => router.push("/settings" as any)}
+            />
+
+            <SectionRow
+              icon="document-text-outline"
+              label="Пользовательское соглашение"
+              onPress={() => router.push("/terms")}
+            />
+
+            <SectionRow
+              icon="lock-closed-outline"
+              label="Политика конфиденциальности"
+              onPress={() => router.push("/privacy")}
+              last
+            />
+          </View>
+
+          <Text style={styles.blockLabel}>МОИ ДАННЫЕ</Text>
+
+          <TouchableOpacity
+            activeOpacity={0.9}
+            onLongPress={() =>
+              handleCopyText("Сфера деятельности", user.category)
+            }
+            delayLongPress={300}
+            style={styles.infoBlock}
+          >
+            <Text style={styles.infoTitle}>СФЕРА ДЕЯТЕЛЬНОСТИ</Text>
+            <Text style={styles.infoText}>{user.category || "—"}</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            activeOpacity={0.9}
+            onLongPress={() => handleCopyText("Профессия", user.profession)}
+            delayLongPress={300}
+            style={styles.infoBlock}
+          >
+            <Text style={styles.infoTitle}>ПРОФЕССИЯ</Text>
+            <Text style={styles.infoText}>{user.profession || "—"}</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            activeOpacity={0.9}
+            onLongPress={() =>
+              handleCopyText(
+                "Локация",
+                [user.city, user.country].filter(Boolean).join(", "),
+              )
+            }
+            delayLongPress={300}
+            style={styles.infoBlock}
+          >
+            <Text style={styles.infoTitle}>ЛОКАЦИЯ</Text>
+            <Text style={styles.infoText}>
+              {[user.city, user.country].filter(Boolean).join(", ") || "—"}
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            activeOpacity={0.9}
+            onLongPress={() => handleCopyText("Описание", user.bio)}
+            delayLongPress={300}
+            style={styles.infoBlock}
+          >
+            <Text style={styles.infoTitle}>ЧЕМ МОГУ БЫТЬ ПОЛЕЗЕН</Text>
+            {renderTextWithLinks(user.bio)}
+          </TouchableOpacity>
 
           {!!user.email && (
-            <Glass {...glassCardProps} style={styles.infoBlock}>
-              <TouchableOpacity
-                activeOpacity={0.9}
-                onPress={handleOpenEmail}
-                onLongPress={() => handleCopyText("Почта", user.email)}
-                delayLongPress={300}
-                style={styles.infoInner}
-              >
-                <Text style={styles.infoTitle}>ПОЧТА</Text>
-                <Text style={styles.linkText}>{user.email}</Text>
-              </TouchableOpacity>
-            </Glass>
-          )}
-
-          <Glass {...glassCardProps} style={styles.infoBlock}>
             <TouchableOpacity
               activeOpacity={0.9}
-              onLongPress={() => handleCopyText("Телефон", user.phone)}
+              onPress={handleOpenEmail}
+              onLongPress={() => handleCopyText("Почта", user.email)}
               delayLongPress={300}
-              style={styles.infoInner}
+              style={styles.infoBlock}
             >
-              <Text style={styles.infoTitle}>ТЕЛЕФОН</Text>
-              <Text style={styles.infoText}>{user.phone || "—"}</Text>
-              <Text style={styles.infoHint}>
-                {user.phone_visible
-                  ? "Номер отображается в профиле."
-                  : "Номер скрыт от пользователей и доступен только администрации."}
-              </Text>
+              <Text style={styles.infoTitle}>ПОЧТА</Text>
+              <Text style={styles.linkText}>{user.email}</Text>
             </TouchableOpacity>
-          </Glass>
+          )}
+
+          <TouchableOpacity
+            activeOpacity={0.9}
+            onLongPress={() => handleCopyText("Телефон", user.phone)}
+            delayLongPress={300}
+            style={styles.infoBlock}
+          >
+            <Text style={styles.infoTitle}>ТЕЛЕФОН</Text>
+            <Text style={styles.infoText}>{user.phone || "—"}</Text>
+            <Text style={styles.infoHint}>
+              {user.phone_visible
+                ? "Номер отображается в профиле."
+                : "Номер скрыт от пользователей и доступен только администрации."}
+            </Text>
+          </TouchableOpacity>
 
           {!!user.telegram && (
-            <Glass {...glassCardProps} style={styles.infoBlock}>
-              <TouchableOpacity
-                activeOpacity={0.9}
-                onPress={handleTelegramOpen}
-                onLongPress={() => handleCopyText("Telegram", user.telegram)}
-                delayLongPress={300}
-                style={styles.infoInner}
-              >
-                <Text style={styles.infoTitle}>TELEGRAM</Text>
-                <Text style={styles.linkText}>{user.telegram}</Text>
-              </TouchableOpacity>
-            </Glass>
+            <TouchableOpacity
+              activeOpacity={0.9}
+              onPress={handleTelegramOpen}
+              onLongPress={() => handleCopyText("Telegram", user.telegram)}
+              delayLongPress={300}
+              style={styles.infoBlock}
+            >
+              <Text style={styles.infoTitle}>TELEGRAM</Text>
+              <Text style={styles.linkText}>{user.telegram}</Text>
+            </TouchableOpacity>
           )}
 
           {!!user.extra_info && (
-            <Glass {...glassCardProps} style={styles.infoBlock}>
-              <TouchableOpacity
-                activeOpacity={1}
-                onLongPress={() =>
-                  handleCopyText("Дополнительно", user.extra_info)
-                }
-                delayLongPress={300}
-                style={styles.infoInner}
-              >
-                <Text style={styles.infoTitle}>ДОПОЛНИТЕЛЬНО</Text>
-                {renderTextWithLinks(user.extra_info)}
-              </TouchableOpacity>
-            </Glass>
+            <TouchableOpacity
+              activeOpacity={1}
+              onLongPress={() =>
+                handleCopyText("Дополнительно", user.extra_info)
+              }
+              delayLongPress={300}
+              style={styles.infoBlock}
+            >
+              <Text style={styles.infoTitle}>ДОПОЛНИТЕЛЬНО</Text>
+              {renderTextWithLinks(user.extra_info)}
+            </TouchableOpacity>
           )}
         </ScrollView>
       </View>
@@ -550,11 +512,6 @@ export default function ProfileScreen() {
 }
 
 const styles = StyleSheet.create({
-  emptyBg: {
-    flex: 1,
-    backgroundColor: "#FFFFFF",
-  },
-
   screen: {
     flex: 1,
     backgroundColor: "#FFFFFF",
@@ -608,56 +565,14 @@ const styles = StyleSheet.create({
     color: "#96AC9E",
   },
 
-  roleBadge: {
+  avatarWrap: {
     alignSelf: "center",
-    backgroundColor: "rgba(105,183,141,0.12)",
-    borderWidth: 1,
-    borderColor: "rgba(105,183,141,0.55)",
-    paddingHorizontal: 14,
-    paddingVertical: 3,
-    borderRadius: 999,
-    marginBottom: 14,
-  },
-
-  roleBadgeText: {
-    color: "#3F6B5B",
-    fontSize: 11.5,
-    fontWeight: "600",
-    letterSpacing: 1.4,
-  },
-
-  avatarRow: {
-    width: "100%",
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: 8,
-    marginBottom: 16,
-  },
-
-  circleButton: {
-    width: 54,
-    height: 54,
-    borderRadius: 27,
-    alignItems: "center",
-    justifyContent: "center",
-    borderWidth: 1,
-  },
-
-  inviteCircleButton: {
-    backgroundColor: "rgba(105,183,141,0.12)",
-    borderColor: "rgba(105,183,141,0.55)",
-  },
-
-  logoutCircleButton: {
-    backgroundColor: "rgba(192,91,77,0.08)",
-    borderColor: "rgba(192,91,77,0.45)",
   },
 
   avatar: {
-    width: 136,
-    height: 136,
-    borderRadius: 68,
+    width: 128,
+    height: 128,
+    borderRadius: 64,
     backgroundColor: "#EAF4EE",
     borderWidth: 1,
     borderColor: "rgba(93,140,120,0.28)",
@@ -668,6 +583,7 @@ const styles = StyleSheet.create({
     fontSize: 26,
     color: "#3F6B5B",
     textAlign: "center",
+    marginTop: 14,
   },
 
   subInfo: {
@@ -685,33 +601,26 @@ const styles = StyleSheet.create({
     textAlign: "center",
   },
 
-  tekmet: {
+  roleBadge: {
     alignSelf: "center",
-    marginTop: 14,
-    marginBottom: 18,
+    backgroundColor: "rgba(105,183,141,0.12)",
+    borderWidth: 1,
+    borderColor: "rgba(105,183,141,0.55)",
+    paddingHorizontal: 14,
+    paddingVertical: 3,
+    borderRadius: 999,
+    marginTop: 10,
   },
 
-  topButtonsRow: {
-    flexDirection: "row",
-    gap: 10,
-    marginBottom: 10,
-  },
-
-  rowButton: {
-    flex: 1,
+  roleBadgeText: {
+    color: "#3F6B5B",
+    fontSize: 11.5,
+    fontWeight: "600",
+    letterSpacing: 1.4,
   },
 
   editButton: {
-    marginBottom: 20,
-  },
-
-  primaryShadow: {
-    borderRadius: 18,
-    shadowColor: "#69B78D",
-    shadowOpacity: 0.45,
-    shadowRadius: 14,
-    shadowOffset: { width: 0, height: 8 },
-    elevation: 6,
+    marginTop: 16,
   },
 
   buttonInner: {
@@ -722,24 +631,98 @@ const styles = StyleSheet.create({
     minHeight: 50,
   },
 
-  primaryButtonText: {
-    color: "#FFFFFF",
-    fontSize: 15.5,
-    fontWeight: "600",
-  },
-
   secondaryButtonText: {
     color: "#3F6B5B",
     fontSize: 15.5,
     fontWeight: "600",
   },
 
-  infoBlock: {
-    marginBottom: 10,
+  primaryShadow: {
+    marginTop: 20,
+    borderRadius: 18,
+    shadowColor: "#69B78D",
+    shadowOpacity: 0.45,
+    shadowRadius: 14,
+    shadowOffset: { width: 0, height: 8 },
+    elevation: 6,
   },
 
-  infoInner: {
+  primaryButtonText: {
+    color: "#FFFFFF",
+    fontSize: 15.5,
+    fontWeight: "600",
+  },
+
+  tekmet: {
+    alignSelf: "center",
+    marginTop: 20,
+    marginBottom: 18,
+  },
+
+  sectionCard: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: 18,
+    borderWidth: 0.75,
+    borderColor: "rgba(93,140,120,0.28)",
+    overflow: "hidden",
+    marginBottom: 26,
+  },
+
+  row: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 16,
+    paddingVertical: 15,
+    borderBottomWidth: 0.75,
+    borderBottomColor: "rgba(93,140,120,0.18)",
+  },
+
+  rowLast: {
+    borderBottomWidth: 0,
+  },
+
+  rowIcon: {
+    marginRight: 12,
+  },
+
+  rowLabel: {
+    flex: 1,
+    fontSize: 15,
+    color: "#2F4A3C",
+  },
+
+  rowBadge: {
+    minWidth: 22,
+    height: 22,
+    borderRadius: 11,
+    paddingHorizontal: 6,
+    marginRight: 8,
+    backgroundColor: "#C05B4D",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  rowBadgeText: {
+    color: "#FFFFFF",
+    fontSize: 12,
+    fontWeight: "600",
+  },
+
+  blockLabel: {
+    fontSize: 11,
+    fontWeight: "600",
+    letterSpacing: 1.6,
+    color: "#719686",
+    marginBottom: 12,
+  },
+
+  infoBlock: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: 18,
+    borderWidth: 0.75,
+    borderColor: "rgba(93,140,120,0.28)",
     padding: 16,
+    marginBottom: 10,
   },
 
   infoTitle: {
@@ -768,10 +751,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     lineHeight: 17,
     color: "#8FA79A",
-  },
-
-  disabled: {
-    opacity: 0.7,
   },
 
   modalOverlay: {
