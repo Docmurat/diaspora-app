@@ -1,11 +1,11 @@
-import { View, Image, StyleSheet } from 'react-native';
-import { useEffect } from 'react';
-import { router } from 'expo-router';
+import { router } from "expo-router";
+import { useEffect } from "react";
+import { Image, StyleSheet, View } from "react-native";
 
 export default function SplashScreen() {
   useEffect(() => {
     const timer = setTimeout(() => {
-      router.replace('/(tabs)');
+      router.replace("/(tabs)");
     }, 2000);
 
     return () => clearTimeout(timer);
@@ -13,10 +13,7 @@ export default function SplashScreen() {
 
   return (
     <View style={styles.container}>
-      <Image
-        source={require('../assets/logo2.png')}
-        style={styles.logo}
-      />
+      <Image source={require("../assets/Logo-start.png")} style={styles.logo} />
     </View>
   );
 }
@@ -24,13 +21,13 @@ export default function SplashScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#fff',
-    justifyContent: 'center',
-    alignItems: 'center',
+    backgroundColor: "#fff",
+    justifyContent: "center",
+    alignItems: "center",
   },
   logo: {
     width: 250,
     height: 270,
-    resizeMode: 'contain',
+    resizeMode: "contain",
   },
 });

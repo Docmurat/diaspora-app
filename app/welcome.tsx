@@ -24,7 +24,7 @@ import Svg, {
   Defs,
   Path,
   RadialGradient,
-  Stop
+  Stop,
 } from "react-native-svg";
 
 function useDrift(duration: number, delay = 0) {
@@ -232,7 +232,7 @@ export default function WelcomeScreen() {
 
       <View style={styles.content}>
         <Image
-          source={require("../assets/logo-mingi.png")}
+          source={require("../assets/Logo-start.png")}
           style={{
             width: logoWidth,
             height: logoHeight,
