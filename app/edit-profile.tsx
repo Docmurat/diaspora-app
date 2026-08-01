@@ -9,6 +9,7 @@ import { StatusBar } from "expo-status-bar";
 import { useCallback, useMemo, useState } from "react";
 import {
   ActivityIndicator,
+  Alert,
   Image,
   KeyboardAvoidingView,
   Platform,
@@ -104,10 +105,12 @@ export default function EditProfileScreen() {
     height: number;
   } | null>(null);
 
-  const canEditNameDirectly =
-    user?.role === "moderator" ||
-    user?.role === "owner" ||
+  // Анкета возвращена модератором на доработку
+  const needsRevision =
     (user as any)?.moderation_status === "needs_revision";
+
+  const canEditNameDirectly =
+    user?.role === "moderator" || user?.role === "owner" || needsRevision;
 
   const loadProfile = useCallback(async () => {
     try {
@@ -294,6 +297,18 @@ export default function EditProfileScreen() {
 
       if (updateError) {
         throw new Error(updateError.message);
+      }
+
+      if (needsRevision) {
+        // Возвращаем на экран ожидания: там человек допишет сопроводительное
+        // письмо (по желанию) и сам отправит анкету повторно.
+        Alert.alert(
+          "Изменения сохранены",
+          "Теперь отправьте анкету повторно — при желании добавьте сообщение модератору.",
+        );
+
+        router.replace("/pending-approval");
+        return;
       }
 
       router.back();

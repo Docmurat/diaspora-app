@@ -3,10 +3,11 @@
 
 import { Ionicons } from "@expo/vector-icons";
 import { router, useFocusEffect } from "expo-router";
-import { ReactNode, useCallback, useState } from "react";
+import { ReactNode, useCallback, useEffect, useState } from "react";
 import { Image, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import { supabase } from "../lib/supabase";
 import { getUnreadCount } from "../services/notificationService";
 import { getMyProfile } from "../services/profileService";
 
@@ -48,6 +49,53 @@ export default function TopBar({
       };
     }, []),
   );
+
+  // Живой счётчик: база сама сообщает о новых уведомлениях,
+  // страницу обновлять не нужно.
+  useEffect(() => {
+    let alive = true;
+    let channel: ReturnType<typeof supabase.channel> | null = null;
+
+    const refresh = async () => {
+      try {
+        const count = await getUnreadCount();
+        if (alive) setUnreadCount(count);
+      } catch (e) {
+        // тихо: счётчик не критичен
+      }
+    };
+
+    const subscribe = async () => {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+
+      if (!user || !alive) return;
+
+      channel = supabase
+        .channel(`notifications-badge-${user.id}`)
+        .on(
+          "postgres_changes",
+          {
+            event: "*",
+            schema: "public",
+            table: "notifications",
+            filter: `user_id=eq.${user.id}`,
+          },
+          () => {
+            refresh();
+          },
+        )
+        .subscribe();
+    };
+
+    subscribe();
+
+    return () => {
+      alive = false;
+      if (channel) supabase.removeChannel(channel);
+    };
+  }, []);
 
   return (
     <View

@@ -73,6 +73,7 @@ export async function approveUser(userId: string) {
     .update({
       moderation_status: "approved",
       moderation_completed_by_name: moderatorName,
+      moderation_completed_by: me.id,
       moderation_completed_at: completedAt,
       moderation_note: "Заявка одобрена.",
       moderation_assigned_to: null,
@@ -138,6 +139,7 @@ export async function rejectUser(
     .update({
       moderation_status: status,
       moderation_completed_by_name: mode === "reject" ? moderatorName : null,
+      moderation_completed_by: mode === "reject" ? me.id : null,
       moderation_completed_at: mode === "reject" ? now : null,
       moderation_note: message,
       moderation_assigned_to: mode === "revision" ? me.id : null,
@@ -473,6 +475,8 @@ export async function takeUserModeration(userId: string) {
         moderation_taken_at: now,
         moderation_completed_at: null,
         moderation_completed_by_name: null,
+      moderation_completed_by: null,
+        moderation_completed_by: null,
         updated_at: now,
       })
       .eq("id", userId);
@@ -489,6 +493,7 @@ export async function takeUserModeration(userId: string) {
       moderation_taken_at: now,
       moderation_completed_at: null,
       moderation_completed_by_name: null,
+      moderation_completed_by: null,
       updated_at: now,
     })
     .eq("id", userId)
@@ -579,4 +584,77 @@ export async function takeComplaint(complaintId: string) {
   if (!data) {
     throw new Error("Жалоба уже взята другим модератором");
   }
+}
+
+/**
+ * Сколько задач ждёт этого модератора: все свободные заявки из очереди
+ * «Новое» плюс его собственные — в работе и на доработке.
+ * Завершённые не считаются. Используется для счётчика в профиле.
+ */
+export async function getModerationTaskCount(): Promise<number> {
+  const me = await getMyProfile();
+
+  if (!me || (me.role !== "owner" && me.role !== "moderator")) return 0;
+
+  const countOf = async (
+    table: string,
+    build: (query: any) => any,
+  ): Promise<number> => {
+    try {
+      const { count, error } = await build(
+        supabase.from(table).select("id", { count: "exact", head: true }),
+      );
+
+      if (error) return 0;
+      return count || 0;
+    } catch (e) {
+      return 0;
+    }
+  };
+
+  const results = await Promise.all([
+    // Новое: никем не взятые
+    countOf("users", (q: any) =>
+      q
+        .eq("moderation_status", "pending")
+        .eq("is_deleted", false)
+        .is("moderation_assigned_to", null),
+    ),
+    countOf("invite_requests", (q: any) =>
+      q.eq("status", "new").is("assigned_to", null),
+    ),
+    countOf("name_change_requests", (q: any) =>
+      q.eq("status", "pending").is("assigned_to", null),
+    ),
+    countOf("complaints", (q: any) =>
+      q.eq("status", "pending").is("assigned_to", null),
+    ),
+
+    // Мои: в работе
+    countOf("users", (q: any) =>
+      q
+        .eq("moderation_status", "pending")
+        .eq("is_deleted", false)
+        .eq("moderation_assigned_to", me.id),
+    ),
+    countOf("invite_requests", (q: any) =>
+      q.eq("status", "new").eq("assigned_to", me.id),
+    ),
+    countOf("name_change_requests", (q: any) =>
+      q.eq("status", "pending").eq("assigned_to", me.id),
+    ),
+    countOf("complaints", (q: any) =>
+      q.eq("status", "pending").eq("assigned_to", me.id),
+    ),
+
+    // Мои: на доработке
+    countOf("users", (q: any) =>
+      q
+        .eq("moderation_status", "needs_revision")
+        .eq("is_deleted", false)
+        .eq("moderation_assigned_to", me.id),
+    ),
+  ]);
+
+  return results.reduce((sum, value) => sum + value, 0);
 }

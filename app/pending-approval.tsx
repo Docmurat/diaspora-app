@@ -20,9 +20,6 @@ import { supabase } from "../lib/supabase";
 import { getMyProfile } from "../services/profileService";
 import { signOutUser } from "../services/sessionService";
 
-const RESUBMIT_DEFAULT_MESSAGE =
-  "Я исправил(а) анкету и отправляю её на повторное рассмотрение.";
-
 const glassCardProps = {
   radius: 18,
   tintColor: "rgba(255,255,255,0.55)",
@@ -47,13 +44,11 @@ export default function PendingApprovalScreen() {
   const [loading, setLoading] = useState(true);
   const [profile, setProfile] = useState<any>(null);
   const [sendingAgain, setSendingAgain] = useState(false);
-  const [resubmitMessage, setResubmitMessage] = useState(
-    RESUBMIT_DEFAULT_MESSAGE,
-  );
+  const [resubmitMessage, setResubmitMessage] = useState("");
 
-  const loadData = useCallback(async () => {
+  const loadData = useCallback(async (silent = false) => {
     try {
-      setLoading(true);
+      if (!silent) setLoading(true);
 
       const myProfile = await getMyProfile();
       setProfile(myProfile);
@@ -83,6 +78,62 @@ export default function PendingApprovalScreen() {
     }
   }, []);
 
+  // Живое обновление: решение модератора и его сообщения прилетают сами
+  useEffect(() => {
+    let alive = true;
+    let channel: ReturnType<typeof supabase.channel> | null = null;
+
+    const subscribe = async () => {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+
+      if (!user || !alive) return;
+
+      channel = supabase
+        .channel(`pending-approval-${user.id}`)
+        .on(
+          "postgres_changes",
+          {
+            event: "UPDATE",
+            schema: "public",
+            table: "users",
+            filter: `id=eq.${user.id}`,
+          },
+          (payload) => {
+            const fresh = payload.new as any;
+
+            if (fresh?.moderation_status === "approved") {
+              router.replace("/splash");
+              return;
+            }
+
+            loadData(true);
+          },
+        )
+        .on(
+          "postgres_changes",
+          {
+            event: "INSERT",
+            schema: "public",
+            table: "moderation_messages",
+            filter: `request_id=eq.${user.id}`,
+          },
+          () => {
+            loadData(true);
+          },
+        )
+        .subscribe();
+    };
+
+    subscribe();
+
+    return () => {
+      alive = false;
+      if (channel) supabase.removeChannel(channel);
+    };
+  }, [loadData]);
+
   useFocusEffect(
     useCallback(() => {
       loadData();
@@ -108,7 +159,7 @@ export default function PendingApprovalScreen() {
         }
 
         if (fresh.moderation_status !== statusRef.current) {
-          await loadData();
+          await loadData(true);
         }
       } catch (e) {
         console.log("Ошибка автопроверки статуса:", e);
@@ -146,17 +197,16 @@ export default function PendingApprovalScreen() {
       return;
     }
 
-    if (!resubmitMessage.trim()) {
-      Alert.alert("Ошибка", "Введите сообщение для модератора");
-      return;
-    }
-
     try {
       setSendingAgain(true);
 
       const { error: updateError } = await supabase
         .from("users")
         .update({
+          // Статус НЕ меняем: заявка остаётся в очереди «На доработке»
+          // и закреплённой за своим модератором. Признак ниже говорит
+          // модератору, что человек прислал исправления, — на нём же
+          // висит уведомление.
           moderation_status: "needs_revision",
           moderator_has_unread_changes: true,
           updated_at: new Date().toISOString(),
@@ -167,23 +217,27 @@ export default function PendingApprovalScreen() {
         throw new Error(updateError.message);
       }
 
-      const { error: messageError } = await supabase
-        .from("moderation_messages")
-        .insert({
-          request_type: "invite_request",
-          request_id: profile.id, // ВАЖНОЕ 1
-          author_user_id: profile.id,
-          author_role: "user",
-          message: resubmitMessage.trim(),
-          read_by_user: true,
-          read_by_moderator: false,
-        });
+      const covering = resubmitMessage.trim();
 
-      if (messageError) {
-        throw new Error(messageError.message);
+      if (covering) {
+        const { error: messageError } = await supabase
+          .from("moderation_messages")
+          .insert({
+            request_type: "invite_request",
+            request_id: profile.id, // ВАЖНОЕ 1
+            author_user_id: profile.id,
+            author_role: "user",
+            message: covering,
+            read_by_user: true,
+            read_by_moderator: false,
+          });
+
+        if (messageError) {
+          throw new Error(messageError.message);
+        }
       }
 
-      setResubmitMessage(RESUBMIT_DEFAULT_MESSAGE);
+      setResubmitMessage("");
       await loadData();
 
       Alert.alert(
@@ -275,14 +329,16 @@ export default function PendingApprovalScreen() {
               </Glass>
             </TouchableOpacity>
 
-            <Text style={styles.inputLabel}>Сообщение модератору</Text>
+            <Text style={styles.inputLabel}>
+              Сообщение модератору (необязательно)
+            </Text>
 
             <Glass {...glassInputProps} style={styles.inputWrap}>
               <TextInput
                 style={styles.textArea}
                 value={resubmitMessage}
                 onChangeText={setResubmitMessage}
-                placeholder="Введите сообщение"
+                placeholder="Например: исправил город и профессию"
                 placeholderTextColor="#8FA79A"
                 multiline
                 textAlignVertical="top"

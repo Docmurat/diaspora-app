@@ -1,5 +1,10 @@
-import { router, useFocusEffect } from "expo-router";
-import { useCallback, useMemo, useState } from "react";
+import {
+  Philosopher_400Regular,
+  Philosopher_700Bold,
+  useFonts,
+} from "@expo-google-fonts/philosopher";
+import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -11,7 +16,9 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import { Tekmet } from "../components/mingi";
 import { supabase } from "../lib/supabase";
+import { subscribeToChanges } from "../services/liveService";
 import {
   approveNameChangeRequest,
   approveUser,
@@ -66,6 +73,17 @@ type UnifiedItem = {
 };
 
 export default function ModerationScreen() {
+  const [fontsLoaded] = useFonts({
+    Philosopher_400Regular,
+    Philosopher_700Bold,
+  });
+
+  // Уведомление приводит сюда сразу к нужной очереди и карточке:
+  // /moderation?tab=needs_revision&focus=<id>
+  const params = useLocalSearchParams();
+  const focusId = String(params.focus || "");
+  const focusTab = String(params.tab || "");
+
   const [activeTab, setActiveTab] = useState<QueueTab>("new");
   const [ownershipFilter, setOwnershipFilter] =
     useState<OwnershipFilter>("all");
@@ -92,9 +110,76 @@ export default function ModerationScreen() {
   >({});
   const [loading, setLoading] = useState(true);
 
+  // Рубильник уведомлений модерации: «выходной» — заявки продолжают
+  // копиться в этом меню, но уведомления и пуши не приходят.
+  const [noticesEnabled, setNoticesEnabled] = useState(true);
+  const [savingNotices, setSavingNotices] = useState(false);
+
   const [actionModal, setActionModal] = useState<ModerationAction>(null);
   const [actionComment, setActionComment] = useState("");
   const [submittingAction, setSubmittingAction] = useState(false);
+
+  // Экран обновляется сам, как только что-то меняется в базе
+  useEffect(() => {
+    return subscribeToChanges(
+      "moderation-screen",
+      [
+        { table: "users" },
+        { table: "invite_requests" },
+        { table: "name_change_requests" },
+        { table: "complaints" },
+        { table: "moderation_messages" },
+      ],
+      () => {
+        loadData(true);
+      },
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    const allowed: QueueTab[] = [
+      "new",
+      "in_progress",
+      "needs_revision",
+      "done",
+    ];
+
+    if (allowed.includes(focusTab as QueueTab)) {
+      setActiveTab(focusTab as QueueTab);
+    }
+
+    if (focusId) {
+      // В ссылке может прийти как id участника, так и полный ключ карточки
+      setExpandedCards((prev) => ({
+        ...prev,
+        [focusId]: true,
+        [`registration-${focusId}`]: true,
+      }));
+    }
+  }, [focusId, focusTab]);
+
+  const toggleNotices = async () => {
+    if (!me?.id || savingNotices) return;
+
+    const next = !noticesEnabled;
+    setNoticesEnabled(next);
+    setSavingNotices(true);
+
+    try {
+      const { error } = await supabase
+        .from("users")
+        .update({ moderation_notifications_enabled: next })
+        .eq("id", me.id);
+
+      if (error) throw new Error(error.message);
+    } catch (e) {
+      setNoticesEnabled(!next);
+      Alert.alert("Ошибка", "Не удалось сохранить настройку уведомлений");
+    } finally {
+      setSavingNotices(false);
+    }
+  };
 
   const toggleCard = (cardId: string) => {
     setExpandedCards((prev) => ({
@@ -242,9 +327,9 @@ export default function ModerationScreen() {
     }
   };
 
-  const loadData = async () => {
+  const loadData = async (silent = false) => {
     try {
-      setLoading(true);
+      if (!silent) setLoading(true);
 
       const [
         profile,
@@ -271,6 +356,9 @@ export default function ModerationScreen() {
       ]);
 
       setMe(profile);
+      setNoticesEnabled(
+        (profile as any)?.moderation_notifications_enabled !== false,
+      );
       setPendingUsers(users);
       setInviteRequests(inviteReqs);
       setNameRequests(requests);
@@ -875,7 +963,7 @@ export default function ModerationScreen() {
     );
   };
 
-  const unifiedItems = useMemo<UnifiedItem[]>(() => {
+  const allItems = useMemo<UnifiedItem[]>(() => {
     const items: UnifiedItem[] = [];
 
     pendingUsers.forEach((user) => {
@@ -983,6 +1071,7 @@ export default function ModerationScreen() {
           statusLabel:
             user.moderation_status === "approved" ? "Одобрено" : "Отклонено",
           moderatorName: user.moderation_completed_by_name || undefined,
+          completedById: user.moderation_completed_by || undefined,
           createdAt: user.created_at,
           startedAt: user.moderation_taken_at,
           completedAt: user.moderation_completed_at,
@@ -1006,6 +1095,7 @@ export default function ModerationScreen() {
           subtitle: request.review_note || undefined,
           statusLabel: request.status === "approved" ? "Одобрено" : "Отклонено",
           moderatorName: request.completed_by_name || undefined,
+          completedById: request.reviewed_by_user_id || undefined,
           createdAt: request.created_at,
           startedAt: request.taken_at,
           completedAt: request.final_decision_at,
@@ -1033,6 +1123,7 @@ export default function ModerationScreen() {
             `→ ${request.requested_first_name} ${request.requested_last_name}`,
           statusLabel: request.status === "approved" ? "Одобрено" : "Отклонено",
           moderatorName: request.completed_by_name || undefined,
+          completedById: request.reviewed_by || undefined,
           createdAt: request.created_at,
           startedAt: request.taken_at,
           completedAt: request.reviewed_at,
@@ -1059,6 +1150,7 @@ export default function ModerationScreen() {
           statusLabel:
             complaint.status === "resolved" ? "Принято" : "Отклонено",
           moderatorName: complaint.completed_by_name || undefined,
+          completedById: complaint.reviewed_by || undefined,
           createdAt: complaint.created_at,
           startedAt: complaint.taken_at,
           completedAt: complaint.reviewed_at,
@@ -1066,33 +1158,8 @@ export default function ModerationScreen() {
       });
     });
 
-    return items
-      .filter((item) => item.queue === activeTab)
-      .filter((item) => {
-        const shouldApplyOwnershipFilter =
-          activeTab === "in_progress" || activeTab === "needs_revision";
-
-        if (!shouldApplyOwnershipFilter) return true;
-        if (ownershipFilter === "all") return true;
-
-        return item.assignedTo === me?.id;
-      })
-      .sort((a, b) => {
-        const priorityDiff =
-          getTaskPriorityScore(a.assignedName, a.takenAt, a.createdAt) -
-          getTaskPriorityScore(b.assignedName, b.takenAt, b.createdAt);
-
-        if (priorityDiff !== 0) return priorityDiff;
-
-        // Новые заявки сверху: более свежая дата — первой
-        return (
-          new Date(b.createdAt || 0).getTime() -
-          new Date(a.createdAt || 0).getTime()
-        );
-      });
+    return items;
   }, [
-    activeTab,
-    ownershipFilter,
     me?.id,
     pendingUsers,
     inviteRequests,
@@ -1105,33 +1172,79 @@ export default function ModerationScreen() {
     completedComplaints,
   ]);
 
-  const centeredCount = useMemo(() => {
-    return (
-      pendingUsers.length +
-      inviteRequests.length +
-      nameRequests.length +
-      complaints.length +
-      blockedUsers.length
-    );
-  }, [
-    pendingUsers.length,
-    inviteRequests.length,
-    nameRequests.length,
-    complaints.length,
-    blockedUsers.length,
-  ]);
-  const myTasksCount = useMemo(() => {
-    const myId = me?.id;
-    if (!myId) return 0;
+  // Кому что видно: основатель видит все заявки и может переключаться
+  // «Мои / Все». Остальные модераторы видят в очередях «В работе»,
+  // «На доработке» и «Завершено» только свои заявки, а во «Новом» — все.
+  const canSwitchOwnership = isOwner;
 
-    return (
-      pendingUsers.filter((item) => item.moderation_assigned_to === myId)
-        .length +
-      inviteRequests.filter((item) => item.assigned_to === myId).length +
-      nameRequests.filter((item) => item.assigned_to === myId).length +
-      complaints.filter((item) => item.assigned_to === myId).length
-    );
-  }, [me?.id, pendingUsers, inviteRequests, nameRequests, complaints]);
+  const belongsToMe = useCallback(
+    (item: UnifiedItem) => {
+      if (item.queue === "done") {
+        // Надёжный путь — по идентификатору модератора.
+        if (item.raw?.completedById) {
+          return item.raw.completedById === me?.id;
+        }
+
+        // Записи, закрытые до появления этого поля: сверяем по имени.
+        return (
+          !!myDisplayName &&
+          !!item.raw?.moderatorName &&
+          String(item.raw.moderatorName).trim() === myDisplayName
+        );
+      }
+
+      return !!me?.id && item.assignedTo === me.id;
+    },
+    [me?.id, myDisplayName],
+  );
+
+  const passesOwnership = useCallback(
+    (item: UnifiedItem, queue: QueueTab) => {
+      if (queue === "new") return true;
+
+      if (!canSwitchOwnership) return belongsToMe(item);
+      if (ownershipFilter === "all") return true;
+
+      return belongsToMe(item);
+    },
+    [canSwitchOwnership, ownershipFilter, belongsToMe],
+  );
+
+  const queueCounts = useMemo(() => {
+    const counts: Record<QueueTab, number> = {
+      new: 0,
+      in_progress: 0,
+      needs_revision: 0,
+      done: 0,
+    };
+
+    allItems.forEach((item) => {
+      if (passesOwnership(item, item.queue)) {
+        counts[item.queue] += 1;
+      }
+    });
+
+    return counts;
+  }, [allItems, passesOwnership]);
+
+  const unifiedItems = useMemo<UnifiedItem[]>(() => {
+    return allItems
+      .filter((item) => item.queue === activeTab)
+      .filter((item) => passesOwnership(item, activeTab))
+      .sort((a, b) => {
+        const priorityDiff =
+          getTaskPriorityScore(a.assignedName, a.takenAt, a.createdAt) -
+          getTaskPriorityScore(b.assignedName, b.takenAt, b.createdAt);
+
+        if (priorityDiff !== 0) return priorityDiff;
+
+        return (
+          new Date(b.createdAt || 0).getTime() -
+          new Date(a.createdAt || 0).getTime()
+        );
+      });
+  }, [allItems, activeTab, passesOwnership]);
+
   const renderUnifiedCard = (item: UnifiedItem) => {
     if (item.queue === "done") {
       const archiveItem = item.raw;
@@ -1534,10 +1647,14 @@ export default function ModerationScreen() {
     );
   };
 
+  if (!fontsLoaded) {
+    return <View style={styles.screen} />;
+  }
+
   if (loading) {
     return (
       <View style={styles.loader}>
-        <ActivityIndicator size="large" color="#2E7D32" />
+        <ActivityIndicator size="large" color="#69B78D" />
       </View>
     );
   }
@@ -1546,27 +1663,32 @@ export default function ModerationScreen() {
     <>
       <View style={styles.screen}>
         <View style={styles.header}>
-          <Text style={styles.title}>Модерация</Text>
-          <TouchableOpacity style={styles.refreshButton} onPress={loadData}>
-            <Text style={styles.refreshButtonText}>Обновить</Text>
+          <TouchableOpacity onPress={() => router.back()} activeOpacity={0.8}>
+            <Text style={styles.backLinkText}>← Назад</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            onPress={toggleNotices}
+            activeOpacity={0.85}
+            disabled={savingNotices}
+            style={[
+              styles.noticeSwitch,
+              !noticesEnabled && styles.noticeSwitchOff,
+            ]}
+          >
+            <Text
+              style={[
+                styles.noticeSwitchText,
+                !noticesEnabled && styles.noticeSwitchTextOff,
+              ]}
+            >
+              {noticesEnabled ? "Уведомления вкл." : "Выходной"}
+            </Text>
           </TouchableOpacity>
         </View>
 
-        <View style={styles.centerCounterWrap}>
-          <View style={styles.countersInline}>
-            <View style={styles.counterItem}>
-              <Text style={styles.centerCounterValue}>{centeredCount}</Text>
-              <Text style={styles.centerCounterLabel}>всего активных</Text>
-            </View>
-
-            <View style={styles.counterDivider} />
-
-            <View style={styles.counterItem}>
-              <Text style={styles.centerCounterValue}>{myTasksCount}</Text>
-              <Text style={styles.centerCounterLabel}>моих задач</Text>
-            </View>
-          </View>
-        </View>
+        <Text style={styles.title}>Модерация</Text>
+        <Tekmet style={styles.tekmet} />
 
         <View style={styles.tabsRow}>
           <TouchableOpacity
@@ -1584,6 +1706,24 @@ export default function ModerationScreen() {
             >
               Новое
             </Text>
+
+            {queueCounts.new > 0 && (
+              <View
+                style={[
+                  styles.tabCount,
+                  activeTab === "new" && styles.tabCountActive,
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.tabCountText,
+                    activeTab === "new" && styles.tabCountTextActive,
+                  ]}
+                >
+                  {queueCounts.new}
+                </Text>
+              </View>
+            )}
           </TouchableOpacity>
 
           <TouchableOpacity
@@ -1601,6 +1741,24 @@ export default function ModerationScreen() {
             >
               В работе
             </Text>
+
+            {queueCounts.in_progress > 0 && (
+              <View
+                style={[
+                  styles.tabCount,
+                  activeTab === "in_progress" && styles.tabCountActive,
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.tabCountText,
+                    activeTab === "in_progress" && styles.tabCountTextActive,
+                  ]}
+                >
+                  {queueCounts.in_progress}
+                </Text>
+              </View>
+            )}
           </TouchableOpacity>
 
           <TouchableOpacity
@@ -1618,6 +1776,24 @@ export default function ModerationScreen() {
             >
               На доработке
             </Text>
+
+            {queueCounts.needs_revision > 0 && (
+              <View
+                style={[
+                  styles.tabCount,
+                  activeTab === "needs_revision" && styles.tabCountActive,
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.tabCountText,
+                    activeTab === "needs_revision" && styles.tabCountTextActive,
+                  ]}
+                >
+                  {queueCounts.needs_revision}
+                </Text>
+              </View>
+            )}
           </TouchableOpacity>
 
           <TouchableOpacity
@@ -1638,43 +1814,46 @@ export default function ModerationScreen() {
           </TouchableOpacity>
         </View>
 
-        {(activeTab === "in_progress" || activeTab === "needs_revision") && (
-          <View style={styles.subTabsRow}>
-            <TouchableOpacity
-              style={[
-                styles.subTabButton,
-                ownershipFilter === "all" && styles.subTabButtonActive,
-              ]}
-              onPress={() => setOwnershipFilter("all")}
-            >
-              <Text
+        {canSwitchOwnership &&
+          (activeTab === "in_progress" ||
+            activeTab === "needs_revision" ||
+            activeTab === "done") && (
+            <View style={styles.subTabsRow}>
+              <TouchableOpacity
                 style={[
-                  styles.subTabButtonText,
-                  ownershipFilter === "all" && styles.subTabButtonTextActive,
+                  styles.subTabButton,
+                  ownershipFilter === "all" && styles.subTabButtonActive,
                 ]}
+                onPress={() => setOwnershipFilter("all")}
               >
-                Все
-              </Text>
-            </TouchableOpacity>
+                <Text
+                  style={[
+                    styles.subTabButtonText,
+                    ownershipFilter === "all" && styles.subTabButtonTextActive,
+                  ]}
+                >
+                  Все
+                </Text>
+              </TouchableOpacity>
 
-            <TouchableOpacity
-              style={[
-                styles.subTabButton,
-                ownershipFilter === "mine" && styles.subTabButtonActive,
-              ]}
-              onPress={() => setOwnershipFilter("mine")}
-            >
-              <Text
+              <TouchableOpacity
                 style={[
-                  styles.subTabButtonText,
-                  ownershipFilter === "mine" && styles.subTabButtonTextActive,
+                  styles.subTabButton,
+                  ownershipFilter === "mine" && styles.subTabButtonActive,
                 ]}
+                onPress={() => setOwnershipFilter("mine")}
               >
-                Мои
-              </Text>
-            </TouchableOpacity>
-          </View>
-        )}
+                <Text
+                  style={[
+                    styles.subTabButtonText,
+                    ownershipFilter === "mine" && styles.subTabButtonTextActive,
+                  ]}
+                >
+                  Мои
+                </Text>
+              </TouchableOpacity>
+            </View>
+          )}
         <ScrollView contentContainerStyle={styles.container}>
           {unifiedItems.length === 0 ? (
             <Text style={styles.emptyText}>Список пуст</Text>
@@ -1734,427 +1913,528 @@ export default function ModerationScreen() {
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: "#fff",
-  },
-  countersInline: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
+    backgroundColor: "#FFFFFF",
   },
 
-  counterItem: {
-    alignItems: "center",
-    minWidth: 110,
-  },
-
-  counterDivider: {
-    width: 1,
-    height: 42,
-    backgroundColor: "#e0e0e0",
-    marginHorizontal: 18,
-  },
   loader: {
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
-    backgroundColor: "#fff",
+    backgroundColor: "#FFFFFF",
   },
+
   header: {
-    paddingTop: 64,
-    paddingHorizontal: 16,
-    paddingBottom: 12,
+    paddingTop: 56,
+    paddingHorizontal: 20,
+    paddingBottom: 6,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    backgroundColor: "#fff",
+    backgroundColor: "#FFFFFF",
   },
-  title: {
-    fontSize: 28,
-    fontWeight: "800",
-    color: "#111",
+
+  backLinkText: {
+    fontSize: 15,
+    color: "#96AC9E",
   },
-  refreshButton: {
-    borderWidth: 1,
-    borderColor: "#d8e3d8",
-    backgroundColor: "#f7faf7",
-    borderRadius: 12,
+
+  noticeSwitch: {
     paddingHorizontal: 14,
-    paddingVertical: 10,
+    paddingVertical: 7,
+    borderRadius: 999,
+    borderWidth: 0.75,
+    borderColor: "rgba(105,183,141,0.55)",
+    backgroundColor: "rgba(105,183,141,0.12)",
   },
-  refreshButtonText: {
-    fontSize: 14,
-    fontWeight: "700",
-    color: "#2E7D32",
+
+  noticeSwitchOff: {
+    borderColor: "rgba(192,91,77,0.45)",
+    backgroundColor: "rgba(192,91,77,0.08)",
   },
-  centerCounterWrap: {
-    alignItems: "center",
-    justifyContent: "center",
-    paddingTop: 6,
-    paddingBottom: 14,
+
+  noticeSwitchText: {
+    fontSize: 12.5,
+    fontWeight: "600",
+    color: "#3F6B5B",
   },
-  centerCounterValue: {
-    fontSize: 34,
-    fontWeight: "900",
-    color: "#111",
+
+  noticeSwitchTextOff: {
+    color: "#C05B4D",
   },
-  centerCounterLabel: {
-    fontSize: 13,
-    color: "#666",
-    marginTop: 2,
+
+  title: {
+    fontFamily: "Philosopher_700Bold",
+    fontSize: 30,
+    color: "#3F6B5B",
+    textAlign: "center",
   },
+
+  tekmet: {
+    alignSelf: "center",
+    marginTop: 10,
+    marginBottom: 14,
+  },
+
   tabsRow: {
     flexDirection: "row",
     flexWrap: "wrap",
-    paddingHorizontal: 16,
+    paddingHorizontal: 20,
     paddingBottom: 10,
   },
+
+  tabButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#FFFFFF",
+    borderWidth: 0.75,
+    borderColor: "rgba(93,140,120,0.45)",
+    borderRadius: 999,
+    paddingVertical: 9,
+    paddingHorizontal: 15,
+    marginRight: 8,
+    marginBottom: 8,
+  },
+
+  tabButtonActive: {
+    backgroundColor: "rgba(105,183,141,0.92)",
+    borderColor: "rgba(255,255,255,0.85)",
+  },
+
+  tabButtonText: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: "#3F6B5B",
+  },
+
+  tabButtonTextActive: {
+    color: "#FFFFFF",
+  },
+
+  tabCount: {
+    minWidth: 20,
+    height: 20,
+    borderRadius: 10,
+    paddingHorizontal: 6,
+    marginLeft: 7,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(105,183,141,0.16)",
+  },
+
+  tabCountActive: {
+    backgroundColor: "rgba(255,255,255,0.28)",
+  },
+
+  tabCountText: {
+    fontSize: 11.5,
+    fontWeight: "600",
+    color: "#3F6B5B",
+  },
+
+  tabCountTextActive: {
+    color: "#FFFFFF",
+  },
+
   subTabsRow: {
     flexDirection: "row",
-    paddingHorizontal: 16,
+    paddingHorizontal: 20,
     paddingBottom: 10,
   },
 
   subTabButton: {
-    backgroundColor: "#f4f6f4",
-    borderRadius: 10,
-    paddingVertical: 8,
-    paddingHorizontal: 12,
+    backgroundColor: "#FFFFFF",
+    borderWidth: 0.75,
+    borderColor: "rgba(93,140,120,0.28)",
+    borderRadius: 999,
+    paddingVertical: 7,
+    paddingHorizontal: 13,
     marginRight: 8,
   },
 
   subTabButtonActive: {
-    backgroundColor: "#111",
+    backgroundColor: "rgba(105,183,141,0.12)",
+    borderColor: "rgba(105,183,141,0.55)",
   },
 
   subTabButtonText: {
-    fontSize: 13,
-    fontWeight: "700",
-    color: "#555",
+    fontSize: 12.5,
+    fontWeight: "600",
+    color: "#7E988B",
   },
 
   subTabButtonTextActive: {
-    color: "#fff",
+    color: "#3F6B5B",
   },
-  tabButton: {
-    backgroundColor: "#f4f6f4",
-    borderRadius: 12,
-    paddingVertical: 10,
-    paddingHorizontal: 14,
-    marginRight: 8,
-    marginBottom: 8,
-  },
-  tabButtonActive: {
-    backgroundColor: "#2E7D32",
-  },
-  tabButtonText: {
-    fontSize: 13,
-    fontWeight: "800",
-    color: "#444",
-  },
-  tabButtonTextActive: {
-    color: "#fff",
-  },
+
   container: {
-    padding: 16,
+    paddingHorizontal: 20,
     paddingBottom: 40,
-    backgroundColor: "#fff",
+    backgroundColor: "#FFFFFF",
     flexGrow: 1,
   },
+
   emptyText: {
-    color: "#777",
-    fontSize: 15,
-    marginTop: 10,
+    color: "#7E988B",
+    fontSize: 14.5,
+    marginTop: 14,
     lineHeight: 22,
     textAlign: "center",
   },
+
   card: {
-    backgroundColor: "#fafafa",
+    backgroundColor: "#FFFFFF",
     borderRadius: 18,
     padding: 16,
     marginBottom: 12,
-    borderWidth: 1,
-    borderColor: "#f0f0f0",
+    borderWidth: 0.75,
+    borderColor: "rgba(93,140,120,0.28)",
   },
+
   cardHeader: {
     flexDirection: "row",
     alignItems: "flex-start",
     justifyContent: "space-between",
     marginBottom: 10,
   },
+
   cardHeaderMain: {
     flex: 1,
     paddingRight: 10,
   },
+
   cardCollapsedHint: {
     marginTop: 4,
     fontSize: 12,
-    color: "#888",
+    color: "#8FA79A",
   },
+
+  // Полоса состояния: цвет сразу говорит, насколько заявка горит
   statusLine: {
-    marginBottom: 10,
-    paddingVertical: 8,
-    paddingHorizontal: 10,
-    borderRadius: 10,
+    marginBottom: 12,
+    paddingVertical: 9,
+    paddingHorizontal: 12,
+    borderRadius: 12,
+    borderLeftWidth: 3,
   },
+
   statusLineNormal: {
-    backgroundColor: "#eef6ee",
+    backgroundColor: "rgba(105,183,141,0.10)",
+    borderLeftColor: "#69B78D",
   },
+
   statusLineWarning: {
-    backgroundColor: "#fff6e5",
+    backgroundColor: "rgba(224,163,62,0.12)",
+    borderLeftColor: "#E0A33E",
   },
+
   statusLineCritical: {
-    backgroundColor: "#fff1f1",
+    backgroundColor: "rgba(192,91,77,0.10)",
+    borderLeftColor: "#C05B4D",
   },
+
   statusLineText: {
     fontSize: 13,
-    fontWeight: "700",
-    color: "#333",
+    fontWeight: "600",
+    color: "#3F6B5B",
   },
+
   statusChip: {
+    paddingHorizontal: 12,
+    paddingVertical: 4,
     borderRadius: 999,
-    backgroundColor: "#eef6ee",
-    paddingHorizontal: 10,
-    paddingVertical: 6,
+    backgroundColor: "rgba(105,183,141,0.12)",
+    borderWidth: 1,
+    borderColor: "rgba(105,183,141,0.55)",
   },
+
   statusChipBlocked: {
-    backgroundColor: "#fff2f2",
+    backgroundColor: "rgba(192,91,77,0.08)",
+    borderColor: "rgba(192,91,77,0.45)",
   },
+
   statusChipText: {
-    fontSize: 12,
-    fontWeight: "800",
-    color: "#2E7D32",
+    fontSize: 11,
+    fontWeight: "600",
+    letterSpacing: 0.8,
+    color: "#3F6B5B",
   },
+
   archiveChip: {
+    alignSelf: "flex-start",
+    paddingHorizontal: 12,
+    paddingVertical: 4,
     borderRadius: 999,
-    backgroundColor: "#eef2ff",
-    paddingHorizontal: 10,
-    paddingVertical: 6,
+    borderWidth: 1,
+    marginBottom: 8,
   },
+
   archiveChipText: {
-    fontSize: 12,
-    fontWeight: "800",
-    color: "#4456a6",
+    fontSize: 11,
+    fontWeight: "600",
+    letterSpacing: 0.8,
   },
+
   archiveChipApproved: {
-    backgroundColor: "#e8f5e9",
+    backgroundColor: "rgba(105,183,141,0.12)",
+    borderColor: "rgba(105,183,141,0.55)",
   },
+
   archiveChipApprovedText: {
-    color: "#2E7D32",
+    color: "#3F6B5B",
   },
+
   archiveChipRejected: {
-    backgroundColor: "#fdecec",
+    backgroundColor: "rgba(192,91,77,0.08)",
+    borderColor: "rgba(192,91,77,0.45)",
   },
+
   archiveChipRejectedText: {
-    color: "#c62828",
+    color: "#C05B4D",
   },
+
   archiveChipNeutral: {
-    backgroundColor: "#eef2ff",
+    backgroundColor: "rgba(93,140,120,0.08)",
+    borderColor: "rgba(93,140,120,0.35)",
   },
+
   archiveChipNeutralText: {
-    color: "#4456a6",
+    color: "#7E988B",
   },
+
   name: {
-    fontSize: 18,
-    fontWeight: "800",
-    color: "#111",
+    fontFamily: "Philosopher_700Bold",
+    fontSize: 18.5,
+    color: "#3F6B5B",
     marginBottom: 4,
   },
+
   nameRow: {
     flexDirection: "row",
-    alignItems: "center",
+    alignItems: "flex-start",
   },
+
   unreadDot: {
     width: 10,
     height: 10,
     borderRadius: 5,
-    backgroundColor: "#2563eb",
+    backgroundColor: "#C05B4D",
     marginLeft: 8,
+    marginTop: 6,
+  },
+
+  mutedText: {
+    fontSize: 12.5,
+    color: "#8FA79A",
     marginTop: 2,
   },
-  mutedText: {
-    fontSize: 13,
-    color: "#6b7280",
-    lineHeight: 18,
-  },
+
   infoBlock: {
-    marginBottom: 4,
-  },
-  text: {
-    fontSize: 14,
-    color: "#555",
-    marginBottom: 4,
-    lineHeight: 20,
-  },
-  reasonLabel: {
-    marginTop: 4,
-    marginBottom: 4,
-    fontSize: 14,
-    fontWeight: "700",
-    color: "#222",
-  },
-  messageBox: {
-    marginTop: 10,
-    padding: 10,
-    borderRadius: 12,
-    backgroundColor: "#f2f6f2",
-  },
-  messageLabel: {
-    fontSize: 13,
-    fontWeight: "800",
-    color: "#2E7D32",
-    marginBottom: 4,
-  },
-  messageItem: {
     marginTop: 8,
-    paddingTop: 8,
-    borderTopWidth: 1,
-    borderTopColor: "#dfe8df",
   },
-  messageMeta: {
-    fontSize: 12,
-    fontWeight: "700",
-    color: "#666",
+
+  text: {
+    fontSize: 14.5,
+    lineHeight: 21,
+    color: "#2F4A3C",
+  },
+
+  reasonLabel: {
+    fontSize: 11.5,
+    fontWeight: "600",
+    letterSpacing: 1.2,
+    color: "#719686",
+    marginTop: 10,
     marginBottom: 4,
   },
+
+  messageBox: {
+    marginTop: 12,
+    padding: 12,
+    borderRadius: 14,
+    backgroundColor: "rgba(105,183,141,0.07)",
+    borderWidth: 0.75,
+    borderColor: "rgba(105,183,141,0.28)",
+  },
+
+  messageLabel: {
+    fontSize: 11.5,
+    fontWeight: "600",
+    letterSpacing: 1.2,
+    color: "#719686",
+    marginBottom: 8,
+  },
+
+  messageItem: {
+    marginBottom: 10,
+  },
+
+  messageMeta: {
+    fontSize: 11.5,
+    color: "#8FA79A",
+    marginBottom: 2,
+  },
+
   messageText: {
     fontSize: 14,
-    color: "#333",
     lineHeight: 20,
+    color: "#2F4A3C",
   },
+
   assignmentBlock: {
-    marginTop: 14,
+    marginTop: 12,
   },
+
   takeAction: {
     alignSelf: "flex-start",
-    backgroundColor: "#2563eb",
-    paddingVertical: 8,
-    paddingHorizontal: 14,
-    borderRadius: 10,
+    backgroundColor: "rgba(105,183,141,0.92)",
+    paddingVertical: 9,
+    paddingHorizontal: 16,
+    borderRadius: 999,
   },
+
   primaryActionFull: {
     marginTop: 14,
-    backgroundColor: "#2E7D32",
-    paddingVertical: 12,
-    borderRadius: 12,
+    backgroundColor: "rgba(105,183,141,0.92)",
+    paddingVertical: 13,
+    borderRadius: 18,
     alignItems: "center",
   },
+
   secondaryActionFull: {
     marginTop: 14,
-    backgroundColor: "#f4f6f4",
-    borderWidth: 1,
-    borderColor: "#d8e3d8",
-    paddingVertical: 12,
-    borderRadius: 12,
+    backgroundColor: "#FFFFFF",
+    borderWidth: 0.75,
+    borderColor: "rgba(93,140,120,0.45)",
+    paddingVertical: 13,
+    borderRadius: 18,
     alignItems: "center",
   },
+
   secondaryActionFullText: {
-    color: "#2E7D32",
-    textAlign: "center",
-    fontWeight: "800",
-    fontSize: 13,
-    lineHeight: 16,
+    fontSize: 15,
+    fontWeight: "600",
+    color: "#3F6B5B",
   },
+
   primaryAction: {
-    backgroundColor: "#2E7D32",
-    paddingVertical: 12,
-    paddingHorizontal: 20,
-    borderRadius: 10,
+    backgroundColor: "rgba(105,183,141,0.92)",
+    paddingVertical: 11,
+    paddingHorizontal: 18,
+    borderRadius: 999,
     marginRight: 8,
     marginBottom: 8,
   },
+
   warningAction: {
-    backgroundColor: "#f9a825",
-    paddingVertical: 12,
-    paddingHorizontal: 20,
-    borderRadius: 10,
+    backgroundColor: "#E0A33E",
+    paddingVertical: 11,
+    paddingHorizontal: 18,
+    borderRadius: 999,
     marginRight: 8,
     marginBottom: 8,
   },
+
   dangerAction: {
-    backgroundColor: "#c62828",
-    paddingVertical: 12,
-    paddingHorizontal: 20,
-    borderRadius: 10,
+    backgroundColor: "#C05B4D",
+    paddingVertical: 11,
+    paddingHorizontal: 18,
+    borderRadius: 999,
     marginRight: 8,
     marginBottom: 8,
   },
+
   actionGrid: {
     marginTop: 14,
     flexDirection: "row",
     flexWrap: "wrap",
   },
+
   actionRow: {
     marginTop: 14,
     flexDirection: "row",
     flexWrap: "wrap",
   },
+
   actionButtonText: {
-    color: "#fff",
-    textAlign: "center",
-    fontWeight: "800",
-    fontSize: 13,
-    lineHeight: 16,
+    color: "#FFFFFF",
+    fontSize: 14,
+    fontWeight: "600",
   },
+
   lockedText: {
+    marginTop: 12,
     fontSize: 13,
-    color: "#c62828",
-    fontWeight: "700",
+    lineHeight: 19,
+    color: "#8FA79A",
   },
+
   modalOverlay: {
     flex: 1,
-    backgroundColor: "rgba(0,0,0,0.35)",
+    backgroundColor: "rgba(31,58,47,0.55)",
+    alignItems: "center",
     justifyContent: "center",
+    padding: 24,
+  },
+
+  modalCard: {
+    width: "100%",
+    backgroundColor: "#FFFFFF",
+    borderRadius: 22,
     padding: 20,
   },
-  modalCard: {
-    backgroundColor: "#fff",
-    borderRadius: 18,
-    padding: 16,
-  },
+
   modalTitle: {
-    fontSize: 20,
-    fontWeight: "800",
-    marginBottom: 12,
-    color: "#111",
+    fontFamily: "Philosopher_700Bold",
+    fontSize: 21,
+    color: "#3F6B5B",
+    marginBottom: 14,
   },
+
   modalInput: {
     minHeight: 110,
-    borderWidth: 1,
-    borderColor: "#ddd",
-    borderRadius: 12,
-    padding: 12,
-    backgroundColor: "#fff",
+    borderWidth: 0.75,
+    borderColor: "rgba(93,140,120,0.45)",
+    borderRadius: 16,
+    padding: 14,
+    backgroundColor: "#FFFFFF",
     fontSize: 15,
-    color: "#222",
+    color: "#2F4A3C",
+    textAlignVertical: "top",
   },
+
   modalButtonsRow: {
     flexDirection: "row",
-    marginTop: 14,
+    marginTop: 16,
   },
+
   modalCancelButton: {
     flex: 1,
-    borderWidth: 1.5,
-    borderColor: "#bbb",
-    borderRadius: 12,
-    paddingVertical: 14,
+    backgroundColor: "#FFFFFF",
+    borderWidth: 0.75,
+    borderColor: "rgba(93,140,120,0.45)",
+    paddingVertical: 13,
+    borderRadius: 18,
+    alignItems: "center",
     marginRight: 8,
-    backgroundColor: "#fff",
   },
+
   modalCancelButtonText: {
-    textAlign: "center",
-    fontWeight: "700",
-    color: "#555",
+    fontSize: 15,
+    fontWeight: "600",
+    color: "#3F6B5B",
   },
+
   modalConfirmButton: {
     flex: 1,
-    backgroundColor: "#2E7D32",
-    borderRadius: 12,
-    paddingVertical: 14,
-    marginLeft: 8,
+    backgroundColor: "rgba(105,183,141,0.92)",
+    paddingVertical: 13,
+    borderRadius: 18,
+    alignItems: "center",
   },
+
   modalConfirmButtonText: {
-    textAlign: "center",
-    fontWeight: "800",
-    color: "#fff",
+    fontSize: 15,
+    fontWeight: "600",
+    color: "#FFFFFF",
   },
 });

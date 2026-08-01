@@ -23,10 +23,7 @@ import {
 } from "react-native";
 
 import { Glass, Tekmet } from "../../components/mingi";
-import {
-  getPendingComplaints,
-  getPendingUsers,
-} from "../../services/moderationService";
+import { getModerationTaskCount } from "../../services/moderationService";
 import { DbUserProfile, getMyProfile } from "../../services/profileService";
 import { getAgeFromBirthDate } from "../../store/user";
 
@@ -84,14 +81,8 @@ export default function ProfileScreen() {
 
           if (isAdmin) {
             try {
-              const [pendingUsers, pendingComplaints] = await Promise.all([
-                getPendingUsers(),
-                getPendingComplaints(),
-              ]);
-
-              setModerationCount(
-                (pendingUsers?.length || 0) + (pendingComplaints?.length || 0),
-              );
+              // Свободные заявки из «Нового» + мои в работе и на доработке
+              setModerationCount(await getModerationTaskCount());
             } catch (e) {
               setModerationCount(0);
             }

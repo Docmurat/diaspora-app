@@ -6,7 +6,7 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import { router, useFocusEffect } from "expo-router";
 import { StatusBar } from "expo-status-bar";
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
   ScrollView,
@@ -17,6 +17,7 @@ import {
 } from "react-native";
 
 import { Tekmet } from "../components/mingi";
+import { supabase } from "../lib/supabase";
 import {
   AppNotification,
   getMyNotifications,
@@ -95,6 +96,46 @@ export default function NotificationsScreen() {
       load();
     }, [load]),
   );
+
+  // Новые уведомления прилетают сами, без обновления страницы
+  useEffect(() => {
+    let alive = true;
+    let channel: ReturnType<typeof supabase.channel> | null = null;
+
+    const subscribe = async () => {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+
+      if (!user || !alive) return;
+
+      channel = supabase
+        .channel(`notifications-list-${user.id}`)
+        .on(
+          "postgres_changes",
+          {
+            event: "INSERT",
+            schema: "public",
+            table: "notifications",
+            filter: `user_id=eq.${user.id}`,
+          },
+          (payload) => {
+            const item = payload.new as AppNotification;
+            setItems((prev) =>
+              prev.some((n) => n.id === item.id) ? prev : [item, ...prev],
+            );
+          },
+        )
+        .subscribe();
+    };
+
+    subscribe();
+
+    return () => {
+      alive = false;
+      if (channel) supabase.removeChannel(channel);
+    };
+  }, []);
 
   const handleOpen = async (item: AppNotification) => {
     if (!item.is_read) {
