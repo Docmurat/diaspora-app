@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "diaspora-app",
+    "name": "Минги-Тау",
     "slug": "diaspora-app",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -23,10 +23,7 @@
       "bundler": "metro",
       "favicon": "./assets/images/favicon.png"
     },
-    "plugins": [
-      "expo-router",
-      "expo-font"
-    ],
+    "plugins": ["expo-router", "expo-font"],
     "experiments": {
       "typedRoutes": true
     }
