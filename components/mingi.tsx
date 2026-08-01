@@ -28,7 +28,7 @@ import Svg, {
 if (Platform.OS === "web" && typeof document !== "undefined") {
   // Метку меняем при каждом изменении правил, иначе старый стиль остаётся
   // висеть на странице и новые правила не применяются.
-  const STYLE_ID = "mingi-web-css-v3";
+  const STYLE_ID = "mingi-web-css-v5";
   let style = document.getElementById(STYLE_ID) as HTMLStyleElement | null;
 
   if (!style) {

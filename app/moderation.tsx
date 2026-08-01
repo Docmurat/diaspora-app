@@ -8,6 +8,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
+  Image,
   Modal,
   ScrollView,
   StyleSheet,
@@ -72,6 +73,55 @@ type UnifiedItem = {
   raw: any;
 };
 
+// Цвет ярлыка = вид заявки. Жалоба красная, блокировка тёмная,
+// смена имени янтарная, остальное — в фирменной зелени.
+const KIND_CHIP: Record<string, { box: object; text: object }> = {
+  registration: {
+    box: {
+      backgroundColor: "rgba(105,183,141,0.12)",
+      borderColor: "rgba(105,183,141,0.55)",
+    },
+    text: { color: "#3F6B5B" },
+  },
+  invite_request: {
+    box: {
+      backgroundColor: "rgba(93,140,120,0.10)",
+      borderColor: "rgba(93,140,120,0.45)",
+    },
+    text: { color: "#4E7364" },
+  },
+  name_change: {
+    box: {
+      backgroundColor: "rgba(224,163,62,0.12)",
+      borderColor: "rgba(224,163,62,0.55)",
+    },
+    text: { color: "#9A6C16" },
+  },
+  complaint: {
+    box: {
+      backgroundColor: "rgba(192,91,77,0.10)",
+      borderColor: "rgba(192,91,77,0.55)",
+    },
+    text: { color: "#C05B4D" },
+  },
+  blocked: {
+    box: {
+      backgroundColor: "rgba(47,74,60,0.10)",
+      borderColor: "rgba(47,74,60,0.45)",
+    },
+    text: { color: "#2F4A3C" },
+  },
+};
+
+// Виды заявок для фильтра во вкладке «Новое»
+const NEW_KINDS = [
+  { key: "all", label: "Все" },
+  { key: "registration", label: "Регистрации" },
+  { key: "invite_request", label: "Заявки" },
+  { key: "name_change", label: "Смена ФИО" },
+  { key: "complaint", label: "Жалобы" },
+];
+
 export default function ModerationScreen() {
   const [fontsLoaded] = useFonts({
     Philosopher_400Regular,
@@ -85,6 +135,8 @@ export default function ModerationScreen() {
   const focusTab = String(params.tab || "");
 
   const [activeTab, setActiveTab] = useState<QueueTab>("new");
+  // Фильтр по виду заявки внутри вкладки «Новое»
+  const [kindFilter, setKindFilter] = useState<string>("all");
   const [ownershipFilter, setOwnershipFilter] =
     useState<OwnershipFilter>("all");
   const [expandedCards, setExpandedCards] = useState<Record<string, boolean>>(
@@ -129,6 +181,10 @@ export default function ModerationScreen() {
         { table: "name_change_requests" },
         { table: "complaints" },
         { table: "moderation_messages" },
+        // Запасной и самый надёжный путь: уведомление модератору приходит
+        // всегда, а вот сами таблицы заявок при трансляции могут молчать
+        // из-за проверок доступа. Пришло уведомление — обновляем списки.
+        { table: "notifications" },
       ],
       () => {
         loadData(true);
@@ -267,13 +323,15 @@ export default function ModerationScreen() {
           id,
           first_name,
           last_name,
-          email
+          email,
+          avatar_path
         ),
         target:target_user_id (
           id,
           first_name,
           last_name,
-          email
+          email,
+          avatar_path
         )
       `,
       )
@@ -459,13 +517,15 @@ export default function ModerationScreen() {
           id,
           first_name,
           last_name,
-          email
+          email,
+          avatar_path
         ),
         target:target_user_id (
           id,
           first_name,
           last_name,
-          email
+          email,
+          avatar_path
         ),
         assigned_moderator:assigned_to (
           id,
@@ -923,7 +983,7 @@ export default function ModerationScreen() {
       } else if (actionModal.type === "reject_name_change") {
         await rejectNameChangeRequest(actionModal.targetId, comment);
       } else if (actionModal.type === "reject_complaint") {
-        await rejectComplaint(actionModal.targetId);
+        await rejectComplaint(actionModal.targetId, comment);
       }
 
       setActionModal(null);
@@ -1210,6 +1270,20 @@ export default function ModerationScreen() {
     [canSwitchOwnership, ownershipFilter, belongsToMe],
   );
 
+  const newKindCounts = useMemo(() => {
+    const counts: Record<string, number> = { all: 0 };
+
+    allItems.forEach((item) => {
+      if (item.queue !== "new") return;
+      if (!passesOwnership(item, "new")) return;
+
+      counts.all += 1;
+      counts[item.kind] = (counts[item.kind] || 0) + 1;
+    });
+
+    return counts;
+  }, [allItems, passesOwnership]);
+
   const queueCounts = useMemo(() => {
     const counts: Record<QueueTab, number> = {
       new: 0,
@@ -1231,6 +1305,11 @@ export default function ModerationScreen() {
     return allItems
       .filter((item) => item.queue === activeTab)
       .filter((item) => passesOwnership(item, activeTab))
+      .filter((item) =>
+        activeTab === "new" && kindFilter !== "all"
+          ? item.kind === kindFilter
+          : true,
+      )
       .sort((a, b) => {
         const priorityDiff =
           getTaskPriorityScore(a.assignedName, a.takenAt, a.createdAt) -
@@ -1243,7 +1322,53 @@ export default function ModerationScreen() {
           new Date(a.createdAt || 0).getTime()
         );
       });
-  }, [allItems, activeTab, passesOwnership]);
+  }, [allItems, activeTab, passesOwnership, kindFilter]);
+
+  // Участники жалобы — обычные участники сообщества, поэтому открываем
+  // их настоящий профиль, а не режим модерации (он нужен для анкет,
+  // которые ещё не опубликованы).
+  const renderPersonRow = (label: string, person: any, accent: boolean) => {
+    if (!person?.id) return null;
+
+    const fullName =
+      `${person.first_name || ""} ${person.last_name || ""}`.trim() ||
+      "Без имени";
+
+    return (
+      <TouchableOpacity
+        activeOpacity={0.85}
+        onPress={() =>
+          router.push({
+            pathname: "/user-profile",
+            params: { id: person.id },
+          })
+        }
+        style={[styles.personRow, accent && styles.personRowAccent]}
+      >
+        <Image
+          source={
+            person.avatar_path
+              ? { uri: person.avatar_path }
+              : require("../assets/default-avatar.png")
+          }
+          style={styles.personAvatar}
+        />
+
+        <View style={styles.personInfo}>
+          <Text
+            style={[styles.personLabel, accent && styles.personLabelAccent]}
+          >
+            {label}
+          </Text>
+          <Text style={styles.personName} numberOfLines={1}>
+            {fullName}
+          </Text>
+        </View>
+
+        <Text style={styles.personArrow}>›</Text>
+      </TouchableOpacity>
+    );
+  };
 
   const renderUnifiedCard = (item: UnifiedItem) => {
     if (item.queue === "done") {
@@ -1363,13 +1488,10 @@ export default function ModerationScreen() {
               Нажмите, чтобы раскрыть
             </Text>
           </View>
-          <View
-            style={[
-              styles.statusChip,
-              item.kind === "blocked" && styles.statusChipBlocked,
-            ]}
-          >
-            <Text style={styles.statusChipText}>{item.badge}</Text>
+          <View style={[styles.statusChip, KIND_CHIP[item.kind]?.box]}>
+            <Text style={[styles.statusChipText, KIND_CHIP[item.kind]?.text]}>
+              {item.badge}
+            </Text>
           </View>
         </View>
 
@@ -1572,10 +1694,16 @@ export default function ModerationScreen() {
                 const complaint = item.raw;
                 return (
                   <>
-                    <Text style={styles.mutedText}>
-                      От: {complaint.reporter?.first_name || ""}{" "}
-                      {complaint.reporter?.last_name || ""}
-                    </Text>
+                    {renderPersonRow(
+                      "НА КОГО ЖАЛУЮТСЯ",
+                      complaint.target,
+                      true,
+                    )}
+                    {renderPersonRow(
+                      "КТО ПОЖАЛОВАЛСЯ",
+                      complaint.reporter,
+                      false,
+                    )}
 
                     <Text style={styles.reasonLabel}>Причина</Text>
                     <Text style={styles.text}>{complaint.reason}</Text>
@@ -1586,7 +1714,9 @@ export default function ModerationScreen() {
                           style={styles.takeAction}
                           onPress={() => handleTakeComplaint(complaint.id)}
                         >
-                          <Text style={styles.actionButtonText}>Принять</Text>
+                          <Text style={styles.actionButtonText}>
+                            Взять в работу
+                          </Text>
                         </TouchableOpacity>
                       ) : canManageAssignedTask(complaint.assigned_to) ? (
                         <View style={styles.actionRow}>
@@ -1594,9 +1724,7 @@ export default function ModerationScreen() {
                             style={styles.primaryAction}
                             onPress={() => handleResolveComplaint(complaint)}
                           >
-                            <Text style={styles.actionButtonText}>
-                              Принять жалобу
-                            </Text>
+                            <Text style={styles.actionButtonText}>Решена</Text>
                           </TouchableOpacity>
 
                           <TouchableOpacity
@@ -1604,7 +1732,7 @@ export default function ModerationScreen() {
                             onPress={() => handleRejectComplaint(complaint.id)}
                           >
                             <Text style={styles.actionButtonText}>
-                              Отклонить
+                              Отклонена
                             </Text>
                           </TouchableOpacity>
                         </View>
@@ -1814,6 +1942,42 @@ export default function ModerationScreen() {
           </TouchableOpacity>
         </View>
 
+        {activeTab === "new" && (
+          <View style={styles.kindsRow}>
+            {NEW_KINDS.map((kind) => {
+              const count =
+                kind.key === "all"
+                  ? newKindCounts.all || 0
+                  : newKindCounts[kind.key] || 0;
+
+              if (kind.key !== "all" && count === 0) return null;
+
+              const isActive = kindFilter === kind.key;
+
+              return (
+                <TouchableOpacity
+                  key={kind.key}
+                  activeOpacity={0.85}
+                  onPress={() => setKindFilter(kind.key)}
+                  style={[
+                    styles.subTabButton,
+                    isActive && styles.subTabButtonActive,
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.subTabButtonText,
+                      isActive && styles.subTabButtonTextActive,
+                    ]}
+                  >
+                    {kind.label} {count}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        )}
+
         {canSwitchOwnership &&
           (activeTab === "in_progress" ||
             activeTab === "needs_revision" ||
@@ -1983,13 +2147,14 @@ const styles = StyleSheet.create({
   },
 
   tabButton: {
+    height: 38,
     flexDirection: "row",
     alignItems: "center",
+    justifyContent: "center",
     backgroundColor: "#FFFFFF",
-    borderWidth: 0.75,
+    borderWidth: 1,
     borderColor: "rgba(93,140,120,0.45)",
     borderRadius: 999,
-    paddingVertical: 9,
     paddingHorizontal: 15,
     marginRight: 8,
     marginBottom: 8,
@@ -2002,8 +2167,11 @@ const styles = StyleSheet.create({
 
   tabButtonText: {
     fontSize: 13,
+    lineHeight: 17,
     fontWeight: "600",
     color: "#3F6B5B",
+    includeFontPadding: false,
+    textAlignVertical: "center",
   },
 
   tabButtonTextActive: {
@@ -2035,20 +2203,35 @@ const styles = StyleSheet.create({
     color: "#FFFFFF",
   },
 
+  kindsRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    alignItems: "flex-start",
+    paddingHorizontal: 20,
+    paddingBottom: 4,
+  },
+
   subTabsRow: {
     flexDirection: "row",
+    alignItems: "flex-start",
     paddingHorizontal: 20,
-    paddingBottom: 10,
+    paddingBottom: 4,
   },
 
   subTabButton: {
+    // Жёсткая высота: иначе дробный абрис округляется по-разному
+    // и текст в соседних кнопках прыгает на пиксель
+    height: 34,
+    alignSelf: "flex-start",
+    alignItems: "center",
+    justifyContent: "center",
     backgroundColor: "#FFFFFF",
-    borderWidth: 0.75,
+    borderWidth: 1,
     borderColor: "rgba(93,140,120,0.28)",
     borderRadius: 999,
-    paddingVertical: 7,
-    paddingHorizontal: 13,
+    paddingHorizontal: 14,
     marginRight: 8,
+    marginBottom: 8,
   },
 
   subTabButtonActive: {
@@ -2058,8 +2241,11 @@ const styles = StyleSheet.create({
 
   subTabButtonText: {
     fontSize: 12.5,
+    lineHeight: 16,
     fontWeight: "600",
     color: "#7E988B",
+    includeFontPadding: false,
+    textAlignVertical: "center",
   },
 
   subTabButtonTextActive: {
@@ -2147,11 +2333,6 @@ const styles = StyleSheet.create({
     borderColor: "rgba(105,183,141,0.55)",
   },
 
-  statusChipBlocked: {
-    backgroundColor: "rgba(192,91,77,0.08)",
-    borderColor: "rgba(192,91,77,0.45)",
-  },
-
   statusChipText: {
     fontSize: 11,
     fontWeight: "600",
@@ -2202,8 +2383,8 @@ const styles = StyleSheet.create({
   },
 
   name: {
-    fontFamily: "Philosopher_700Bold",
-    fontSize: 18.5,
+    fontSize: 17,
+    fontWeight: "700",
     color: "#3F6B5B",
     marginBottom: 4,
   },
@@ -2236,6 +2417,59 @@ const styles = StyleSheet.create({
     fontSize: 14.5,
     lineHeight: 21,
     color: "#2F4A3C",
+  },
+
+  personRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "rgba(93,140,120,0.06)",
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "rgba(93,140,120,0.28)",
+    padding: 10,
+    marginBottom: 8,
+  },
+
+  personRowAccent: {
+    backgroundColor: "rgba(192,91,77,0.06)",
+    borderColor: "rgba(192,91,77,0.35)",
+  },
+
+  personAvatar: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    marginRight: 12,
+    backgroundColor: "#EAF4EE",
+  },
+
+  personInfo: {
+    flex: 1,
+    minWidth: 0,
+  },
+
+  personLabel: {
+    fontSize: 10.5,
+    fontWeight: "600",
+    letterSpacing: 1.2,
+    color: "#719686",
+    marginBottom: 2,
+  },
+
+  personLabelAccent: {
+    color: "#C05B4D",
+  },
+
+  personName: {
+    fontSize: 15,
+    fontWeight: "600",
+    color: "#2F4A3C",
+  },
+
+  personArrow: {
+    fontSize: 22,
+    color: "#A8BDB1",
+    marginLeft: 8,
   },
 
   reasonLabel: {
@@ -2384,8 +2618,8 @@ const styles = StyleSheet.create({
   },
 
   modalTitle: {
-    fontFamily: "Philosopher_700Bold",
-    fontSize: 21,
+    fontSize: 19,
+    fontWeight: "700",
     color: "#3F6B5B",
     marginBottom: 14,
   },

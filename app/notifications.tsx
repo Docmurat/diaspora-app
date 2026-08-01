@@ -24,13 +24,18 @@ import {
   markAllNotificationsRead,
   markNotificationRead,
 } from "../services/notificationService";
+import { getMyProfile } from "../services/profileService";
 
 const ICONS: Record<string, keyof typeof Ionicons.glyphMap> = {
   message: "chatbubble-ellipses-outline",
   moderation: "shield-checkmark-outline",
+  complaint: "flash-outline",
   invite: "mail-open-outline",
   help: "megaphone-outline",
 };
+
+// Жалобы выделяем цветом: они требуют внимания в первую очередь
+const ACCENT_TYPES = ["complaint"];
 
 function formatWhen(dateString: string) {
   const date = new Date(dateString);
@@ -64,6 +69,18 @@ function formatWhen(dateString: string) {
   });
 }
 
+// Часть ссылок ведёт в закрытые разделы: например, уведомления о заявке
+// остаются у человека и после одобрения, но модерация ему уже недоступна.
+// Такие уведомления просто не открываются, вместо ошибки.
+function canOpenLink(link: string | null, isModerator: boolean) {
+  if (!link) return false;
+  if (!link.startsWith("/")) return false;
+  if (link.startsWith("/moderation")) return isModerator;
+  if (link.startsWith("/pending-approval")) return false;
+
+  return true;
+}
+
 export default function NotificationsScreen() {
   const [fontsLoaded] = useFonts({
     Philosopher_400Regular,
@@ -71,6 +88,7 @@ export default function NotificationsScreen() {
   });
 
   const [items, setItems] = useState<AppNotification[]>([]);
+  const [isModerator, setIsModerator] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -79,8 +97,15 @@ export default function NotificationsScreen() {
       setLoading(true);
       setError("");
 
-      const data = await getMyNotifications();
+      const [data, profile] = await Promise.all([
+        getMyNotifications(),
+        getMyProfile().catch(() => null),
+      ]);
+
       setItems(data);
+      setIsModerator(
+        profile?.role === "owner" || profile?.role === "moderator",
+      );
     } catch (e) {
       const message =
         e instanceof Error ? e.message : "Не удалось загрузить уведомления";
@@ -150,8 +175,12 @@ export default function NotificationsScreen() {
       }
     }
 
-    if (item.link) {
+    if (!canOpenLink(item.link, isModerator)) return;
+
+    try {
       router.push(item.link as any);
+    } catch (e) {
+      console.log("Не удалось открыть уведомление:", e);
     }
   };
 
@@ -222,47 +251,57 @@ export default function NotificationsScreen() {
             события сообщества.
           </Text>
         ) : (
-          items.map((item) => (
-            <TouchableOpacity
-              key={item.id}
-              activeOpacity={0.85}
-              onPress={() => handleOpen(item)}
-              style={[styles.card, !item.is_read && styles.cardUnread]}
-            >
-              <Ionicons
-                name={ICONS[item.type] || "notifications-outline"}
-                size={20}
-                color={item.is_read ? "#A8BDB1" : "#69B78D"}
-                style={styles.cardIcon}
-              />
+          items.map((item) => {
+            const openable = canOpenLink(item.link, isModerator);
 
-              <View style={styles.cardBody}>
-                <View style={styles.cardTop}>
-                  <Text
-                    style={[
-                      styles.cardTitle,
-                      !item.is_read && styles.cardTitleUnread,
-                    ]}
-                    numberOfLines={1}
-                  >
-                    {item.title}
-                  </Text>
+            return (
+              <TouchableOpacity
+                key={item.id}
+                activeOpacity={openable ? 0.85 : 1}
+                onPress={() => handleOpen(item)}
+                style={[styles.card, !item.is_read && styles.cardUnread]}
+              >
+                <Ionicons
+                  name={ICONS[item.type] || "notifications-outline"}
+                  size={20}
+                  color={
+                    item.is_read
+                      ? "#A8BDB1"
+                      : ACCENT_TYPES.includes(item.type)
+                        ? "#C05B4D"
+                        : "#69B78D"
+                  }
+                  style={styles.cardIcon}
+                />
 
-                  <Text style={styles.cardTime}>
-                    {formatWhen(item.created_at)}
-                  </Text>
+                <View style={styles.cardBody}>
+                  <View style={styles.cardTop}>
+                    <Text
+                      style={[
+                        styles.cardTitle,
+                        !item.is_read && styles.cardTitleUnread,
+                      ]}
+                      numberOfLines={1}
+                    >
+                      {item.title}
+                    </Text>
+
+                    <Text style={styles.cardTime}>
+                      {formatWhen(item.created_at)}
+                    </Text>
+                  </View>
+
+                  {!!item.body && (
+                    <Text style={styles.cardText} numberOfLines={2}>
+                      {item.body}
+                    </Text>
+                  )}
                 </View>
 
-                {!!item.body && (
-                  <Text style={styles.cardText} numberOfLines={2}>
-                    {item.body}
-                  </Text>
-                )}
-              </View>
-
-              {!item.is_read && <View style={styles.dot} />}
-            </TouchableOpacity>
-          ))
+                {!item.is_read && <View style={styles.dot} />}
+              </TouchableOpacity>
+            );
+          })
         )}
       </ScrollView>
     </View>

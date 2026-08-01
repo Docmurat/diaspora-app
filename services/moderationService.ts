@@ -376,13 +376,15 @@ export async function getPendingComplaints() {
         id,
         first_name,
         last_name,
-        email
+        email,
+        avatar_path
       ),
       target:target_user_id (
         id,
         first_name,
         last_name,
-        email
+        email,
+        avatar_path
       ),
       assigned_moderator:assigned_to (
         id,
@@ -399,7 +401,7 @@ export async function getPendingComplaints() {
   return data || [];
 }
 
-export async function resolveComplaint(complaintId: string) {
+export async function resolveComplaint(complaintId: string, comment?: string) {
   const me = await checkAccess();
   const moderatorName =
     `${me.first_name || ""} ${me.last_name || ""}`.trim() ||
@@ -409,6 +411,7 @@ export async function resolveComplaint(complaintId: string) {
     .from("complaints")
     .update({
       status: "resolved",
+      review_note: comment?.trim() || null,
       reviewed_by: me.id,
       reviewed_at: new Date().toISOString(),
       completed_by_name: moderatorName,
@@ -421,7 +424,7 @@ export async function resolveComplaint(complaintId: string) {
   if (error) throw new Error(error.message);
 }
 
-export async function rejectComplaint(complaintId: string) {
+export async function rejectComplaint(complaintId: string, comment?: string) {
   const me = await checkAccess();
   const moderatorName =
     `${me.first_name || ""} ${me.last_name || ""}`.trim() ||
@@ -431,6 +434,9 @@ export async function rejectComplaint(complaintId: string) {
     .from("complaints")
     .update({
       status: "rejected",
+      // Пояснение модератора: раньше текст из окна терялся,
+      // теперь он сохраняется и попадает в уведомление заявителю.
+      review_note: comment?.trim() || null,
       reviewed_by: me.id,
       reviewed_at: new Date().toISOString(),
       completed_by_name: moderatorName,
@@ -444,18 +450,30 @@ export async function rejectComplaint(complaintId: string) {
 }
 
 export async function softDeleteUser(userId: string) {
-  await checkOwnerAccess();
+  const me = await checkOwnerAccess();
+  const now = new Date().toISOString();
 
-  const { error } = await supabase
+  const { data, error } = await supabase
     .from("users")
     .update({
       is_deleted: true,
       is_blocked: false,
-      updated_at: new Date().toISOString(),
+      // Кто и когда удалил — иначе разобраться потом невозможно
+      deleted_by: me.id,
+      deleted_at: now,
+      updated_at: now,
     })
-    .eq("id", userId);
+    .eq("id", userId)
+    .select("id")
+    .maybeSingle();
 
   if (error) throw new Error(error.message);
+
+  if (!data) {
+    throw new Error(
+      "Не удалось удалить профиль: база не приняла изменение (нет прав или запись не найдена)",
+    );
+  }
 }
 
 export async function takeUserModeration(userId: string) {

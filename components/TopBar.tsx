@@ -73,7 +73,7 @@ export default function TopBar({
       if (!user || !alive) return;
 
       channel = supabase
-        .channel(`notifications-badge-${user.id}`)
+        .channel(`user-live-${user.id}`)
         .on(
           "postgres_changes",
           {
@@ -84,6 +84,29 @@ export default function TopBar({
           },
           () => {
             refresh();
+          },
+        )
+        .on(
+          "postgres_changes",
+          {
+            event: "UPDATE",
+            schema: "public",
+            table: "users",
+            filter: `id=eq.${user.id}`,
+          },
+          (payload) => {
+            const me = payload.new as any;
+
+            // Профиль удалили или заблокировали, пока человек в приложении —
+            // уводим сразу, не дожидаясь перезагрузки страницы.
+            if (me?.is_deleted) {
+              router.replace("/profile-deleted");
+              return;
+            }
+
+            if (me?.is_blocked) {
+              router.replace("/access-restricted");
+            }
           },
         )
         .subscribe();

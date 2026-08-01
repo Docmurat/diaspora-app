@@ -13,6 +13,8 @@ import {
 import { useLocalSearchParams, router } from 'expo-router';
 import { supabase } from '../lib/supabase';
 import { getOrCreateDirectChat } from '../services/chatService';
+import { getMyProfile } from '../services/profileService';
+import { hasMutualBlock } from '../services/userBlockService';
 import {
   ChatMessage,
   getMessages,
@@ -41,6 +43,8 @@ console.log('CHAT OTHER USER ID:', otherUserId);
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
   const [screenError, setScreenError] = useState('');
+  // Блокировка закрывает переписку в обе стороны. Исключение — основатель.
+  const [blocked, setBlocked] = useState(false);
 
   const groupedMessages = useMemo(() => {
     return messages.map((message) => ({
@@ -109,6 +113,24 @@ console.log('CHAT OTHER USER ID:', otherUserId);
     }
 
     myUserIdRef.current = user.id;
+
+    // Проверяем блокировку до всего остального
+    try {
+      const [relation, myProfile] = await Promise.all([
+        hasMutualBlock(otherUserId),
+        getMyProfile().catch(() => null),
+      ]);
+
+      const isFounder = myProfile?.role === 'owner';
+
+      if (relation?.isAnyBlocked && !isFounder) {
+        setBlocked(true);
+        setLoading(false);
+        return;
+      }
+    } catch (e) {
+      console.log('Не удалось проверить блокировку:', e);
+    }
     console.log('myUserIdRef set:', myUserIdRef.current);
 
     console.log('calling getOrCreateDirectChat with:', otherUserId);
@@ -320,6 +342,7 @@ console.log('CHAT OTHER USER ID:', otherUserId);
         )}
       </ScrollView>
 
+      {!blocked && (
       <View style={styles.inputRow}>
         <TextInput
           placeholder="Введите сообщение..."
@@ -339,6 +362,7 @@ console.log('CHAT OTHER USER ID:', otherUserId);
           <Text style={styles.sendButtonText}>{sending ? '...' : '→'}</Text>
         </TouchableOpacity>
       </View>
+      )}
     </KeyboardAvoidingView>
   );
 }

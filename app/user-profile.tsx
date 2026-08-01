@@ -113,6 +113,9 @@ export default function UserProfileScreen() {
   const [loading, setLoading] = useState(true);
   const [showMenu, setShowMenu] = useState(false);
   const [isFavorite, setIsFavorite] = useState(false);
+  // Удаление подтверждается вторым нажатием: всплывающие окна с «Да/Нет»
+  // в браузере не работают, а случайное касание стирает человека.
+  const [confirmDelete, setConfirmDelete] = useState(false);
   const [blockState, setBlockState] = useState({
     iBlockedUser: false,
     userBlockedMe: false,
@@ -244,35 +247,43 @@ export default function UserProfileScreen() {
   const restrictedByTargetUser = blockState.userBlockedMe;
   const iBlockedThisUser = blockState.iBlockedUser;
 
-  const canModerationViewBlockedProfile = isAdmin || isModerationMode;
+  // Если участник заблокировал модератора, тот теряет полномочия по
+  // отношению к нему: скрытые контакты не видны, переписка закрыта.
+  // Исключение — основатель: он видит всё всегда.
+  const canBypassBlock = isOwner || isModerationMode;
 
+  // Скрытый телефон: модератору виден, только пока его не заблокировали
+  const canSeeHiddenFields =
+    isModerationMode || isOwner || (isAdmin && !restrictedByTargetUser);
+
+  // Основателю доступно всё: он видит скрытые контакты и может писать
+  // даже тому, кто его заблокировал.
   const canWriteToUser =
     !isOwnProfile &&
-    !iBlockedThisUser &&
-    !restrictedByTargetUser &&
-    !isModerationMode;
+    !isModerationMode &&
+    (isOwner || (!iBlockedThisUser && !restrictedByTargetUser));
 
   const showDirectContact = canWriteToUser;
 
   const showPhone = isModerationMode
     ? !!user.phone
-    : (user.phone_visible || isAdmin) &&
-      (!restrictedByTargetUser || canModerationViewBlockedProfile);
+    : (user.phone_visible || canSeeHiddenFields) &&
+      (!restrictedByTargetUser || canBypassBlock);
 
   const showTelegram = isModerationMode
     ? !!user.telegram
     : !!user.telegram &&
-      (!restrictedByTargetUser || canModerationViewBlockedProfile);
+      (!restrictedByTargetUser || canBypassBlock);
 
   const showEmail = isModerationMode
     ? !!user.email
     : !!user.email &&
-      (!restrictedByTargetUser || canModerationViewBlockedProfile);
+      (!restrictedByTargetUser || canBypassBlock);
 
   const showAdditional = isModerationMode
     ? !!user.extra_info
     : !!user.extra_info &&
-      (!restrictedByTargetUser || canModerationViewBlockedProfile);
+      (!restrictedByTargetUser || canBypassBlock);
 
   const handleCopyText = async (label: string, value?: string | null) => {
     const text = value?.trim();
@@ -333,8 +344,14 @@ export default function UserProfileScreen() {
   };
 
   const handleDeleteUser = async () => {
+    if (!confirmDelete) {
+      setConfirmDelete(true);
+      return;
+    }
+
     try {
       await softDeleteUser(user.id);
+      setConfirmDelete(false);
       setShowMenu(false);
       Alert.alert("Готово", "Профиль помечен как удалённый.");
       router.back();
@@ -542,8 +559,16 @@ export default function UserProfileScreen() {
                 onPress={handleDeleteUser}
               >
                 <Text style={[styles.menuItemText, styles.dangerText]}>
-                  Удалить профиль
+                  {confirmDelete
+                    ? "Нажмите ещё раз, чтобы удалить"
+                    : "Удалить профиль"}
                 </Text>
+
+                {confirmDelete && (
+                  <Text style={styles.menuItemHint}>
+                    Человек исчезнет из сообщества. Отменить нельзя.
+                  </Text>
+                )}
               </TouchableOpacity>
             )}
 
@@ -560,10 +585,7 @@ export default function UserProfileScreen() {
 
             {!isAdmin && (
               <>
-                <TouchableOpacity
-                  style={styles.menuItem}
-                  onPress={handleReport}
-                >
+                <TouchableOpacity style={styles.menuItem} onPress={handleReport}>
                   <Text style={styles.menuItemText}>Пожаловаться</Text>
                 </TouchableOpacity>
 
@@ -733,7 +755,10 @@ export default function UserProfileScreen() {
             <TouchableOpacity
               style={styles.menuOverlay}
               activeOpacity={1}
-              onPress={() => setShowMenu(false)}
+              onPress={() => {
+            setShowMenu(false);
+            setConfirmDelete(false);
+          }}
             />
           )}
 
@@ -856,9 +881,7 @@ export default function UserProfileScreen() {
           {showAdditional && (
             <TouchableOpacity
               style={styles.infoBlock}
-              onLongPress={() =>
-                handleCopyText("Дополнительно", user.extra_info)
-              }
+              onLongPress={() => handleCopyText("Дополнительно", user.extra_info)}
               delayLongPress={300}
               activeOpacity={1}
             >
@@ -1008,6 +1031,13 @@ const styles = StyleSheet.create({
   menuItem: {
     paddingHorizontal: 16,
     paddingVertical: 12,
+  },
+
+  menuItemHint: {
+    marginTop: 4,
+    fontSize: 12,
+    lineHeight: 17,
+    color: "#8FA79A",
   },
 
   menuItemText: {
