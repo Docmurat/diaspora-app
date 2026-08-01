@@ -1,95 +1,149 @@
-import { useMemo, useState } from 'react';
 import {
-  View,
+  Philosopher_400Regular,
+  Philosopher_700Bold,
+  useFonts,
+} from "@expo-google-fonts/philosopher";
+import * as ImagePicker from "expo-image-picker";
+import { router, useLocalSearchParams } from "expo-router";
+import { StatusBar } from "expo-status-bar";
+import { useMemo, useState } from "react";
+import {
+  Alert,
+  Image,
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  Switch,
   Text,
   TextInput,
   TouchableOpacity,
-  StyleSheet,
-  ScrollView,
-  Image,
-  Alert,
-  Switch,
-  KeyboardAvoidingView,
-  Platform,
-} from 'react-native';
-import { translateAuthError } from '../services/errorService';
-import { router, useLocalSearchParams } from 'expo-router';
-import * as ImagePicker from 'expo-image-picker';
-import { normalizeBirthDate, formatBirthDateInput } from '../store/user';
-import { registerUser } from '../services/authService';
-import { supabase } from '../lib/supabase';
-import { uploadAvatar, isRemoteAvatar } from '../services/storageService';
+  View,
+} from "react-native";
+import AvatarCropModal, { prepareAvatarSource } from "../components/AvatarCrop";
+import { Glass, Tekmet } from "../components/mingi";
+import { supabase } from "../lib/supabase";
+import { registerUser } from "../services/authService";
+import { translateAuthError } from "../services/errorService";
+import { isRemoteAvatar, uploadAvatar } from "../services/storageService";
+import { formatBirthDateInput, normalizeBirthDate } from "../store/user";
 
 const categories = [
-  'Медицина',
-  'Юриспруденция',
-  'Образование',
-  'IT и технологии',
-  'Бизнес и финансы',
-  'Строительство и недвижимость',
-  'Логистика и транспорт',
-  'Услуги и сервис',
-  'Маркетинг и медиа',
-  'Дизайн и творчество',
-  'Государственная служба',
-  'Наука и исследования',
-  'Спорт и здоровье',
-  'Дом и быт',
-  'Другое',
+  "Медицина",
+  "Юриспруденция",
+  "Образование",
+  "IT и технологии",
+  "Бизнес и финансы",
+  "Строительство и недвижимость",
+  "Логистика и транспорт",
+  "Услуги и сервис",
+  "Маркетинг и медиа",
+  "Дизайн и творчество",
+  "Государственная служба",
+  "Наука и исследования",
+  "Спорт и здоровье",
+  "Дом и быт",
+  "Другое",
 ];
 
 const professions = [
-  'Стоматолог',
-  'Терапевт',
-  'Хирург',
-  'Педиатр',
-  'Юрист',
-  'Адвокат',
-  'Нотариус',
-  'Учитель',
-  'Преподаватель',
-  'Программист',
-  'Разработчик',
-  'Дизайнер',
-  'Маркетолог',
-  'Бухгалтер',
-  'Финансист',
-  'Предприниматель',
-  'Логист',
-  'Водитель',
-  'Риелтор',
-  'Строитель',
-  'Архитектор',
-  'Няня',
-  'Тренер',
-  'Исследователь',
-  'Госслужащий',
+  "Стоматолог",
+  "Терапевт",
+  "Хирург",
+  "Педиатр",
+  "Юрист",
+  "Адвокат",
+  "Нотариус",
+  "Учитель",
+  "Преподаватель",
+  "Программист",
+  "Разработчик",
+  "Дизайнер",
+  "Маркетолог",
+  "Бухгалтер",
+  "Финансист",
+  "Предприниматель",
+  "Логист",
+  "Водитель",
+  "Риелтор",
+  "Строитель",
+  "Архитектор",
+  "Няня",
+  "Тренер",
+  "Исследователь",
+  "Госслужащий",
 ];
 
+const glassInputProps = {
+  radius: 16,
+  tintColor: "rgba(255,255,255,0.95)",
+  borderColor: "rgba(93,140,120,0.45)",
+  borderWidth: 0.75,
+} as const;
+
 export default function RegisterScreen() {
+  const [fontsLoaded] = useFonts({
+    Philosopher_400Regular,
+    Philosopher_700Bold,
+  });
+
   const [step, setStep] = useState(1);
   const params = useLocalSearchParams();
-  const inviteCode = String(params.inviteCode || '');
+  const inviteCode = String(params.inviteCode || "");
 
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [phone, setPhone] = useState('');
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [phone, setPhone] = useState("");
   const [phoneVisible, setPhoneVisible] = useState(true);
-  const [firstName, setFirstName] = useState('');
-  const [lastName, setLastName] = useState('');
-  const [birthDateInput, setBirthDateInput] = useState('');
-  const [country, setCountry] = useState('');
-  const [city, setCity] = useState('');
-  const [category, setCategory] = useState('');
-  const [profession, setProfession] = useState('');
-  const [bio, setBio] = useState('');
-  const [telegram, setTelegram] = useState('');
-  const [avatarUri, setAvatarUri] = useState('');
-  const [error, setError] = useState('');
-  const [showProfessionSuggestions, setShowProfessionSuggestions] = useState(false);
+  const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("");
+  const [birthDateInput, setBirthDateInput] = useState("");
+  const [country, setCountry] = useState("");
+  const [city, setCity] = useState("");
+  const [category, setCategory] = useState("");
+  const [profession, setProfession] = useState("");
+  const [bio, setBio] = useState("");
+  const [telegram, setTelegram] = useState("");
+  const [avatarUri, setAvatarUri] = useState("");
+  const [cropVisible, setCropVisible] = useState(false);
+  const [cropSource, setCropSource] = useState<{
+    uri: string;
+    width: number;
+    height: number;
+  } | null>(null);
+  const [error, setError] = useState("");
+  const [showProfessionSuggestions, setShowProfessionSuggestions] =
+    useState(false);
   const [showCategoryOptions, setShowCategoryOptions] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [checkingEmail, setCheckingEmail] = useState(false);
+
+  const filteredCategories = useMemo(() => {
+    const search = category.trim().toLowerCase();
+    if (!search) return categories;
+
+    return categories.filter((item) => item.toLowerCase().includes(search));
+  }, [category]);
+
+  const categoryValid = useMemo(
+    () =>
+      categories.some(
+        (item) => item.toLowerCase() === category.trim().toLowerCase(),
+      ),
+    [category],
+  );
+
+  const step1Valid =
+    !!email.trim() &&
+    !!password.trim() &&
+    !!phone.trim() &&
+    !!firstName.trim() &&
+    !!lastName.trim() &&
+    !!birthDateInput.trim() &&
+    !!country.trim() &&
+    !!city.trim();
+
+  const step2Valid = categoryValid && !!profession.trim() && !!bio.trim();
 
   const filteredProfessions = useMemo(() => {
     const search = profession.trim().toLowerCase();
@@ -101,37 +155,45 @@ export default function RegisterScreen() {
   }, [profession]);
 
   const checkEmailExists = async (rawEmail: string) => {
-  const normalizedEmail = rawEmail.trim().toLowerCase();
+    const normalizedEmail = rawEmail.trim().toLowerCase();
 
-  const { data, error } = await supabase.rpc('check_email_exists', {
-    input_email: normalizedEmail,
-  });
+    const { data, error } = await supabase.rpc("check_email_exists", {
+      input_email: normalizedEmail,
+    });
 
-  if (error) {
-    throw new Error(error.message);
-  }
+    if (error) {
+      throw new Error(error.message);
+    }
 
-  return !!data;
-};
+    return !!data;
+  };
 
   const handlePickImage = async () => {
     const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
 
     if (!permission.granted) {
-      Alert.alert('Нет доступа', 'Нужно разрешение на доступ к галерее.');
+      Alert.alert("Нет доступа", "Нужно разрешение на доступ к галерее.");
       return;
     }
 
     const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ['images'],
-      allowsEditing: true,
-      aspect: [1, 1],
-      quality: 0.8,
+      mediaTypes: ["images"],
+      allowsEditing: false,
+      quality: 0.9,
     });
 
     if (!result.canceled && result.assets?.length > 0) {
-      setAvatarUri(result.assets[0].uri);
-      setError('');
+      const asset = result.assets[0];
+
+      // Сразу уменьшаем фото, чтобы не держать в памяти тяжёлый оригинал
+      const prepared = await prepareAvatarSource(
+        asset.uri,
+        asset.width || 0,
+        asset.height || 0,
+      );
+
+      setCropSource(prepared);
+      setCropVisible(true);
     }
   };
 
@@ -148,57 +210,66 @@ export default function RegisterScreen() {
       !country.trim() ||
       !city.trim()
     ) {
-      setError('Заполните все обязательные поля');
+      setError("Заполните все обязательные поля");
       return;
     }
 
     const normalizedBirthDate = normalizeBirthDate(birthDateInput);
     if (!normalizedBirthDate) {
-      setError('Дата рождения должна быть в формате ДД.ММ.ГГГГ');
+      setError("Дата рождения должна быть в формате ДД.ММ.ГГГГ");
       return;
     }
 
     try {
       setCheckingEmail(true);
-      setError('');
+      setError("");
 
       const emailExists = await checkEmailExists(email);
 
       if (emailExists) {
-        setError('Эта почта уже используется');
+        setError("Эта почта уже используется");
         return;
       }
 
       setStep(2);
     } catch (e) {
-  setError(translateAuthError(e));
-} finally {
-  setCheckingEmail(false);
-}
+      setError(translateAuthError(e));
+    } finally {
+      setCheckingEmail(false);
+    }
   };
 
   const handleRegister = async () => {
     if (submitting) return;
 
     if (!inviteCode.trim()) {
-      setError('Инвайт-код не найден. Вернитесь и введите код заново.');
+      setError("Инвайт-код не найден. Вернитесь и введите код заново.");
       return;
     }
 
-    if (!category || !profession.trim() || !bio.trim()) {
-      setError('Заполните все обязательные поля');
+    if (!category.trim() || !profession.trim() || !bio.trim()) {
+      setError("Заполните все обязательные поля");
+      return;
+    }
+
+    const matchedCategory = categories.find(
+      (item) => item.toLowerCase() === category.trim().toLowerCase(),
+    );
+
+    if (!matchedCategory) {
+      setError("Выберите сферу деятельности из списка");
       return;
     }
 
     const normalizedBirthDate = normalizeBirthDate(birthDateInput);
     if (!normalizedBirthDate) {
-      setError('Дата рождения должна быть в формате ДД.ММ.ГГГГ');
+      setError("Дата рождения должна быть в формате ДД.ММ.ГГГГ");
       return;
     }
 
     try {
       setSubmitting(true);
-      setError('');
+      setError("");
 
       const result = await registerUser({
         inviteCode,
@@ -211,11 +282,11 @@ export default function RegisterScreen() {
         birthDate: normalizedBirthDate,
         country,
         city,
-        category,
+        category: matchedCategory,
         profession,
         bio,
         telegram,
-        extraInfo: '',
+        extraInfo: "",
         avatarPath: null,
       });
 
@@ -223,461 +294,627 @@ export default function RegisterScreen() {
         const uploaded = await uploadAvatar(result.userId, avatarUri);
 
         const { error: avatarUpdateError } = await supabase
-          .from('users')
+          .from("users")
           .update({
             avatar_path: uploaded.publicUrl,
             updated_at: new Date().toISOString(),
           })
-          .eq('id', result.userId);
+          .eq("id", result.userId);
 
         if (avatarUpdateError) {
           throw new Error(avatarUpdateError.message);
         }
       }
 
-      router.replace('/pending-approval');
+      router.replace("/pending-approval");
     } catch (e) {
-  setError(translateAuthError(e));
-} finally {
-  setSubmitting(false);
-}
+      setError(translateAuthError(e));
+    } finally {
+      setSubmitting(false);
+    }
   };
 
+  if (!fontsLoaded) {
+    return <View style={styles.emptyBg} />;
+  }
+
   return (
-    <KeyboardAvoidingView
-      style={styles.keyboardWrap}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      keyboardVerticalOffset={Platform.OS === 'ios' ? 20 : 0}
-    >
-      <ScrollView
-        contentContainerStyle={styles.container}
-        keyboardShouldPersistTaps="handled"
-        keyboardDismissMode="on-drag"
-        showsVerticalScrollIndicator={false}
+    <View style={styles.screen}>
+      <StatusBar style="dark" />
+
+      <KeyboardAvoidingView
+        style={styles.keyboardWrap}
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
+        keyboardVerticalOffset={Platform.OS === "ios" ? 20 : 0}
       >
-        <Text style={styles.title}>Регистрация</Text>
-        <Text style={styles.stepText}>Шаг {step} из 2</Text>
+        <ScrollView
+          contentContainerStyle={styles.container}
+          keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="on-drag"
+          showsVerticalScrollIndicator={false}
+        >
+          <Text style={styles.title}>Регистрация</Text>
+          <Text style={styles.subtitle}>ШАГ {step} ИЗ 2</Text>
 
-        {step === 1 && (
-          <>
-            <TouchableOpacity style={styles.avatarPicker} onPress={handlePickImage}>
-              <Image
-                source={
-                  avatarUri
-                    ? { uri: avatarUri }
-                    : require('../assets/default-avatar.png')
-                }
-                style={styles.avatarImage}
-              />
-            </TouchableOpacity>
+          <Tekmet style={styles.tekmet} />
 
-            <Text style={styles.avatarHint}>Добавить фото профиля</Text>
+          <Text style={styles.requiredHint}>
+            Поля со звёздочкой (*) обязательны
+          </Text>
 
-            <TextInput
-              placeholder="Электронная почта"
-              style={styles.input}
-              value={email}
-              onChangeText={(text) => {
-                setEmail(text);
-                setError('');
-              }}
-              autoCapitalize="none"
-              keyboardType="email-address"
-            />
+          {step === 1 && (
+            <>
+              <TouchableOpacity
+                style={styles.avatarPicker}
+                onPress={handlePickImage}
+                activeOpacity={0.85}
+              >
+                <Image
+                  source={
+                    avatarUri
+                      ? { uri: avatarUri }
+                      : require("../assets/default-avatar.png")
+                  }
+                  style={styles.avatarImage}
+                />
+              </TouchableOpacity>
 
-            <TextInput
-              placeholder="Пароль"
-              style={styles.input}
-              value={password}
-              onChangeText={(text) => {
-                setPassword(text);
-                setError('');
-              }}
-              secureTextEntry
-            />
+              <Text style={styles.avatarHint}>Добавить фото профиля</Text>
 
-            <TextInput
-              placeholder="Номер телефона"
-              style={styles.input}
-              value={phone}
-              onChangeText={(text) => {
-                setPhone(text);
-                setError('');
-              }}
-              keyboardType="phone-pad"
-            />
+              <Glass {...glassInputProps} style={styles.inputWrap}>
+                <TextInput
+                  placeholder="Электронная почта *"
+                  placeholderTextColor="#8FA79A"
+                  style={styles.input}
+                  value={email}
+                  onChangeText={(text) => {
+                    setEmail(text);
+                    setError("");
+                  }}
+                  autoCapitalize="none"
+                  keyboardType="email-address"
+                />
+              </Glass>
 
-            <View style={styles.switchRow}>
-              <View style={styles.switchTextWrap}>
-                <Text style={styles.switchTitle}>Показывать номер в профиле</Text>
-                <Text style={styles.switchHint}>
-                  Выключите, чтобы номер был доступен только администрации
-                </Text>
-              </View>
-              <Switch
-                value={phoneVisible}
-                onValueChange={setPhoneVisible}
-                trackColor={{ false: '#d9d9d9', true: '#81C784' }}
-                thumbColor={phoneVisible ? '#2E7D32' : '#f4f4f4'}
-              />
-            </View>
+              <Glass {...glassInputProps} style={styles.inputWrap}>
+                <TextInput
+                  placeholder="Пароль *"
+                  placeholderTextColor="#8FA79A"
+                  style={styles.input}
+                  value={password}
+                  onChangeText={(text) => {
+                    setPassword(text);
+                    setError("");
+                  }}
+                  secureTextEntry
+                />
+              </Glass>
 
-            <TextInput
-              placeholder="Имя"
-              style={styles.input}
-              value={firstName}
-              onChangeText={(text) => {
-                setFirstName(text);
-                setError('');
-              }}
-            />
+              <Glass {...glassInputProps} style={styles.inputWrap}>
+                <TextInput
+                  placeholder="Номер телефона *"
+                  placeholderTextColor="#8FA79A"
+                  style={styles.input}
+                  value={phone}
+                  onChangeText={(text) => {
+                    setPhone(text);
+                    setError("");
+                  }}
+                  keyboardType="phone-pad"
+                />
+              </Glass>
 
-            <TextInput
-              placeholder="Фамилия"
-              style={styles.input}
-              value={lastName}
-              onChangeText={(text) => {
-                setLastName(text);
-                setError('');
-              }}
-            />
+              <Glass {...glassInputProps} style={styles.inputWrap}>
+                <View style={styles.switchRow}>
+                  <View style={styles.switchTextWrap}>
+                    <Text style={styles.switchTitle}>
+                      Показывать номер в профиле
+                    </Text>
+                    <Text style={styles.switchHint}>
+                      Выключите, чтобы номер был доступен только администрации
+                    </Text>
+                  </View>
+                  <Switch
+                    value={phoneVisible}
+                    onValueChange={setPhoneVisible}
+                    trackColor={{ false: "#D6E4DA", true: "#9FD4B4" }}
+                    thumbColor={phoneVisible ? "#69B78D" : "#FFFFFF"}
+                  />
+                </View>
+              </Glass>
 
-            <TextInput
-  placeholder="Дата рождения (ДД.ММ.ГГГГ)"
-  style={styles.input}
-  value={birthDateInput}
-  onChangeText={(text) => {
-    setBirthDateInput(formatBirthDateInput(text));
-    setError('');
-  }}
-  keyboardType="number-pad"
-/>
+              <Glass {...glassInputProps} style={styles.inputWrap}>
+                <TextInput
+                  placeholder="Имя *"
+                  placeholderTextColor="#8FA79A"
+                  style={styles.input}
+                  value={firstName}
+                  onChangeText={(text) => {
+                    setFirstName(text);
+                    setError("");
+                  }}
+                />
+              </Glass>
 
-            <TextInput
-              placeholder="Страна"
-              style={styles.input}
-              value={country}
-              onChangeText={(text) => {
-                setCountry(text);
-                setError('');
-              }}
-            />
+              <Glass {...glassInputProps} style={styles.inputWrap}>
+                <TextInput
+                  placeholder="Фамилия *"
+                  placeholderTextColor="#8FA79A"
+                  style={styles.input}
+                  value={lastName}
+                  onChangeText={(text) => {
+                    setLastName(text);
+                    setError("");
+                  }}
+                />
+              </Glass>
 
-            <TextInput
-              placeholder="Город"
-              style={styles.input}
-              value={city}
-              onChangeText={(text) => {
-                setCity(text);
-                setError('');
-              }}
-            />
+              <Glass {...glassInputProps} style={styles.inputWrap}>
+                <TextInput
+                  placeholder="Дата рождения (ДД.ММ.ГГГГ) *"
+                  placeholderTextColor="#8FA79A"
+                  style={styles.input}
+                  value={birthDateInput}
+                  onChangeText={(text) => {
+                    setBirthDateInput(formatBirthDateInput(text));
+                    setError("");
+                  }}
+                  keyboardType="number-pad"
+                />
+              </Glass>
 
-            {!!error && <Text style={styles.error}>{error}</Text>}
+              <Glass {...glassInputProps} style={styles.inputWrap}>
+                <TextInput
+                  placeholder="Страна *"
+                  placeholderTextColor="#8FA79A"
+                  style={styles.input}
+                  value={country}
+                  onChangeText={(text) => {
+                    setCountry(text);
+                    setError("");
+                  }}
+                />
+              </Glass>
 
-            <TouchableOpacity
-              style={[styles.button, checkingEmail && styles.disabledButton]}
-              onPress={goToStepTwo}
-              disabled={checkingEmail}
-            >
-              <Text style={styles.buttonText}>
-                {checkingEmail ? 'Проверка...' : 'Далее'}
-              </Text>
-            </TouchableOpacity>
-          </>
-        )}
+              <Glass {...glassInputProps} style={styles.inputWrap}>
+                <TextInput
+                  placeholder="Город *"
+                  placeholderTextColor="#8FA79A"
+                  style={styles.input}
+                  value={city}
+                  onChangeText={(text) => {
+                    setCity(text);
+                    setError("");
+                  }}
+                />
+              </Glass>
 
-        {step === 2 && (
-          <>
-            <Text style={styles.label}>Сфера деятельности</Text>
+              {!!error && <Text style={styles.error}>{error}</Text>}
 
-            <TouchableOpacity
-              style={styles.selectField}
-              onPress={() => setShowCategoryOptions((prev) => !prev)}
-            >
-              <Text
+              <TouchableOpacity
+                activeOpacity={0.85}
+                onPress={goToStepTwo}
+                disabled={checkingEmail || !step1Valid}
                 style={[
-                  styles.selectFieldText,
-                  !category && styles.selectPlaceholderText,
+                  styles.primaryShadow,
+                  (checkingEmail || !step1Valid) && styles.disabled,
                 ]}
               >
-                {category || 'Выберите сферу деятельности'}
-              </Text>
-              <Text style={styles.selectArrow}>{showCategoryOptions ? '▲' : '▼'}</Text>
-            </TouchableOpacity>
-
-            {showCategoryOptions && (
-              <View style={styles.optionsBox}>
-                {categories.map((item) => (
-                  <TouchableOpacity
-                    key={item}
-                    style={styles.optionItem}
-                    onPress={() => {
-                      setCategory(item);
-                      setShowCategoryOptions(false);
-                      setError('');
-                    }}
-                  >
-                    <Text style={styles.optionText}>{item}</Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            )}
-
-            <TextInput
-              placeholder="Профессия"
-              style={styles.input}
-              value={profession}
-              onChangeText={(text) => {
-                setProfession(text);
-                setShowProfessionSuggestions(true);
-                setError('');
-              }}
-              onFocus={() => setShowProfessionSuggestions(true)}
-            />
-
-            {showProfessionSuggestions && filteredProfessions.length > 0 && (
-              <View style={styles.optionsBox}>
-                {filteredProfessions.map((item) => (
-                  <TouchableOpacity
-                    key={item}
-                    style={styles.optionItem}
-                    onPress={() => {
-                      setProfession(item);
-                      setShowProfessionSuggestions(false);
-                    }}
-                  >
-                    <Text style={styles.optionText}>{item}</Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            )}
-
-            <TextInput
-              placeholder="Чем могу быть полезен"
-              style={[styles.input, styles.textArea]}
-              value={bio}
-              onChangeText={(text) => {
-                setBio(text);
-                setError('');
-              }}
-              multiline
-            />
-
-            <TextInput
-              placeholder="Telegram (необязательно)"
-              style={styles.input}
-              value={telegram}
-              onChangeText={(text) => {
-                setTelegram(text);
-                setError('');
-              }}
-            />
-
-            {!!error && <Text style={styles.error}>{error}</Text>}
-
-            <View style={styles.buttonsRow}>
-              <TouchableOpacity
-                style={styles.secondaryButton}
-                onPress={() => {
-                  setError('');
-                  setStep(1);
-                }}
-              >
-                <Text style={styles.secondaryButtonText}>Назад</Text>
+                <Glass
+                  radius={18}
+                  tintColor="rgba(105,183,141,0.92)"
+                  borderColor="rgba(255,255,255,0.85)"
+                >
+                  <View style={styles.buttonInner}>
+                    <Text style={styles.primaryButtonText}>
+                      {checkingEmail ? "Проверка..." : "Далее"}
+                    </Text>
+                  </View>
+                </Glass>
               </TouchableOpacity>
+            </>
+          )}
 
-              <TouchableOpacity
-                style={[styles.buttonSmall, submitting && styles.disabledButton]}
-                onPress={handleRegister}
-                disabled={submitting}
-              >
-                <Text style={styles.buttonText}>
-                  {submitting ? 'Сохранение...' : 'Завершить'}
-                </Text>
-              </TouchableOpacity>
-            </View>
-          </>
-        )}
-      </ScrollView>
-    </KeyboardAvoidingView>
+          {step === 2 && (
+            <>
+              <Glass {...glassInputProps} style={styles.inputWrap}>
+                <TextInput
+                  placeholder="Сфера деятельности *"
+                  placeholderTextColor="#8FA79A"
+                  style={styles.input}
+                  value={category}
+                  onChangeText={(text) => {
+                    setCategory(text);
+                    setShowCategoryOptions(true);
+                    setError("");
+                  }}
+                  onFocus={() => setShowCategoryOptions(true)}
+                />
+              </Glass>
+
+              {showCategoryOptions && filteredCategories.length > 0 && (
+                <Glass {...glassInputProps} style={styles.optionsBox}>
+                  {filteredCategories.map((item, index) => (
+                    <TouchableOpacity
+                      key={item}
+                      style={[
+                        styles.optionItem,
+                        index === filteredCategories.length - 1 &&
+                          styles.optionItemLast,
+                      ]}
+                      onPress={() => {
+                        setCategory(item);
+                        setShowCategoryOptions(false);
+                        setError("");
+                      }}
+                    >
+                      <Text style={styles.optionText}>{item}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </Glass>
+              )}
+
+              <Glass {...glassInputProps} style={styles.inputWrap}>
+                <TextInput
+                  placeholder="Профессия *"
+                  placeholderTextColor="#8FA79A"
+                  style={styles.input}
+                  value={profession}
+                  onChangeText={(text) => {
+                    setProfession(text);
+                    setShowProfessionSuggestions(true);
+                    setError("");
+                  }}
+                  onFocus={() => setShowProfessionSuggestions(true)}
+                />
+              </Glass>
+
+              {showProfessionSuggestions && filteredProfessions.length > 0 && (
+                <Glass {...glassInputProps} style={styles.optionsBox}>
+                  {filteredProfessions.map((item, index) => (
+                    <TouchableOpacity
+                      key={item}
+                      style={[
+                        styles.optionItem,
+                        index === filteredProfessions.length - 1 &&
+                          styles.optionItemLast,
+                      ]}
+                      onPress={() => {
+                        setProfession(item);
+                        setShowProfessionSuggestions(false);
+                      }}
+                    >
+                      <Text style={styles.optionText}>{item}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </Glass>
+              )}
+
+              <Glass {...glassInputProps} style={styles.inputWrap}>
+                <TextInput
+                  placeholder="Чем могу быть полезен *"
+                  placeholderTextColor="#8FA79A"
+                  style={[styles.input, styles.textArea]}
+                  value={bio}
+                  onChangeText={(text) => {
+                    setBio(text);
+                    setError("");
+                  }}
+                  multiline
+                />
+              </Glass>
+
+              <Glass {...glassInputProps} style={styles.inputWrap}>
+                <TextInput
+                  placeholder="Telegram (необязательно)"
+                  placeholderTextColor="#8FA79A"
+                  style={styles.input}
+                  value={telegram}
+                  onChangeText={(text) => {
+                    setTelegram(text);
+                    setError("");
+                  }}
+                  autoCapitalize="none"
+                />
+              </Glass>
+
+              {!!error && <Text style={styles.error}>{error}</Text>}
+
+              <View style={styles.buttonsRow}>
+                <TouchableOpacity
+                  activeOpacity={0.85}
+                  onPress={() => {
+                    setStep(1);
+                    setError("");
+                  }}
+                  style={styles.secondaryWrap}
+                >
+                  <Glass
+                    radius={18}
+                    tintColor="rgba(255,255,255,0.5)"
+                    borderColor="rgba(93,140,120,0.45)"
+                    borderWidth={0.75}
+                  >
+                    <View style={styles.buttonInner}>
+                      <Text style={styles.secondaryButtonText}>Назад</Text>
+                    </View>
+                  </Glass>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  activeOpacity={0.85}
+                  onPress={handleRegister}
+                  disabled={submitting || !step2Valid}
+                  style={[
+                    styles.primaryShadow,
+                    styles.primaryHalf,
+                    (submitting || !step2Valid) && styles.disabled,
+                  ]}
+                >
+                  <Glass
+                    radius={18}
+                    tintColor="rgba(105,183,141,0.92)"
+                    borderColor="rgba(255,255,255,0.85)"
+                  >
+                    <View style={styles.buttonInner}>
+                      <Text style={styles.primaryButtonText}>
+                        {submitting ? "Отправка..." : "Готово"}
+                      </Text>
+                    </View>
+                  </Glass>
+                </TouchableOpacity>
+              </View>
+            </>
+          )}
+        </ScrollView>
+      </KeyboardAvoidingView>
+
+      {cropSource && (
+        <AvatarCropModal
+          visible={cropVisible}
+          uri={cropSource.uri}
+          imageWidth={cropSource.width}
+          imageHeight={cropSource.height}
+          onCancel={() => setCropVisible(false)}
+          onDone={(croppedUri) => {
+            setAvatarUri(croppedUri);
+            setCropVisible(false);
+            setError("");
+          }}
+        />
+      )}
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
+  emptyBg: {
+    flex: 1,
+    backgroundColor: "#FFFFFF",
+  },
+
+  screen: {
+    flex: 1,
+    backgroundColor: "#FFFFFF",
+  },
+
   keyboardWrap: {
     flex: 1,
-    backgroundColor: '#fff',
   },
+
   container: {
-    padding: 20,
-    paddingTop: 70,
-    paddingBottom: 80,
-    backgroundColor: '#fff',
+    paddingHorizontal: 28,
+    paddingTop: 64,
+    paddingBottom: 40,
     flexGrow: 1,
   },
+
   title: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    marginBottom: 8,
+    fontFamily: "Philosopher_700Bold",
+    fontSize: 34,
+    color: "#3F6B5B",
+    textAlign: "center",
   },
-  stepText: {
-    fontSize: 14,
-    color: '#777',
-    marginBottom: 24,
+
+  subtitle: {
+    fontFamily: "Philosopher_400Regular",
+    fontSize: 13.5,
+    letterSpacing: 2.5,
+    color: "#719686",
+    textAlign: "center",
+    marginTop: 8,
   },
-  avatarPicker: {
-    alignSelf: 'center',
+
+  tekmet: {
+    alignSelf: "center",
+    marginTop: 14,
     marginBottom: 10,
   },
+
+  requiredHint: {
+    fontSize: 12.5,
+    color: "#96AC9E",
+    textAlign: "center",
+    marginBottom: 16,
+  },
+
+  avatarPicker: {
+    alignSelf: "center",
+  },
+
   avatarImage: {
-    width: 110,
-    height: 110,
-    borderRadius: 55,
+    width: 104,
+    height: 104,
+    borderRadius: 52,
+    borderWidth: 2,
+    borderColor: "rgba(255,255,255,0.85)",
   },
+
   avatarHint: {
-    textAlign: 'center',
-    color: '#666',
-    fontSize: 13,
-    marginBottom: 18,
+    fontFamily: "Philosopher_400Regular",
+    fontSize: 13.5,
+    color: "#719686",
+    textAlign: "center",
+    marginTop: 8,
+    marginBottom: 20,
   },
-  label: {
-    fontSize: 14,
-    color: '#444',
-    marginBottom: 8,
-    fontWeight: '600',
+
+  inputWrap: {
+    marginBottom: 12,
   },
+
   input: {
     height: 52,
-    borderWidth: 1,
-    borderColor: '#ddd',
-    borderRadius: 12,
-    paddingHorizontal: 15,
-    marginBottom: 14,
-    backgroundColor: '#fff',
+    paddingHorizontal: 16,
+    fontSize: 15.5,
+    color: "#2F4A3C",
+    ...(Platform.OS === "web"
+      ? ({
+          outlineStyle: "none",
+          outlineWidth: 0,
+          outlineColor: "transparent",
+        } as any)
+      : {}),
   },
+
+  textArea: {
+    height: 110,
+    paddingTop: 14,
+    textAlignVertical: "top",
+  },
+
   switchRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    borderWidth: 1,
-    borderColor: '#ddd',
-    borderRadius: 12,
-    paddingHorizontal: 15,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 16,
     paddingVertical: 12,
-    backgroundColor: '#fff',
-    marginBottom: 14,
   },
+
   switchTextWrap: {
     flex: 1,
     paddingRight: 12,
   },
+
   switchTitle: {
     fontSize: 14,
-    fontWeight: '600',
-    color: '#222',
+    fontWeight: "600",
+    color: "#3F6B5B",
     marginBottom: 4,
   },
+
   switchHint: {
     fontSize: 12,
-    color: '#666',
+    color: "#7E988B",
     lineHeight: 17,
   },
+
+  label: {
+    fontFamily: "Philosopher_400Regular",
+    fontSize: 14,
+    color: "#719686",
+    marginBottom: 8,
+    marginLeft: 4,
+  },
+
   selectField: {
     minHeight: 52,
-    borderWidth: 1,
-    borderColor: '#ddd',
-    borderRadius: 12,
-    paddingHorizontal: 15,
-    marginBottom: 14,
-    backgroundColor: '#fff',
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
   },
+
   selectFieldText: {
     flex: 1,
-    fontSize: 15,
-    color: '#111',
+    fontSize: 15.5,
+    color: "#2F4A3C",
   },
+
   selectPlaceholderText: {
-    color: '#999',
+    color: "#8FA79A",
   },
+
   selectArrow: {
     fontSize: 12,
-    color: '#666',
+    color: "#719686",
     marginLeft: 10,
   },
+
   optionsBox: {
-    borderWidth: 1,
-    borderColor: '#e5e5e5',
-    borderRadius: 12,
-    backgroundColor: '#fff',
-    marginTop: -6,
-    marginBottom: 14,
-    overflow: 'hidden',
+    marginTop: -4,
+    marginBottom: 12,
   },
+
   optionItem: {
     paddingVertical: 12,
-    paddingHorizontal: 15,
-    borderBottomWidth: 1,
-    borderBottomColor: '#f0f0f0',
+    paddingHorizontal: 16,
+    borderBottomWidth: 0.75,
+    borderBottomColor: "rgba(93,140,120,0.2)",
   },
+
+  optionItemLast: {
+    borderBottomWidth: 0,
+  },
+
   optionText: {
     fontSize: 15,
-    color: '#333',
+    color: "#4E7364",
   },
-  textArea: {
-    height: 110,
-    paddingTop: 14,
-    textAlignVertical: 'top',
-  },
+
   error: {
-    color: '#c62828',
+    color: "#C05B4D",
     marginBottom: 12,
     fontSize: 14,
+    textAlign: "center",
   },
-  button: {
-    backgroundColor: '#2E7D32',
-    padding: 16,
-    borderRadius: 12,
-    marginTop: 10,
-    marginBottom: 30,
+
+  primaryShadow: {
+    marginTop: 8,
+    borderRadius: 18,
+    shadowColor: "#69B78D",
+    shadowOpacity: 0.45,
+    shadowRadius: 14,
+    shadowOffset: { width: 0, height: 8 },
+    elevation: 6,
   },
-  buttonSmall: {
+
+  primaryHalf: {
     flex: 1,
-    backgroundColor: '#2E7D32',
-    padding: 16,
-    borderRadius: 12,
+    marginTop: 0,
     marginLeft: 8,
   },
-  disabledButton: {
-    opacity: 0.7,
-  },
-  buttonText: {
-    color: '#fff',
-    textAlign: 'center',
-    fontWeight: 'bold',
-    fontSize: 16,
-  },
-  buttonsRow: {
-    flexDirection: 'row',
-    marginTop: 10,
-    marginBottom: 30,
-  },
-  secondaryButton: {
+
+  secondaryWrap: {
     flex: 1,
-    borderWidth: 1.5,
-    borderColor: '#2E7D32',
-    padding: 16,
-    borderRadius: 12,
     marginRight: 8,
-    backgroundColor: '#fff',
   },
-  secondaryButtonText: {
-    color: '#2E7D32',
-    textAlign: 'center',
-    fontWeight: 'bold',
+
+  buttonsRow: {
+    flexDirection: "row",
+    marginTop: 8,
+  },
+
+  buttonInner: {
+    paddingVertical: 16,
+    alignItems: "center",
+    justifyContent: "center",
+    minHeight: 52,
+  },
+
+  primaryButtonText: {
+    color: "#FFFFFF",
     fontSize: 16,
+    fontWeight: "600",
+  },
+
+  secondaryButtonText: {
+    color: "#3F6B5B",
+    fontSize: 16,
+    fontWeight: "600",
+  },
+
+  disabled: {
+    opacity: 0.7,
   },
 });

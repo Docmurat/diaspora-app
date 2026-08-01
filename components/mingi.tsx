@@ -1,0 +1,256 @@
+// Общие элементы дизайн-системы «Минги-Тау»:
+// живой фон с боке, стеклянные карточки и текмет-разделитель.
+// Используется на всех экранах вместо копирования кода.
+
+import { BlurView } from "expo-blur";
+import { StatusBar } from "expo-status-bar";
+import { ReactNode, useEffect, useRef } from "react";
+import {
+  Animated,
+  Easing,
+  Platform,
+  StyleSheet,
+  useWindowDimensions,
+  View,
+  ViewStyle,
+} from "react-native";
+import Svg, {
+  Circle,
+  Defs,
+  Path,
+  RadialGradient,
+  Stop,
+} from "react-native-svg";
+
+// В вебе браузер рисует чёрную рамку фокуса поверх полей, переключателей
+// и кнопок. Отключаем её один раз для всего приложения.
+if (Platform.OS === "web" && typeof document !== "undefined") {
+  const STYLE_ID = "mingi-web-focus-fix";
+  if (!document.getElementById(STYLE_ID)) {
+    const style = document.createElement("style");
+    style.id = STYLE_ID;
+    style.textContent =
+      "*:focus, *:focus-visible { outline: none !important; }";
+    document.head.appendChild(style);
+  }
+}
+
+export function useDrift(duration: number, delay = 0) {
+  const v = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.delay(delay),
+        Animated.timing(v, {
+          toValue: 1,
+          duration,
+          easing: Easing.inOut(Easing.quad),
+          useNativeDriver: true,
+        }),
+        Animated.timing(v, {
+          toValue: 0,
+          duration,
+          easing: Easing.inOut(Easing.quad),
+          useNativeDriver: true,
+        }),
+      ]),
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [v, duration, delay]);
+  return v;
+}
+
+export function Blob({
+  size,
+  color,
+  style,
+  driftX,
+  driftY,
+  rangeX,
+  rangeY,
+  scaleTo,
+  id,
+}: {
+  size: number;
+  color: string;
+  style: object;
+  driftX: Animated.Value;
+  driftY: Animated.Value;
+  rangeX: number;
+  rangeY: number;
+  scaleTo: number;
+  id: string;
+}) {
+  const translateX = driftX.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0, rangeX],
+  });
+  const translateY = driftY.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0, rangeY],
+  });
+  const scale = driftY.interpolate({
+    inputRange: [0, 1],
+    outputRange: [1, scaleTo],
+  });
+  return (
+    <Animated.View
+      pointerEvents="none"
+      style={[
+        { position: "absolute", width: size, height: size },
+        style,
+        { transform: [{ translateX }, { translateY }, { scale }] },
+      ]}
+    >
+      <Svg width={size} height={size}>
+        <Defs>
+          <RadialGradient id={id} cx="50%" cy="50%" r="50%">
+            <Stop offset="0%" stopColor={color} stopOpacity="0.8" />
+            <Stop offset="70%" stopColor={color} stopOpacity="0" />
+          </RadialGradient>
+        </Defs>
+        <Circle cx={size / 2} cy={size / 2} r={size / 2} fill={`url(#${id})`} />
+      </Svg>
+    </Animated.View>
+  );
+}
+
+// Стеклянная карточка: размытие отдельным слоем, поверх него цветная плёнка,
+// и только потом содержимое — контент принудительно поднят поверх стекла
+export function Glass({
+  children,
+  radius,
+  tintColor,
+  borderColor,
+  borderWidth = 1,
+  style,
+}: {
+  children: ReactNode;
+  radius: number;
+  tintColor: string;
+  borderColor: string;
+  borderWidth?: number;
+  style?: ViewStyle;
+}) {
+  return (
+    <View
+      style={[
+        {
+          borderRadius: radius,
+          borderWidth,
+          borderColor,
+          overflow: "hidden",
+        },
+        style,
+      ]}
+    >
+      <BlurView
+        intensity={22}
+        tint="light"
+        style={StyleSheet.absoluteFill}
+        pointerEvents="none"
+      />
+      <View
+        style={[StyleSheet.absoluteFill, { backgroundColor: tintColor }]}
+        pointerEvents="none"
+      />
+      <View style={{ position: "relative", zIndex: 1 }}>{children}</View>
+    </View>
+  );
+}
+
+// Текмет-разделитель: линия — круг с ромбом и точкой — линия
+export function Tekmet({ style }: { style?: ViewStyle }) {
+  return (
+    <Svg width={120} height={24} viewBox="0 0 120 24" style={style}>
+      <Path d="M4 12 L44 12" stroke="#CBE2D3" strokeWidth={1.5} />
+      <Circle
+        cx={60}
+        cy={12}
+        r={9}
+        fill="none"
+        stroke="#9FC5AF"
+        strokeWidth={1.6}
+      />
+      <Path
+        d="M60 6 L66 12 L60 18 L54 12 Z"
+        fill="none"
+        stroke="#9FC5AF"
+        strokeWidth={1.6}
+        strokeLinejoin="round"
+      />
+      <Circle cx={60} cy={12} r={1.6} fill="#9FC5AF" />
+      <Path d="M76 12 L116 12" stroke="#CBE2D3" strokeWidth={1.5} />
+    </Svg>
+  );
+}
+
+// Живой фон экрана: мятный цвет + 3 дышащих пятна боке.
+// idPrefix должен быть уникальным для каждого экрана (например "r", "q").
+export function MingiBackground({
+  children,
+  idPrefix,
+}: {
+  children: ReactNode;
+  idPrefix: string;
+}) {
+  const { width, height } = useWindowDimensions();
+
+  const x1 = useDrift(11200);
+  const y1 = useDrift(8200, 300);
+  const x2 = useDrift(9600, 150);
+  const y2 = useDrift(13400, 500);
+  const x3 = useDrift(12200, 700);
+  const y3 = useDrift(8800, 100);
+
+  return (
+    <View style={bgStyles.container}>
+      <StatusBar style="dark" />
+
+      <Blob
+        id={`${idPrefix}1`}
+        size={760}
+        color="#A8D8C0"
+        style={{ top: -300, left: -310 }}
+        driftX={x1}
+        driftY={y1}
+        rangeX={width * 0.85}
+        rangeY={height * 0.6}
+        scaleTo={1.18}
+      />
+      <Blob
+        id={`${idPrefix}2`}
+        size={840}
+        color="#C2E3CF"
+        style={{ top: -90, right: -360 }}
+        driftX={x2}
+        driftY={y2}
+        rangeX={-width * 0.9}
+        rangeY={height * 0.5}
+        scaleTo={0.9}
+      />
+      <Blob
+        id={`${idPrefix}3`}
+        size={800}
+        color="#DFEFE3"
+        style={{ bottom: -330, left: -300 }}
+        driftX={x3}
+        driftY={y3}
+        rangeX={width * 0.8}
+        rangeY={-height * 0.65}
+        scaleTo={1.16}
+      />
+
+      {children}
+    </View>
+  );
+}
+
+const bgStyles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: "#F4FAF4",
+    overflow: "hidden",
+  },
+});
