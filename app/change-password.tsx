@@ -1,79 +1,99 @@
-import { useState } from 'react';
 import {
-  View,
+  Philosopher_400Regular,
+  Philosopher_700Bold,
+  useFonts,
+} from "@expo-google-fonts/philosopher";
+import { router } from "expo-router";
+import { StatusBar } from "expo-status-bar";
+import { useState } from "react";
+import {
+  KeyboardAvoidingView,
+  Platform,
+  StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
-  StyleSheet,
-  ActivityIndicator,
-  KeyboardAvoidingView,
-  Platform,
-} from 'react-native';
-import { router } from 'expo-router';
-import { supabase } from '../lib/supabase';
+  View,
+} from "react-native";
+import { Glass, Tekmet } from "../components/mingi";
+import { supabase } from "../lib/supabase";
 
 function getPasswordErrorMessage(message?: string) {
   if (!message) {
-    return 'Не удалось изменить пароль.';
+    return "Не удалось изменить пароль.";
   }
 
   const normalized = message.toLowerCase();
 
-  if (normalized.includes('same password')) {
-    return 'Новый пароль должен отличаться от текущего.';
+  if (normalized.includes("same password")) {
+    return "Новый пароль должен отличаться от текущего.";
   }
 
-  if (normalized.includes('weak password')) {
-    return 'Пароль слишком слабый.';
+  if (normalized.includes("weak password")) {
+    return "Пароль слишком слабый.";
   }
 
-  if (normalized.includes('password should be at least')) {
-    return 'Пароль слишком короткий.';
+  if (normalized.includes("password should be at least")) {
+    return "Пароль слишком короткий.";
   }
 
-  if (normalized.includes('reauthentication')) {
-    return 'Для смены пароля нужно подтвердить личность повторно.';
+  if (normalized.includes("reauthentication")) {
+    return "Для смены пароля нужно подтвердить личность повторно.";
   }
 
-  if (normalized.includes('nonce')) {
-    return 'Не пройдена повторная проверка безопасности.';
+  if (normalized.includes("nonce")) {
+    return "Не пройдена повторная проверка безопасности.";
   }
 
-  if (normalized.includes('current password')) {
-    return 'Текущий пароль указан неверно.';
+  if (normalized.includes("current password")) {
+    return "Текущий пароль указан неверно.";
   }
 
-  return 'Не удалось изменить пароль.';
+  return "Не удалось изменить пароль.";
 }
 
+const glassInputProps = {
+  radius: 16,
+  tintColor: "rgba(255,255,255,0.95)",
+  borderColor: "rgba(93,140,120,0.45)",
+  borderWidth: 0.75,
+} as const;
+
 export default function ChangePasswordScreen() {
-  const [currentPassword, setCurrentPassword] = useState('');
-  const [newPassword, setNewPassword] = useState('');
-  const [repeatPassword, setRepeatPassword] = useState('');
+  const [fontsLoaded] = useFonts({
+    Philosopher_400Regular,
+    Philosopher_700Bold,
+  });
+
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [repeatPassword, setRepeatPassword] = useState("");
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
-  const [successMessage, setSuccessMessage] = useState('');
+  const [error, setError] = useState("");
+  const [successMessage, setSuccessMessage] = useState("");
+
+  const formValid = !!newPassword.trim() && !!repeatPassword.trim();
 
   const handleChangePassword = async () => {
     if (!newPassword.trim()) {
-      setError('Введите новый пароль.');
+      setError("Введите новый пароль.");
       return;
     }
 
     if (newPassword.length < 6) {
-      setError('Новый пароль должен содержать минимум 6 символов.');
+      setError("Новый пароль должен содержать минимум 6 символов.");
       return;
     }
 
     if (newPassword !== repeatPassword) {
-      setError('Новый пароль и подтверждение не совпадают.');
+      setError("Новый пароль и подтверждение не совпадают.");
       return;
     }
 
     try {
       setLoading(true);
-      setError('');
-      setSuccessMessage('');
+      setError("");
+      setSuccessMessage("");
 
       const payload: {
         password: string;
@@ -93,186 +113,230 @@ export default function ChangePasswordScreen() {
         return;
       }
 
-      setSuccessMessage('Пароль успешно изменён.');
-      setCurrentPassword('');
-      setNewPassword('');
-      setRepeatPassword('');
+      setSuccessMessage("Пароль успешно изменён.");
+      setCurrentPassword("");
+      setNewPassword("");
+      setRepeatPassword("");
     } catch (e: any) {
-      console.log('Ошибка смены пароля:', e);
+      console.log("Ошибка смены пароля:", e);
       setError(getPasswordErrorMessage(e?.message));
     } finally {
       setLoading(false);
     }
   };
 
+  if (!fontsLoaded) {
+    return <View style={styles.screen} />;
+  }
+
   return (
-    <KeyboardAvoidingView
-      style={styles.keyboardWrap}
-      behavior={Platform.OS === 'ios' ? 'padding' : 'padding'}
-      keyboardVerticalOffset={Platform.OS === 'ios' ? 20 : 0}
-    >
-      <View style={styles.container}>
-        <Text style={styles.title}>Сменить пароль</Text>
+    <View style={styles.screen}>
+      <StatusBar style="dark" />
 
-        <Text style={styles.description}>
-          Введите новый пароль. Если в проекте включена дополнительная защита,
-          может понадобиться текущий пароль или повторное подтверждение.
-        </Text>
+      <KeyboardAvoidingView
+        style={styles.keyboardWrap}
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
+        keyboardVerticalOffset={Platform.OS === "ios" ? 20 : 0}
+      >
+        <View style={styles.content}>
+          <Text style={styles.title}>Смена пароля</Text>
+          <Text style={styles.subtitle}>МИНГИ·ТАУ</Text>
 
-        <TextInput
-          placeholder="Текущий пароль"
-          style={styles.input}
-          value={currentPassword}
-          onChangeText={(text) => {
-            setCurrentPassword(text);
-            setError('');
-            setSuccessMessage('');
-          }}
-          secureTextEntry
-          autoCapitalize="none"
-        />
+          <Tekmet style={styles.tekmet} />
 
-        <TextInput
-          placeholder="Новый пароль"
-          style={styles.input}
-          value={newPassword}
-          onChangeText={(text) => {
-            setNewPassword(text);
-            setError('');
-            setSuccessMessage('');
-          }}
-          secureTextEntry
-          autoCapitalize="none"
-        />
+          <Text style={styles.description}>
+            Придумайте новый пароль — не короче 6 символов.
+          </Text>
 
-        <TextInput
-          placeholder="Повторите новый пароль"
-          style={styles.input}
-          value={repeatPassword}
-          onChangeText={(text) => {
-            setRepeatPassword(text);
-            setError('');
-            setSuccessMessage('');
-          }}
-          secureTextEntry
-          autoCapitalize="none"
-        />
+          <Glass {...glassInputProps} style={styles.inputWrap}>
+            <TextInput
+              placeholder="Текущий пароль"
+              placeholderTextColor="#8FA79A"
+              style={styles.input}
+              value={currentPassword}
+              onChangeText={(text) => {
+                setCurrentPassword(text);
+                setError("");
+                setSuccessMessage("");
+              }}
+              secureTextEntry
+              autoCapitalize="none"
+            />
+          </Glass>
 
-        {!!error && <Text style={styles.error}>{error}</Text>}
-        {!!successMessage && <Text style={styles.success}>{successMessage}</Text>}
+          <Glass {...glassInputProps} style={styles.inputWrap}>
+            <TextInput
+              placeholder="Новый пароль *"
+              placeholderTextColor="#8FA79A"
+              style={styles.input}
+              value={newPassword}
+              onChangeText={(text) => {
+                setNewPassword(text);
+                setError("");
+                setSuccessMessage("");
+              }}
+              secureTextEntry
+              autoCapitalize="none"
+            />
+          </Glass>
 
-        <View style={styles.buttonsRow}>
-  <TouchableOpacity
-    style={styles.secondaryButton}
-    onPress={() => router.back()}
-    disabled={loading}
-  >
-    <Text style={styles.secondaryButtonText}>Назад</Text>
-  </TouchableOpacity>
+          <Glass {...glassInputProps} style={styles.inputWrap}>
+            <TextInput
+              placeholder="Повторите новый пароль *"
+              placeholderTextColor="#8FA79A"
+              style={styles.input}
+              value={repeatPassword}
+              onChangeText={(text) => {
+                setRepeatPassword(text);
+                setError("");
+                setSuccessMessage("");
+              }}
+              secureTextEntry
+              autoCapitalize="none"
+            />
+          </Glass>
 
-  {!!successMessage ? (
-    <TouchableOpacity
-      style={styles.primaryButton}
-      onPress={() => router.back()}
-    >
-      <Text style={styles.primaryButtonText}>Готово</Text>
-    </TouchableOpacity>
-  ) : (
-    <TouchableOpacity
-      style={[styles.primaryButton, loading && styles.primaryButtonDisabled]}
-      onPress={handleChangePassword}
-      disabled={loading}
-    >
-      {loading ? (
-        <ActivityIndicator color="#fff" />
-      ) : (
-        <Text style={styles.primaryButtonText}>Сохранить</Text>
-      )}
-    </TouchableOpacity>
-  )}
-</View>
-      </View>
-    </KeyboardAvoidingView>
+          {!!error && <Text style={styles.error}>{error}</Text>}
+          {!!successMessage && (
+            <Text style={styles.success}>{successMessage}</Text>
+          )}
+
+          <TouchableOpacity
+            activeOpacity={0.85}
+            onPress={handleChangePassword}
+            disabled={loading || !formValid}
+            style={[
+              styles.primaryShadow,
+              (loading || !formValid) && styles.disabled,
+            ]}
+          >
+            <Glass
+              radius={18}
+              tintColor="rgba(105,183,141,0.92)"
+              borderColor="rgba(255,255,255,0.85)"
+            >
+              <View style={styles.buttonInner}>
+                <Text style={styles.primaryButtonText}>
+                  {loading ? "Сохранение..." : "Сменить пароль"}
+                </Text>
+              </View>
+            </Glass>
+          </TouchableOpacity>
+
+          <TouchableOpacity onPress={() => router.back()} activeOpacity={0.8}>
+            <Text style={styles.link}>Назад</Text>
+          </TouchableOpacity>
+        </View>
+      </KeyboardAvoidingView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
+  screen: {
+    flex: 1,
+    backgroundColor: "#FFFFFF",
+  },
+
   keyboardWrap: {
     flex: 1,
-    backgroundColor: '#fff',
   },
-  container: {
+
+  content: {
     flex: 1,
-    backgroundColor: '#fff',
-    padding: 20,
-    paddingTop: 70,
+    justifyContent: "center",
+    paddingHorizontal: 28,
   },
+
   title: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    marginBottom: 16,
+    fontFamily: "Philosopher_700Bold",
+    fontSize: 34,
+    color: "#3F6B5B",
+    textAlign: "center",
   },
-  description: {
-    fontSize: 14,
-    color: '#666',
-    lineHeight: 20,
+
+  subtitle: {
+    fontFamily: "Philosopher_400Regular",
+    fontSize: 13.5,
+    letterSpacing: 2.5,
+    color: "#719686",
+    textAlign: "center",
+    marginTop: 8,
+  },
+
+  tekmet: {
+    alignSelf: "center",
+    marginTop: 14,
     marginBottom: 18,
   },
+
+  description: {
+    fontSize: 14.5,
+    lineHeight: 22,
+    color: "#7E988B",
+    textAlign: "center",
+    marginBottom: 20,
+  },
+
+  inputWrap: {
+    marginBottom: 12,
+  },
+
   input: {
     height: 52,
-    borderWidth: 1,
-    borderColor: '#ddd',
-    borderRadius: 12,
-    paddingHorizontal: 15,
-    marginBottom: 14,
-    backgroundColor: '#fff',
+    paddingHorizontal: 16,
+    fontSize: 15.5,
+    color: "#2F4A3C",
+    ...(Platform.OS === "web" ? ({ outlineStyle: "none" } as any) : {}),
   },
+
   error: {
-    color: '#c62828',
-    fontSize: 14,
+    color: "#C05B4D",
     marginBottom: 12,
+    fontSize: 14,
+    textAlign: "center",
   },
+
   success: {
-    color: '#2E7D32',
-    fontSize: 14,
+    color: "#3F6B5B",
     marginBottom: 12,
-    lineHeight: 20,
+    fontSize: 14,
+    lineHeight: 21,
+    textAlign: "center",
   },
-  buttonsRow: {
-    flexDirection: 'row',
-    marginTop: 10,
+
+  primaryShadow: {
+    marginTop: 8,
+    borderRadius: 18,
+    shadowColor: "#69B78D",
+    shadowOpacity: 0.45,
+    shadowRadius: 14,
+    shadowOffset: { width: 0, height: 8 },
+    elevation: 6,
   },
-  secondaryButton: {
-    flex: 1,
-    borderWidth: 1.5,
-    borderColor: '#2E7D32',
-    padding: 16,
-    borderRadius: 12,
-    marginRight: 8,
-    backgroundColor: '#fff',
+
+  buttonInner: {
+    paddingVertical: 16,
+    alignItems: "center",
+    justifyContent: "center",
+    minHeight: 52,
   },
-  secondaryButtonText: {
-    color: '#2E7D32',
-    textAlign: 'center',
-    fontWeight: 'bold',
-    fontSize: 16,
-  },
-  primaryButton: {
-    flex: 1,
-    backgroundColor: '#2E7D32',
-    padding: 16,
-    borderRadius: 12,
-    marginLeft: 8,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  primaryButtonDisabled: {
-    opacity: 0.7,
-  },
+
   primaryButtonText: {
-    color: '#fff',
-    textAlign: 'center',
-    fontWeight: 'bold',
+    color: "#FFFFFF",
     fontSize: 16,
+    fontWeight: "600",
+  },
+
+  link: {
+    color: "#96AC9E",
+    textAlign: "center",
+    fontSize: 14,
+    marginTop: 20,
+    textDecorationLine: "underline",
+  },
+
+  disabled: {
+    opacity: 0.7,
   },
 });

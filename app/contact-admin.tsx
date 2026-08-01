@@ -1,23 +1,44 @@
-import { useEffect, useState } from 'react';
 import {
-  View,
+  Philosopher_400Regular,
+  Philosopher_700Bold,
+  useFonts,
+} from "@expo-google-fonts/philosopher";
+import { router } from "expo-router";
+import { StatusBar } from "expo-status-bar";
+import { useEffect, useState } from "react";
+import {
+  Alert,
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
+  StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
-  StyleSheet,
-  ScrollView,
-  Alert,
-} from 'react-native';
-import { router } from 'expo-router';
-import { supabase } from '../lib/supabase';
-import { getMyProfile } from '../services/profileService';
+  View,
+} from "react-native";
+import { Glass, Tekmet } from "../components/mingi";
+import { supabase } from "../lib/supabase";
+import { getMyProfile } from "../services/profileService";
+
+const glassInputProps = {
+  radius: 16,
+  tintColor: "rgba(255,255,255,0.95)",
+  borderColor: "rgba(93,140,120,0.45)",
+  borderWidth: 0.75,
+} as const;
 
 export default function ContactAdminScreen() {
+  const [fontsLoaded] = useFonts({
+    Philosopher_400Regular,
+    Philosopher_700Bold,
+  });
+
   const [profile, setProfile] = useState<any>(null);
-  const [phone, setPhone] = useState('');
-  const [message, setMessage] = useState('');
+  const [phone, setPhone] = useState("");
+  const [message, setMessage] = useState("");
   const [success, setSuccess] = useState(false);
-  const [error, setError] = useState('');
+  const [error, setError] = useState("");
   const [sending, setSending] = useState(false);
 
   useEffect(() => {
@@ -30,42 +51,44 @@ export default function ContactAdminScreen() {
           setPhone(data.phone);
         }
       } catch (e) {
-        console.log('Ошибка загрузки профиля:', e);
+        console.log("Ошибка загрузки профиля:", e);
       }
     };
 
     loadProfile();
   }, []);
 
+  const formValid = !!phone.trim() && !!message.trim();
+
   const handleSend = async () => {
     if (!phone.trim() || !message.trim()) {
-      setError('Заполните все поля');
+      setError("Заполните все поля");
       return;
     }
 
     if (!profile?.id) {
-      setError('Не удалось определить пользователя');
+      setError("Не удалось определить пользователя");
       return;
     }
 
     try {
       setSending(true);
-      setError('');
+      setError("");
 
       const finalMessage = [
-        'Сообщение от пользователя в режиме ожидания.',
+        "Сообщение от пользователя в режиме ожидания.",
         `Телефон для связи: ${phone.trim()}`,
-        '',
+        "",
         message.trim(),
-      ].join('\n');
+      ].join("\n");
 
       const { error: insertError } = await supabase
-        .from('moderation_messages')
+        .from("moderation_messages")
         .insert({
-          request_type: 'invite_request',
+          request_type: "invite_request",
           request_id: profile.id, // ВАЖНОЕ 1: временно используем userId вместо invite_requests.id
           author_user_id: profile.id,
-          author_role: 'user',
+          author_role: "user",
           message: finalMessage,
           read_by_user: true,
           read_by_moderator: false,
@@ -76,154 +99,276 @@ export default function ContactAdminScreen() {
       }
 
       const { error: updateError } = await supabase
-        .from('users')
+        .from("users")
         .update({
           moderator_has_unread_changes: true,
           updated_at: new Date().toISOString(),
         })
-        .eq('id', profile.id);
+        .eq("id", profile.id);
 
       if (updateError) {
         throw new Error(updateError.message);
       }
 
       setSuccess(true);
-      setMessage('');
+      setMessage("");
     } catch (e) {
       const msg =
-        e instanceof Error ? e.message : 'Не удалось отправить сообщение';
+        e instanceof Error ? e.message : "Не удалось отправить сообщение";
       setError(msg);
-      Alert.alert('Ошибка', msg);
+      Alert.alert("Ошибка", msg);
     } finally {
       setSending(false);
     }
   };
 
+  if (!fontsLoaded) {
+    return <View style={styles.screen} />;
+  }
+
   if (success) {
     return (
-      <View style={styles.container}>
-        <Text style={styles.title}>Сообщение отправлено</Text>
+      <View style={styles.screen}>
+        <StatusBar style="dark" />
 
-        <Text style={styles.text}>
-          Ваше сообщение передано администратору. Ожидайте ответа — оно
-          появится на экране ожидания.
-        </Text>
+        <View style={styles.successContent}>
+          <Text style={styles.title}>Отправлено</Text>
+          <Text style={styles.subtitle}>МИНГИ·ТАУ</Text>
 
-        <TouchableOpacity style={styles.button} onPress={() => router.back()}>
-          <Text style={styles.buttonText}>Вернуться</Text>
-        </TouchableOpacity>
+          <Tekmet style={styles.tekmet} />
+
+          <Text style={styles.text}>
+            Ваше сообщение передано администратору. Ожидайте ответа — оно
+            появится на экране ожидания.
+          </Text>
+
+          <TouchableOpacity
+            activeOpacity={0.85}
+            onPress={() => router.back()}
+            style={styles.primaryShadow}
+          >
+            <Glass
+              radius={18}
+              tintColor="rgba(105,183,141,0.92)"
+              borderColor="rgba(255,255,255,0.85)"
+            >
+              <View style={styles.buttonInner}>
+                <Text style={styles.primaryButtonText}>Вернуться</Text>
+              </View>
+            </Glass>
+          </TouchableOpacity>
+        </View>
       </View>
     );
   }
 
   return (
-    <ScrollView contentContainerStyle={styles.container}>
-      <Text style={styles.title}>Связаться с администратором</Text>
+    <View style={styles.screen}>
+      <StatusBar style="dark" />
 
-      <Text style={styles.label}>Телефон для связи</Text>
-
-      <TextInput
-        style={styles.input}
-        value={phone}
-        onChangeText={(text) => {
-          setPhone(text);
-          setError('');
-        }}
-        placeholder="Введите номер"
-        keyboardType="phone-pad"
-      />
-
-      <Text style={styles.hint}>
-        По умолчанию подставлен номер из анкеты. Вы можете изменить его.
-      </Text>
-
-      <Text style={styles.label}>Сообщение</Text>
-
-      <TextInput
-        style={[styles.input, styles.textArea]}
-        value={message}
-        onChangeText={(text) => {
-          setMessage(text);
-          setError('');
-        }}
-        placeholder="Опишите проблему или вопрос"
-        multiline
-      />
-
-      {!!error && <Text style={styles.error}>{error}</Text>}
-
-      <TouchableOpacity
-        style={[styles.button, sending && styles.buttonDisabled]}
-        onPress={handleSend}
-        disabled={sending}
+      <KeyboardAvoidingView
+        style={styles.keyboardWrap}
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
       >
-        <Text style={styles.buttonText}>
-          {sending ? 'Отправка...' : 'Отправить'}
-        </Text>
-      </TouchableOpacity>
-    </ScrollView>
+        <ScrollView
+          contentContainerStyle={styles.container}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+        >
+          <Text style={styles.title}>Обратная связь</Text>
+          <Text style={styles.subtitle}>МИНГИ·ТАУ</Text>
+
+          <Tekmet style={styles.tekmet} />
+
+          <Text style={styles.text}>
+            Напишите администратору — сообщение попадёт к модерации вместе с
+            вашей анкетой.
+          </Text>
+
+          <Glass {...glassInputProps} style={styles.inputWrap}>
+            <TextInput
+              style={styles.input}
+              value={phone}
+              onChangeText={(text) => {
+                setPhone(text);
+                setError("");
+              }}
+              placeholder="Телефон для связи *"
+              placeholderTextColor="#8FA79A"
+              keyboardType="phone-pad"
+            />
+          </Glass>
+
+          <Text style={styles.hint}>
+            По умолчанию подставлен номер из анкеты — его можно изменить
+          </Text>
+
+          <Glass {...glassInputProps} style={styles.inputWrap}>
+            <TextInput
+              style={[styles.input, styles.textArea]}
+              value={message}
+              onChangeText={(text) => {
+                setMessage(text);
+                setError("");
+              }}
+              placeholder="Опишите проблему или вопрос *"
+              placeholderTextColor="#8FA79A"
+              multiline
+              textAlignVertical="top"
+            />
+          </Glass>
+
+          {!!error && <Text style={styles.error}>{error}</Text>}
+
+          <TouchableOpacity
+            activeOpacity={0.85}
+            onPress={handleSend}
+            disabled={sending || !formValid}
+            style={[
+              styles.primaryShadow,
+              (sending || !formValid) && styles.disabled,
+            ]}
+          >
+            <Glass
+              radius={18}
+              tintColor="rgba(105,183,141,0.92)"
+              borderColor="rgba(255,255,255,0.85)"
+            >
+              <View style={styles.buttonInner}>
+                <Text style={styles.primaryButtonText}>
+                  {sending ? "Отправка..." : "Отправить"}
+                </Text>
+              </View>
+            </Glass>
+          </TouchableOpacity>
+
+          <TouchableOpacity onPress={() => router.back()} activeOpacity={0.8}>
+            <Text style={styles.link}>Назад</Text>
+          </TouchableOpacity>
+        </ScrollView>
+      </KeyboardAvoidingView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
+  screen: {
+    flex: 1,
+    backgroundColor: "#FFFFFF",
+  },
+
+  keyboardWrap: {
+    flex: 1,
+  },
+
   container: {
-    padding: 24,
-    paddingTop: 70,
-    backgroundColor: '#fff',
     flexGrow: 1,
+    justifyContent: "center",
+    paddingHorizontal: 28,
+    paddingVertical: 48,
   },
+
+  successContent: {
+    flex: 1,
+    justifyContent: "center",
+    paddingHorizontal: 28,
+  },
+
   title: {
-    fontSize: 26,
-    fontWeight: 'bold',
-    marginBottom: 20,
+    fontFamily: "Philosopher_700Bold",
+    fontSize: 34,
+    color: "#3F6B5B",
+    textAlign: "center",
   },
+
+  subtitle: {
+    fontFamily: "Philosopher_400Regular",
+    fontSize: 13.5,
+    letterSpacing: 2.5,
+    color: "#719686",
+    textAlign: "center",
+    marginTop: 8,
+  },
+
+  tekmet: {
+    alignSelf: "center",
+    marginTop: 14,
+    marginBottom: 18,
+  },
+
   text: {
-    fontSize: 16,
-    color: '#555',
-    marginBottom: 20,
+    fontSize: 14.5,
     lineHeight: 22,
+    color: "#7E988B",
+    textAlign: "center",
+    marginBottom: 20,
   },
-  label: {
-    fontSize: 14,
-    fontWeight: '600',
-    marginBottom: 6,
-    color: '#444',
+
+  inputWrap: {
+    marginBottom: 12,
   },
+
   input: {
     height: 52,
-    borderWidth: 1,
-    borderColor: '#ddd',
-    borderRadius: 12,
-    paddingHorizontal: 15,
-    marginBottom: 10,
-    backgroundColor: '#fff',
+    paddingHorizontal: 16,
+    fontSize: 15.5,
+    color: "#2F4A3C",
+    ...(Platform.OS === "web" ? ({ outlineStyle: "none" } as any) : {}),
   },
+
   textArea: {
     height: 120,
-    paddingTop: 12,
-    textAlignVertical: 'top',
+    paddingTop: 14,
+    paddingBottom: 14,
+    textAlignVertical: "top",
   },
+
   hint: {
-    fontSize: 13,
-    color: '#666',
-    marginBottom: 14,
+    fontSize: 12.5,
+    color: "#96AC9E",
+    marginBottom: 12,
+    marginLeft: 4,
   },
+
   error: {
-    color: '#c62828',
-    marginBottom: 10,
+    color: "#C05B4D",
+    marginBottom: 12,
+    fontSize: 14,
+    textAlign: "center",
   },
-  button: {
-    backgroundColor: '#2E7D32',
-    padding: 15,
-    borderRadius: 12,
-    marginTop: 10,
+
+  primaryShadow: {
+    marginTop: 8,
+    borderRadius: 18,
+    shadowColor: "#69B78D",
+    shadowOpacity: 0.45,
+    shadowRadius: 14,
+    shadowOffset: { width: 0, height: 8 },
+    elevation: 6,
   },
-  buttonDisabled: {
+
+  buttonInner: {
+    paddingVertical: 16,
+    alignItems: "center",
+    justifyContent: "center",
+    minHeight: 52,
+  },
+
+  primaryButtonText: {
+    color: "#FFFFFF",
+    fontSize: 16,
+    fontWeight: "600",
+  },
+
+  link: {
+    color: "#96AC9E",
+    textAlign: "center",
+    fontSize: 14,
+    marginTop: 20,
+    textDecorationLine: "underline",
+  },
+
+  disabled: {
     opacity: 0.7,
-  },
-  buttonText: {
-    color: '#fff',
-    textAlign: 'center',
-    fontWeight: 'bold',
   },
 });

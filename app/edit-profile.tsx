@@ -1,84 +1,113 @@
-import { useCallback, useState } from 'react';
 import {
+  Philosopher_400Regular,
+  Philosopher_700Bold,
+  useFonts,
+} from "@expo-google-fonts/philosopher";
+import * as ImagePicker from "expo-image-picker";
+import { router, useFocusEffect } from "expo-router";
+import { StatusBar } from "expo-status-bar";
+import { useCallback, useMemo, useState } from "react";
+import {
+  ActivityIndicator,
+  Image,
+  KeyboardAvoidingView,
+  Platform,
   ScrollView,
+  StyleSheet,
+  Switch,
   Text,
   TextInput,
   TouchableOpacity,
-  StyleSheet,
   View,
-  Image,
-  ActivityIndicator,
-  Switch,
-  KeyboardAvoidingView,
-  Platform,
-  Alert,
-} from 'react-native';
-import { router, useFocusEffect } from 'expo-router';
-import * as ImagePicker from 'expo-image-picker';
+} from "react-native";
+import AvatarCropModal, {
+  prepareAvatarSource,
+} from "../components/AvatarCrop";
+import { Glass, Tekmet } from "../components/mingi";
+import { supabase } from "../lib/supabase";
+import {
+  DbUserProfile,
+  getMyProfile,
+  softDeleteMyAccount,
+  syncMyEmailFromAuth,
+} from "../services/profileService";
+import {
+  isRemoteAvatar,
+  removeAllUserAvatars,
+  uploadAvatar,
+} from "../services/storageService";
 import {
   formatBirthDateForInput,
   formatBirthDateInput,
   normalizeBirthDate,
-} from '../store/user';
-import {
-  getMyProfile,
-  DbUserProfile,
-  syncMyEmailFromAuth,
-} from '../services/profileService';
-import { supabase } from '../lib/supabase';
-import {
-  uploadAvatar,
-  isRemoteAvatar,
-  removeAllUserAvatars,
-} from '../services/storageService';
-import { softDeleteMyAccount } from '../services/profileService';
+} from "../store/user";
 
 const categories = [
-  'Медицина',
-  'Юриспруденция',
-  'Образование',
-  'IT и технологии',
-  'Бизнес и финансы',
-  'Строительство и недвижимость',
-  'Логистика и транспорт',
-  'Услуги и сервис',
-  'Маркетинг и медиа',
-  'Дизайн и творчество',
-  'Государственная служба',
-  'Наука и исследования',
-  'Спорт и здоровье',
-  'Дом и быт',
-  'Другое',
+  "Медицина",
+  "Юриспруденция",
+  "Образование",
+  "IT и технологии",
+  "Бизнес и финансы",
+  "Строительство и недвижимость",
+  "Логистика и транспорт",
+  "Услуги и сервис",
+  "Маркетинг и медиа",
+  "Дизайн и творчество",
+  "Государственная служба",
+  "Наука и исследования",
+  "Спорт и здоровье",
+  "Дом и быт",
+  "Другое",
 ];
 
+const glassInputProps = {
+  radius: 16,
+  tintColor: "rgba(255,255,255,0.95)",
+  borderColor: "rgba(93,140,120,0.45)",
+  borderWidth: 0.75,
+} as const;
+
 export default function EditProfileScreen() {
+  const [fontsLoaded] = useFonts({
+    Philosopher_400Regular,
+    Philosopher_700Bold,
+  });
+
   const [user, setUser] = useState<DbUserProfile | null>(null);
   const [loading, setLoading] = useState(true);
 
-  const [firstName, setFirstName] = useState('');
-  const [lastName, setLastName] = useState('');
-  const [email, setEmail] = useState('');
-  const [phone, setPhone] = useState('');
+  const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("");
+  const [email, setEmail] = useState("");
+  const [phone, setPhone] = useState("");
   const [phoneVisible, setPhoneVisible] = useState(true);
-  const [birthDateInput, setBirthDateInput] = useState('');
-  const [country, setCountry] = useState('');
-  const [city, setCity] = useState('');
-  const [category, setCategory] = useState('');
-  const [profession, setProfession] = useState('');
-  const [bio, setBio] = useState('');
-  const [telegram, setTelegram] = useState('');
-  const [extraInfo, setExtraInfo] = useState('');
-  const [avatarUri, setAvatarUri] = useState('');
+  const [birthDateInput, setBirthDateInput] = useState("");
+  const [country, setCountry] = useState("");
+  const [city, setCity] = useState("");
+  const [category, setCategory] = useState("");
+  const [profession, setProfession] = useState("");
+  const [bio, setBio] = useState("");
+  const [telegram, setTelegram] = useState("");
+  const [extraInfo, setExtraInfo] = useState("");
+  const [avatarUri, setAvatarUri] = useState("");
   const [avatarMarkedForRemoval, setAvatarMarkedForRemoval] = useState(false);
-  const [error, setError] = useState('');
+  const [error, setError] = useState("");
   const [showCategoryOptions, setShowCategoryOptions] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [accountDeleting, setAccountDeleting] = useState(false);
+  const [saving, setSaving] = useState(false);
+
+  const [cropVisible, setCropVisible] = useState(false);
+  const [cropSource, setCropSource] = useState<{
+    uri: string;
+    width: number;
+    height: number;
+  } | null>(null);
 
   const canEditNameDirectly =
-  user?.role === 'moderator' ||
-  user?.role === 'owner' ||
-  (user as any)?.moderation_status === 'needs_revision';
+    user?.role === "moderator" ||
+    user?.role === "owner" ||
+    (user as any)?.moderation_status === "needs_revision";
 
   const loadProfile = useCallback(async () => {
     try {
@@ -88,24 +117,24 @@ export default function EditProfileScreen() {
       setUser(profile);
 
       if (profile) {
-        setFirstName(profile.first_name || '');
-        setLastName(profile.last_name || '');
-        setEmail(profile.email || '');
-        setPhone(profile.phone || '');
+        setFirstName(profile.first_name || "");
+        setLastName(profile.last_name || "");
+        setEmail(profile.email || "");
+        setPhone(profile.phone || "");
         setPhoneVisible(profile.phone_visible ?? true);
-        setBirthDateInput(formatBirthDateForInput(profile.birth_date || ''));
-        setCountry(profile.country || '');
-        setCity(profile.city || '');
-        setCategory(profile.category || '');
-        setProfession(profile.profession || '');
-        setBio(profile.bio || '');
-        setTelegram(profile.telegram || '');
-        setExtraInfo(profile.extra_info || '');
-        setAvatarUri(profile.avatar_path || '');
+        setBirthDateInput(formatBirthDateForInput(profile.birth_date || ""));
+        setCountry(profile.country || "");
+        setCity(profile.city || "");
+        setCategory(profile.category || "");
+        setProfession(profile.profession || "");
+        setBio(profile.bio || "");
+        setTelegram(profile.telegram || "");
+        setExtraInfo(profile.extra_info || "");
+        setAvatarUri(profile.avatar_path || "");
         setAvatarMarkedForRemoval(false);
       }
     } catch (e) {
-      console.log('Ошибка загрузки профиля для редактирования:', e);
+      console.log("Ошибка загрузки профиля для редактирования:", e);
       setUser(null);
     } finally {
       setLoading(false);
@@ -115,37 +144,71 @@ export default function EditProfileScreen() {
   useFocusEffect(
     useCallback(() => {
       loadProfile();
-    }, [loadProfile])
+    }, [loadProfile]),
   );
+
+  const filteredCategories = useMemo(() => {
+    const search = category.trim().toLowerCase();
+    if (!search) return categories;
+
+    return categories.filter((item) => item.toLowerCase().includes(search));
+  }, [category]);
+
+  const categoryValid = useMemo(
+    () =>
+      categories.some(
+        (item) => item.toLowerCase() === category.trim().toLowerCase(),
+      ),
+    [category],
+  );
+
+  const formValid =
+    !!phone.trim() &&
+    !!birthDateInput.trim() &&
+    !!country.trim() &&
+    !!city.trim() &&
+    categoryValid &&
+    !!profession.trim() &&
+    !!bio.trim() &&
+    (!canEditNameDirectly || (!!firstName.trim() && !!lastName.trim()));
 
   const handlePickImage = async () => {
     const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
 
     if (!permission.granted) {
-      setError('Нужно разрешение на доступ к галерее.');
+      setError("Нужно разрешение на доступ к галерее.");
       return;
     }
 
     const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ['images'],
-      allowsEditing: true,
-      aspect: [1, 1],
-      quality: 0.8,
+      mediaTypes: ["images"],
+      allowsEditing: false,
+      quality: 0.9,
     });
 
     if (!result.canceled && result.assets?.length > 0) {
-      setAvatarUri(result.assets[0].uri);
-      setAvatarMarkedForRemoval(false);
-      setError('');
+      const asset = result.assets[0];
+
+      // Сразу уменьшаем фото, чтобы не держать в памяти тяжёлый оригинал
+      const prepared = await prepareAvatarSource(
+        asset.uri,
+        asset.width || 0,
+        asset.height || 0,
+      );
+
+      setCropSource(prepared);
+      setCropVisible(true);
     }
   };
 
   const handleRemoveAvatar = () => {
     setAvatarMarkedForRemoval(true);
-    setError('');
+    setError("");
   };
 
   const handleSave = async () => {
+    if (saving) return;
+
     if (
       !email.trim() ||
       !phone.trim() ||
@@ -156,715 +219,883 @@ export default function EditProfileScreen() {
       !profession.trim() ||
       !bio.trim()
     ) {
-      setError('Заполните все обязательные поля');
+      setError("Заполните все обязательные поля");
       return;
     }
 
     if (canEditNameDirectly && (!firstName.trim() || !lastName.trim())) {
-      setError('Имя и фамилия не могут быть пустыми');
+      setError("Имя и фамилия не могут быть пустыми");
+      return;
+    }
+
+    const matchedCategory = categories.find(
+      (item) => item.toLowerCase() === category.trim().toLowerCase(),
+    );
+
+    if (!matchedCategory) {
+      setError("Выберите сферу деятельности из списка");
       return;
     }
 
     const normalizedBirthDate = normalizeBirthDate(birthDateInput);
     if (!normalizedBirthDate) {
-      setError('Дата рождения должна быть в формате ДД.ММ.ГГГГ');
+      setError("Дата рождения должна быть в формате ДД.ММ.ГГГГ");
       return;
     }
 
     if (!user) {
-      setError('Профиль не найден');
+      setError("Профиль не найден");
       return;
     }
 
-    let avatarToSave: string | null = avatarMarkedForRemoval
-      ? null
-      : avatarUri || null;
+    try {
+      setSaving(true);
+      setError("");
 
-    if (avatarMarkedForRemoval) {
-      await removeAllUserAvatars(user.id);
-      avatarToSave = null;
-    } else if (avatarUri && !isRemoteAvatar(avatarUri)) {
-      await removeAllUserAvatars(user.id);
-      const uploaded = await uploadAvatar(user.id, avatarUri);
-      avatarToSave = uploaded.publicUrl;
+      let avatarToSave: string | null = avatarMarkedForRemoval
+        ? null
+        : avatarUri || null;
+
+      if (avatarMarkedForRemoval) {
+        await removeAllUserAvatars(user.id);
+        avatarToSave = null;
+      } else if (avatarUri && !isRemoteAvatar(avatarUri)) {
+        await removeAllUserAvatars(user.id);
+        const uploaded = await uploadAvatar(user.id, avatarUri);
+        avatarToSave = uploaded.publicUrl;
+      }
+
+      const { error: updateError } = await supabase
+        .from("users")
+        .update({
+          ...(canEditNameDirectly
+            ? {
+                first_name: firstName.trim(),
+                last_name: lastName.trim(),
+              }
+            : {}),
+          email,
+          phone,
+          phone_visible: phoneVisible,
+          birth_date: normalizedBirthDate,
+          country,
+          city,
+          category: matchedCategory,
+          profession,
+          bio,
+          telegram: telegram || null,
+          extra_info: extraInfo || null,
+          avatar_path: avatarToSave,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", user.id)
+        .select("id")
+        .maybeSingle();
+
+      if (updateError) {
+        throw new Error(updateError.message);
+      }
+
+      router.back();
+    } catch (e) {
+      const msg =
+        e instanceof Error ? e.message : "Не удалось сохранить изменения";
+      setError(msg);
+    } finally {
+      setSaving(false);
     }
-
-    const { data: updatedUser, error: updateError } = await supabase
-  .from('users')
-  .update({
-    ...(canEditNameDirectly
-      ? {
-          first_name: firstName.trim(),
-          last_name: lastName.trim(),
-        }
-      : {}),
-    email,
-    phone,
-    phone_visible: phoneVisible,
-    birth_date: normalizedBirthDate,
-    country,
-    city,
-    category,
-    profession,
-    bio,
-    telegram: telegram || null,
-    extra_info: extraInfo || null,
-    avatar_path: avatarToSave,
-    updated_at: new Date().toISOString(),
-  })
-  .eq('id', user.id)
-  .select('id, moderation_status')
-  .single();
-
-    if (updateError) {
-      setError(updateError.message);
-      return;
-    }
-    Alert.alert(
-  'Статус после сохранения',
-  String(updatedUser?.moderation_status || 'нет статуса')
-);
-
-    router.back();
   };
 
   const displayedAvatarSource =
     avatarMarkedForRemoval || !avatarUri
-      ? require('../assets/default-avatar.png')
+      ? require("../assets/default-avatar.png")
       : { uri: avatarUri };
 
   const showRemoveButton = !!avatarUri && !avatarMarkedForRemoval;
 
-  if (loading) {
+  if (!fontsLoaded || loading) {
     return (
       <View style={styles.loader}>
-        <ActivityIndicator size="large" color="#2E7D32" />
+        <ActivityIndicator size="large" color="#69B78D" />
       </View>
     );
   }
 
   if (!user) {
     return (
-      <View style={styles.emptyContainer}>
-        <Text style={styles.emptyTitle}>Профиль не найден</Text>
+      <View style={styles.screen}>
+        <View style={styles.emptyContainer}>
+          <Text style={styles.title}>Профиль не найден</Text>
+        </View>
       </View>
     );
   }
 
   return (
-    <KeyboardAvoidingView
-      style={styles.keyboardWrap}
-      behavior={Platform.OS === 'ios' ? 'padding' : 'padding'}
-      keyboardVerticalOffset={Platform.OS === 'ios' ? 20 : 0}
-    >
-      <ScrollView
-        contentContainerStyle={styles.container}
-        keyboardShouldPersistTaps="always"
-        keyboardDismissMode="on-drag"
-        showsVerticalScrollIndicator={false}
+    <View style={styles.screen}>
+      <StatusBar style="dark" />
+
+      <KeyboardAvoidingView
+        style={styles.keyboardWrap}
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
+        keyboardVerticalOffset={Platform.OS === "ios" ? 20 : 0}
       >
-        <Text style={styles.title}>Редактировать профиль</Text>
+        <ScrollView
+          contentContainerStyle={styles.container}
+          keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="on-drag"
+          showsVerticalScrollIndicator={false}
+        >
+          <Text style={styles.title}>Редактирование</Text>
+          <Text style={styles.subtitle}>МИНГИ·ТАУ</Text>
 
-        <View style={styles.avatarWrapper}>
-          <TouchableOpacity
-            style={styles.avatarPicker}
-            onPress={handlePickImage}
-            activeOpacity={0.85}
-          >
-            <Image source={displayedAvatarSource} style={styles.avatarImage} />
-          </TouchableOpacity>
+          <Tekmet style={styles.tekmet} />
 
-          {showRemoveButton && (
+          <Text style={styles.requiredHint}>
+            Поля со звёздочкой (*) обязательны
+          </Text>
+
+          <View style={styles.avatarWrapper}>
             <TouchableOpacity
-              style={styles.removeAvatarButton}
-              onPress={handleRemoveAvatar}
-              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+              onPress={handlePickImage}
+              activeOpacity={0.85}
             >
-              <Text style={styles.removeAvatarText}>✕</Text>
+              <Image
+                source={displayedAvatarSource}
+                style={styles.avatarImage}
+              />
             </TouchableOpacity>
+
+            {showRemoveButton && (
+              <TouchableOpacity
+                style={styles.removeAvatarButton}
+                onPress={handleRemoveAvatar}
+                hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+              >
+                <Text style={styles.removeAvatarText}>✕</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+
+          <Text style={styles.avatarHint}>
+            Нажмите, чтобы изменить фото профиля
+          </Text>
+
+          <Glass {...glassInputProps} style={styles.inputWrap}>
+            <TextInput
+              placeholder={canEditNameDirectly ? "Имя *" : "Имя"}
+              placeholderTextColor="#8FA79A"
+              style={[styles.input, !canEditNameDirectly && styles.inputMuted]}
+              value={firstName}
+              onChangeText={(text) => {
+                setFirstName(text);
+                setError("");
+              }}
+              editable={canEditNameDirectly}
+            />
+          </Glass>
+
+          <Glass {...glassInputProps} style={styles.inputWrap}>
+            <TextInput
+              placeholder={canEditNameDirectly ? "Фамилия *" : "Фамилия"}
+              placeholderTextColor="#8FA79A"
+              style={[styles.input, !canEditNameDirectly && styles.inputMuted]}
+              value={lastName}
+              onChangeText={(text) => {
+                setLastName(text);
+                setError("");
+              }}
+              editable={canEditNameDirectly}
+            />
+          </Glass>
+
+          {!canEditNameDirectly && (
+            <>
+              <Text style={styles.hint}>
+                Имя и фамилия меняются только после модерации администрацией
+              </Text>
+
+              <TouchableOpacity
+                activeOpacity={0.85}
+                onPress={() => router.push("/request-name-change")}
+                style={styles.smallButtonWrap}
+              >
+                <Glass
+                  radius={16}
+                  tintColor="rgba(255,255,255,0.5)"
+                  borderColor="rgba(93,140,120,0.45)"
+                  borderWidth={0.75}
+                >
+                  <View style={styles.smallButtonInner}>
+                    <Text style={styles.smallButtonText}>
+                      Запросить изменение
+                    </Text>
+                  </View>
+                </Glass>
+              </TouchableOpacity>
+            </>
           )}
-        </View>
 
-        <Text style={styles.avatarHint}>
-          Нажмите, чтобы изменить фото профиля
-        </Text>
+          <Glass {...glassInputProps} style={styles.inputWrap}>
+            <TextInput
+              placeholder="Электронная почта"
+              placeholderTextColor="#8FA79A"
+              style={[styles.input, styles.inputMuted]}
+              value={email}
+              editable={false}
+            />
+          </Glass>
 
-        <TextInput
-          placeholder="Имя"
-          style={[styles.input, !canEditNameDirectly && styles.disabledInput]}
-          value={firstName}
-          onChangeText={(text) => {
-            setFirstName(text);
-            setError('');
-          }}
-          editable={canEditNameDirectly}
-        />
+          <Text style={styles.hint}>
+            Смена почты подтверждается письмом на новый адрес
+          </Text>
 
-        <TextInput
-          placeholder="Фамилия"
-          style={[styles.input, !canEditNameDirectly && styles.disabledInput]}
-          value={lastName}
-          onChangeText={(text) => {
-            setLastName(text);
-            setError('');
-          }}
-          editable={canEditNameDirectly}
-        />
-
-        {!canEditNameDirectly && (
-          <>
-            <Text style={styles.hint}>
-              Имя и фамилия меняются только после модерации администрацией.
-            </Text>
+          <View style={styles.smallButtonsRow}>
+            <TouchableOpacity
+              activeOpacity={0.85}
+              onPress={() => router.push("/change-email")}
+              style={styles.smallButtonHalf}
+            >
+              <Glass
+                radius={16}
+                tintColor="rgba(255,255,255,0.5)"
+                borderColor="rgba(93,140,120,0.45)"
+                borderWidth={0.75}
+              >
+                <View style={styles.smallButtonInner}>
+                  <Text style={styles.smallButtonText}>Сменить почту</Text>
+                </View>
+              </Glass>
+            </TouchableOpacity>
 
             <TouchableOpacity
-              style={styles.requestButton}
-              onPress={() => router.push('/request-name-change')}
+              activeOpacity={0.85}
+              onPress={() => router.push("/change-password")}
+              style={[styles.smallButtonHalf, styles.smallButtonHalfRight]}
             >
-              <Text style={styles.requestButtonText}>Запросить изменение</Text>
+              <Glass
+                radius={16}
+                tintColor="rgba(255,255,255,0.5)"
+                borderColor="rgba(93,140,120,0.45)"
+                borderWidth={0.75}
+              >
+                <View style={styles.smallButtonInner}>
+                  <Text style={styles.smallButtonText}>Сменить пароль</Text>
+                </View>
+              </Glass>
             </TouchableOpacity>
-          </>
-        )}
-
-        <TextInput
-          placeholder="Электронная почта"
-          style={[styles.input, styles.disabledInput]}
-          value={email}
-          editable={false}
-        />
-
-        <Text style={styles.hint}>
-          Сменить почту можно только через подтверждение новой электронной почты.
-        </Text>
-
-        <TouchableOpacity
-          style={styles.requestButton}
-          onPress={() => router.push('/change-email')}
-        >
-          <Text style={styles.requestButtonText}>Сменить почту</Text>
-        </TouchableOpacity>
-
-        <Text style={styles.hint}>
-          Пароль можно изменить отдельно в безопасном режиме.
-        </Text>
-
-        <TouchableOpacity
-          style={styles.requestButton}
-          onPress={() => router.push('/change-password')}
-        >
-          <Text style={styles.requestButtonText}>Сменить пароль</Text>
-        </TouchableOpacity>
-
-        <TextInput
-          placeholder="Номер телефона"
-          style={styles.input}
-          value={phone}
-          onChangeText={(text) => {
-            setPhone(text);
-            setError('');
-          }}
-          keyboardType="phone-pad"
-        />
-
-        <View style={styles.switchRow}>
-          <View style={styles.switchTextWrap}>
-            <Text style={styles.switchTitle}>Показывать номер в профиле</Text>
-            <Text style={styles.switchHint}>
-              Выключите, чтобы номер был доступен только администрации
-            </Text>
           </View>
-          <Switch
-            value={phoneVisible}
-            onValueChange={setPhoneVisible}
-            trackColor={{ false: '#d9d9d9', true: '#81C784' }}
-            thumbColor={phoneVisible ? '#2E7D32' : '#f4f4f4'}
-          />
-        </View>
 
-        <TextInput
-          placeholder="Дата рождения (ДД.ММ.ГГГГ)"
-          style={styles.input}
-          value={birthDateInput}
-          onChangeText={(text) => {
-            setBirthDateInput(text);
-            setError('');
-          }}
-        />
+          <Glass {...glassInputProps} style={styles.inputWrap}>
+            <TextInput
+              placeholder="Номер телефона *"
+              placeholderTextColor="#8FA79A"
+              style={styles.input}
+              value={phone}
+              onChangeText={(text) => {
+                setPhone(text);
+                setError("");
+              }}
+              keyboardType="phone-pad"
+            />
+          </Glass>
 
-        <TextInput
-          placeholder="Страна"
-          style={styles.input}
-          value={country}
-          onChangeText={(text) => {
-            setCountry(text);
-            setError('');
-          }}
-        />
-
-        <TextInput
-          placeholder="Город"
-          style={styles.input}
-          value={city}
-          onChangeText={(text) => {
-            setCity(text);
-            setError('');
-          }}
-        />
-
-        <Text style={styles.label}>Сфера деятельности</Text>
-
-        <TouchableOpacity
-          style={styles.selectField}
-          onPress={() => setShowCategoryOptions((prev) => !prev)}
-        >
-          <Text
-            style={[
-              styles.selectFieldText,
-              !category && styles.selectPlaceholderText,
-            ]}
-          >
-            {category || 'Выберите сферу деятельности'}
-          </Text>
-          <Text style={styles.selectArrow}>
-            {showCategoryOptions ? '▲' : '▼'}
-          </Text>
-        </TouchableOpacity>
-
-        {showCategoryOptions && (
-          <View style={styles.optionsBox}>
-            {categories.map((item) => (
-              <TouchableOpacity
-                key={item}
-                style={styles.optionItem}
-                onPress={() => {
-                  setCategory(item);
-                  setShowCategoryOptions(false);
-                  setError('');
-                }}
-              >
-                <Text style={styles.optionText}>{item}</Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-        )}
-
-        <TextInput
-          placeholder="Профессия"
-          style={styles.input}
-          value={profession}
-          onChangeText={(text) => {
-            setProfession(text);
-            setError('');
-          }}
-        />
-
-        <TextInput
-          placeholder="Чем могу быть полезен"
-          style={[styles.input, styles.textArea]}
-          value={bio}
-          onChangeText={(text) => {
-            setBio(text);
-            setError('');
-          }}
-          multiline
-        />
-
-        <TextInput
-          placeholder="Telegram"
-          style={styles.input}
-          value={telegram}
-          onChangeText={(text) => {
-            setTelegram(text);
-            setError('');
-          }}
-        />
-
-        <TextInput
-          placeholder="Дополнительные сведения (портфолио, отзывы, ссылки)"
-          style={[styles.input, styles.textArea]}
-          value={extraInfo}
-          onChangeText={(text) => {
-            setExtraInfo(text);
-            setError('');
-          }}
-          multiline
-        />
-
-        {!!error && <Text style={styles.error}>{error}</Text>}
-
-        <View style={styles.buttonsRow}>
-          <TouchableOpacity
-            style={styles.secondaryButton}
-            onPress={() => router.back()}
-          >
-            <Text style={styles.secondaryButtonText}>Отмена</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity style={styles.primaryButton} onPress={handleSave}>
-            <Text style={styles.primaryButtonText}>Сохранить</Text>
-          </TouchableOpacity>
-        </View>
-
-        <TouchableOpacity
-          style={styles.deleteAccountButton}
-          onPress={() => setShowDeleteConfirm(true)}
-          disabled={accountDeleting}
-        >
-          <Text style={styles.deleteAccountText}>Удалить аккаунт</Text>
-        </TouchableOpacity>
-
-        {showDeleteConfirm && (
-          <View style={styles.deleteConfirmBox}>
-            <Text style={styles.deleteConfirmTitle}>
-              Вы уверены, что хотите удалить аккаунт?
-            </Text>
-
-            <Text style={styles.deleteConfirmText}>
-              Аккаунт будет удалён без возможности восстановления.
-            </Text>
-
-            <View style={styles.deleteConfirmButtonsRow}>
-              <TouchableOpacity
-                style={styles.deleteCancelButton}
-                onPress={() => setShowDeleteConfirm(false)}
-                disabled={accountDeleting}
-              >
-                <Text style={styles.deleteCancelButtonText}>Отмена</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={[
-                  styles.deleteConfirmButton,
-                  accountDeleting && styles.deleteConfirmButtonDisabled,
-                ]}
-                onPress={async () => {
-                  try {
-                    setAccountDeleting(true);
-                    setError('');
-
-                    await softDeleteMyAccount();
-                    await supabase.auth.signOut();
-
-                    router.replace('/welcome');
-                  } catch (e) {
-                    console.log('Ошибка удаления аккаунта:', e);
-                    setError('Не удалось удалить аккаунт');
-                  } finally {
-                    setAccountDeleting(false);
-                  }
-                }}
-                disabled={accountDeleting}
-              >
-                <Text style={styles.deleteConfirmButtonText}>
-                  {accountDeleting ? 'Удаление...' : 'Удалить навсегда'}
+          <Glass {...glassInputProps} style={styles.inputWrap}>
+            <View style={styles.switchRow}>
+              <View style={styles.switchTextWrap}>
+                <Text style={styles.switchTitle}>
+                  Показывать номер в профиле
                 </Text>
-              </TouchableOpacity>
+                <Text style={styles.switchHint}>
+                  Выключите, чтобы номер был доступен только администрации
+                </Text>
+              </View>
+              <Switch
+                value={phoneVisible}
+                onValueChange={setPhoneVisible}
+                trackColor={{ false: "#D6E4DA", true: "#9FD4B4" }}
+                thumbColor={phoneVisible ? "#69B78D" : "#FFFFFF"}
+              />
             </View>
+          </Glass>
+
+          <Glass {...glassInputProps} style={styles.inputWrap}>
+            <TextInput
+              placeholder="Дата рождения (ДД.ММ.ГГГГ) *"
+              placeholderTextColor="#8FA79A"
+              style={styles.input}
+              value={birthDateInput}
+              onChangeText={(text) => {
+                setBirthDateInput(formatBirthDateInput(text));
+                setError("");
+              }}
+              keyboardType="number-pad"
+            />
+          </Glass>
+
+          <Glass {...glassInputProps} style={styles.inputWrap}>
+            <TextInput
+              placeholder="Страна *"
+              placeholderTextColor="#8FA79A"
+              style={styles.input}
+              value={country}
+              onChangeText={(text) => {
+                setCountry(text);
+                setError("");
+              }}
+            />
+          </Glass>
+
+          <Glass {...glassInputProps} style={styles.inputWrap}>
+            <TextInput
+              placeholder="Город *"
+              placeholderTextColor="#8FA79A"
+              style={styles.input}
+              value={city}
+              onChangeText={(text) => {
+                setCity(text);
+                setError("");
+              }}
+            />
+          </Glass>
+
+          <Glass {...glassInputProps} style={styles.inputWrap}>
+            <TextInput
+              placeholder="Сфера деятельности *"
+              placeholderTextColor="#8FA79A"
+              style={styles.input}
+              value={category}
+              onChangeText={(text) => {
+                setCategory(text);
+                setShowCategoryOptions(true);
+                setError("");
+              }}
+              onFocus={() => setShowCategoryOptions(true)}
+            />
+          </Glass>
+
+          {showCategoryOptions && filteredCategories.length > 0 && (
+            <Glass {...glassInputProps} style={styles.optionsBox}>
+              {filteredCategories.map((item, index) => (
+                <TouchableOpacity
+                  key={item}
+                  style={[
+                    styles.optionItem,
+                    index === filteredCategories.length - 1 &&
+                      styles.optionItemLast,
+                  ]}
+                  onPress={() => {
+                    setCategory(item);
+                    setShowCategoryOptions(false);
+                    setError("");
+                  }}
+                >
+                  <Text style={styles.optionText}>{item}</Text>
+                </TouchableOpacity>
+              ))}
+            </Glass>
+          )}
+
+          <Glass {...glassInputProps} style={styles.inputWrap}>
+            <TextInput
+              placeholder="Профессия *"
+              placeholderTextColor="#8FA79A"
+              style={styles.input}
+              value={profession}
+              onChangeText={(text) => {
+                setProfession(text);
+                setError("");
+              }}
+            />
+          </Glass>
+
+          <Glass {...glassInputProps} style={styles.inputWrap}>
+            <TextInput
+              placeholder="Чем могу быть полезен *"
+              placeholderTextColor="#8FA79A"
+              style={[styles.input, styles.textArea]}
+              value={bio}
+              onChangeText={(text) => {
+                setBio(text);
+                setError("");
+              }}
+              multiline
+            />
+          </Glass>
+
+          <Glass {...glassInputProps} style={styles.inputWrap}>
+            <TextInput
+              placeholder="Telegram"
+              placeholderTextColor="#8FA79A"
+              style={styles.input}
+              value={telegram}
+              onChangeText={(text) => {
+                setTelegram(text);
+                setError("");
+              }}
+              autoCapitalize="none"
+            />
+          </Glass>
+
+          <Glass {...glassInputProps} style={styles.inputWrap}>
+            <TextInput
+              placeholder="Дополнительные сведения (портфолио, отзывы, ссылки)"
+              placeholderTextColor="#8FA79A"
+              style={[styles.input, styles.textArea]}
+              value={extraInfo}
+              onChangeText={(text) => {
+                setExtraInfo(text);
+                setError("");
+              }}
+              multiline
+            />
+          </Glass>
+
+          {!!error && <Text style={styles.error}>{error}</Text>}
+
+          <View style={styles.buttonsRow}>
+            <TouchableOpacity
+              activeOpacity={0.85}
+              onPress={() => router.back()}
+              style={styles.secondaryWrap}
+            >
+              <Glass
+                radius={18}
+                tintColor="rgba(255,255,255,0.5)"
+                borderColor="rgba(93,140,120,0.45)"
+                borderWidth={0.75}
+              >
+                <View style={styles.buttonInner}>
+                  <Text style={styles.secondaryButtonText}>Отмена</Text>
+                </View>
+              </Glass>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              activeOpacity={0.85}
+              onPress={handleSave}
+              disabled={saving || !formValid}
+              style={[
+                styles.primaryShadow,
+                styles.primaryHalf,
+                (saving || !formValid) && styles.disabled,
+              ]}
+            >
+              <Glass
+                radius={18}
+                tintColor="rgba(105,183,141,0.92)"
+                borderColor="rgba(255,255,255,0.85)"
+              >
+                <View style={styles.buttonInner}>
+                  <Text style={styles.primaryButtonText}>
+                    {saving ? "Сохранение..." : "Сохранить"}
+                  </Text>
+                </View>
+              </Glass>
+            </TouchableOpacity>
           </View>
-        )}
-      </ScrollView>
-    </KeyboardAvoidingView>
+
+          <TouchableOpacity
+            onPress={() => setShowDeleteConfirm(true)}
+            disabled={accountDeleting}
+            activeOpacity={0.8}
+          >
+            <Text style={styles.deleteAccountLink}>Удалить аккаунт</Text>
+          </TouchableOpacity>
+
+          {showDeleteConfirm && (
+            <Glass
+              radius={18}
+              tintColor="rgba(255,255,255,0.95)"
+              borderColor="rgba(192,91,77,0.5)"
+              borderWidth={0.75}
+              style={styles.deleteConfirmBox}
+            >
+              <View style={styles.deleteConfirmInner}>
+                <Text style={styles.deleteConfirmTitle}>
+                  Удалить аккаунт?
+                </Text>
+
+                <Text style={styles.deleteConfirmText}>
+                  Аккаунт будет удалён без возможности восстановления.
+                </Text>
+
+                <View style={styles.buttonsRow}>
+                  <TouchableOpacity
+                    activeOpacity={0.85}
+                    onPress={() => setShowDeleteConfirm(false)}
+                    disabled={accountDeleting}
+                    style={styles.secondaryWrap}
+                  >
+                    <Glass
+                      radius={16}
+                      tintColor="rgba(255,255,255,0.5)"
+                      borderColor="rgba(93,140,120,0.45)"
+                      borderWidth={0.75}
+                    >
+                      <View style={styles.smallButtonInner}>
+                        <Text style={styles.smallButtonText}>Отмена</Text>
+                      </View>
+                    </Glass>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    activeOpacity={0.85}
+                    disabled={accountDeleting}
+                    style={[
+                      styles.primaryHalf,
+                      accountDeleting && styles.disabled,
+                    ]}
+                    onPress={async () => {
+                      try {
+                        setAccountDeleting(true);
+                        setError("");
+
+                        await softDeleteMyAccount();
+                        await supabase.auth.signOut();
+
+                        router.replace("/welcome");
+                      } catch (e) {
+                        console.log("Ошибка удаления аккаунта:", e);
+                        setError("Не удалось удалить аккаунт");
+                      } finally {
+                        setAccountDeleting(false);
+                      }
+                    }}
+                  >
+                    <View style={styles.deleteConfirmButton}>
+                      <Text style={styles.deleteConfirmButtonText}>
+                        {accountDeleting ? "Удаление..." : "Удалить навсегда"}
+                      </Text>
+                    </View>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            </Glass>
+          )}
+        </ScrollView>
+      </KeyboardAvoidingView>
+
+      {cropSource && (
+        <AvatarCropModal
+          visible={cropVisible}
+          uri={cropSource.uri}
+          imageWidth={cropSource.width}
+          imageHeight={cropSource.height}
+          onCancel={() => setCropVisible(false)}
+          onDone={(croppedUri) => {
+            setAvatarUri(croppedUri);
+            setAvatarMarkedForRemoval(false);
+            setCropVisible(false);
+            setError("");
+          }}
+        />
+      )}
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  keyboardWrap: {
+  screen: {
     flex: 1,
-    backgroundColor: '#fff',
+    backgroundColor: "#FFFFFF",
   },
-  container: {
-    padding: 20,
-    paddingTop: 70,
-    paddingBottom: 80,
-    backgroundColor: '#fff',
-  },
-  deleteConfirmBox: {
-    marginTop: 14,
-    borderWidth: 1,
-    borderColor: '#f0c9c9',
-    backgroundColor: '#fff7f7',
-    borderRadius: 12,
-    padding: 14,
-  },
-  deleteConfirmTitle: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: '#a61b1b',
-    marginBottom: 8,
-  },
-  deleteConfirmText: {
-    fontSize: 14,
-    color: '#666',
-    lineHeight: 20,
-    marginBottom: 14,
-  },
-  deleteConfirmButtonsRow: {
-    flexDirection: 'row',
-  },
-  deleteCancelButton: {
-    flex: 1,
-    borderWidth: 1.5,
-    borderColor: '#bbb',
-    padding: 14,
-    borderRadius: 10,
-    marginRight: 8,
-    backgroundColor: '#fff',
-  },
-  deleteCancelButtonText: {
-    textAlign: 'center',
-    fontWeight: '600',
-    color: '#555',
-    fontSize: 15,
-  },
-  deleteConfirmButton: {
-    flex: 1,
-    backgroundColor: '#c62828',
-    padding: 14,
-    borderRadius: 10,
-    marginLeft: 8,
-  },
-  deleteConfirmButtonDisabled: {
-    opacity: 0.7,
-  },
-  deleteConfirmButtonText: {
-    textAlign: 'center',
-    fontWeight: '700',
-    color: '#fff',
-    fontSize: 15,
-  },
+
   loader: {
     flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#fff',
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: "#FFFFFF",
   },
+
   emptyContainer: {
     flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#fff',
+    justifyContent: "center",
+    paddingHorizontal: 28,
   },
-  emptyTitle: {
-    fontSize: 24,
-    fontWeight: 'bold',
+
+  keyboardWrap: {
+    flex: 1,
   },
-  avatarWrapper: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 10,
-    position: 'relative',
+
+  container: {
+    paddingHorizontal: 28,
+    paddingTop: 64,
+    paddingBottom: 40,
+    flexGrow: 1,
   },
-  avatarPicker: {
-    alignSelf: 'center',
-  },
-  avatarImage: {
-    width: 110,
-    height: 110,
-    borderRadius: 55,
-  },
-  deleteAccountButton: {
-    marginTop: 20,
-    borderWidth: 1.5,
-    borderColor: '#c62828',
-    padding: 16,
-    borderRadius: 12,
-    backgroundColor: '#fff',
-  },
-  deleteAccountText: {
-    color: '#c62828',
-    textAlign: 'center',
-    fontWeight: 'bold',
-    fontSize: 16,
-  },
-  removeAvatarButton: {
-    position: 'absolute',
-    right: 130,
-    top: 40,
-    width: 34,
-    height: 34,
-    borderRadius: 17,
-    backgroundColor: '#f5f5f5',
-    borderWidth: 1,
-    borderColor: '#ddd',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  removeAvatarText: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: '#666',
-  },
-  avatarRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 10,
-  },
+
   title: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    marginBottom: 24,
+    fontFamily: "Philosopher_700Bold",
+    fontSize: 34,
+    color: "#3F6B5B",
+    textAlign: "center",
   },
-  avatarHint: {
-    textAlign: 'center',
-    color: '#666',
-    fontSize: 13,
-    marginBottom: 18,
+
+  subtitle: {
+    fontFamily: "Philosopher_400Regular",
+    fontSize: 13.5,
+    letterSpacing: 2.5,
+    color: "#719686",
+    textAlign: "center",
+    marginTop: 8,
   },
-  label: {
+
+  tekmet: {
+    alignSelf: "center",
+    marginTop: 14,
+    marginBottom: 10,
+  },
+
+  requiredHint: {
+    fontSize: 12.5,
+    color: "#96AC9E",
+    textAlign: "center",
+    marginBottom: 16,
+  },
+
+  avatarWrapper: {
+    alignSelf: "center",
+  },
+
+  avatarImage: {
+    width: 104,
+    height: 104,
+    borderRadius: 52,
+    borderWidth: 2,
+    borderColor: "rgba(255,255,255,0.85)",
+  },
+
+  removeAvatarButton: {
+    position: "absolute",
+    top: -2,
+    right: -2,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: "#C05B4D",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  removeAvatarText: {
+    color: "#FFFFFF",
     fontSize: 14,
-    color: '#444',
-    marginBottom: 8,
-    fontWeight: '600',
+    lineHeight: 16,
   },
+
+  avatarHint: {
+    fontFamily: "Philosopher_400Regular",
+    fontSize: 13.5,
+    color: "#719686",
+    textAlign: "center",
+    marginTop: 8,
+    marginBottom: 20,
+  },
+
+  inputWrap: {
+    marginBottom: 12,
+  },
+
   input: {
     height: 52,
-    borderWidth: 1,
-    borderColor: '#ddd',
-    borderRadius: 12,
-    paddingHorizontal: 15,
-    marginBottom: 14,
-    backgroundColor: '#fff',
+    paddingHorizontal: 16,
+    fontSize: 15.5,
+    color: "#2F4A3C",
+    ...(Platform.OS === "web" ? ({ outlineStyle: "none" } as any) : {}),
   },
-  disabledInput: {
-    backgroundColor: '#f4f4f4',
-    color: '#777',
+
+  inputMuted: {
+    color: "#8FA79A",
   },
-  switchRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    borderWidth: 1,
-    borderColor: '#ddd',
-    borderRadius: 12,
-    paddingHorizontal: 15,
+
+  textArea: {
+    height: 110,
+    paddingTop: 14,
+    textAlignVertical: "top",
+  },
+
+  hint: {
+    fontSize: 12.5,
+    color: "#96AC9E",
+    marginBottom: 10,
+    marginLeft: 4,
+  },
+
+  smallButtonWrap: {
+    marginBottom: 12,
+  },
+
+  smallButtonsRow: {
+    flexDirection: "row",
+    marginBottom: 12,
+  },
+
+  smallButtonHalf: {
+    flex: 1,
+  },
+
+  smallButtonHalfRight: {
+    marginLeft: 8,
+  },
+
+  smallButtonInner: {
     paddingVertical: 12,
-    backgroundColor: '#fff',
-    marginBottom: 14,
+    alignItems: "center",
+    justifyContent: "center",
   },
+
+  smallButtonText: {
+    color: "#3F6B5B",
+    fontSize: 14,
+    fontWeight: "600",
+  },
+
+  switchRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+  },
+
   switchTextWrap: {
     flex: 1,
     paddingRight: 12,
   },
+
   switchTitle: {
     fontSize: 14,
-    fontWeight: '600',
-    color: '#222',
+    fontWeight: "600",
+    color: "#3F6B5B",
     marginBottom: 4,
   },
+
   switchHint: {
     fontSize: 12,
-    color: '#666',
+    color: "#7E988B",
     lineHeight: 17,
   },
-  selectField: {
-    minHeight: 52,
-    borderWidth: 1,
-    borderColor: '#ddd',
-    borderRadius: 12,
-    paddingHorizontal: 15,
-    marginBottom: 14,
-    backgroundColor: '#fff',
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  selectFieldText: {
-    flex: 1,
-    fontSize: 15,
-    color: '#111',
-  },
-  selectPlaceholderText: {
-    color: '#999',
-  },
-  selectArrow: {
-    fontSize: 12,
-    color: '#666',
-    marginLeft: 10,
-  },
+
   optionsBox: {
-    borderWidth: 1,
-    borderColor: '#e5e5e5',
-    borderRadius: 12,
-    backgroundColor: '#fff',
-    marginTop: -6,
-    marginBottom: 14,
-    overflow: 'hidden',
+    marginTop: -4,
+    marginBottom: 12,
   },
+
   optionItem: {
     paddingVertical: 12,
-    paddingHorizontal: 15,
-    borderBottomWidth: 1,
-    borderBottomColor: '#f0f0f0',
+    paddingHorizontal: 16,
+    borderBottomWidth: 0.75,
+    borderBottomColor: "rgba(93,140,120,0.2)",
   },
+
+  optionItemLast: {
+    borderBottomWidth: 0,
+  },
+
   optionText: {
     fontSize: 15,
-    color: '#333',
+    color: "#4E7364",
   },
-  textArea: {
-    height: 110,
-    paddingTop: 14,
-    textAlignVertical: 'top',
-  },
-  hint: {
-    fontSize: 13,
-    color: '#666',
-    marginTop: -4,
-    marginBottom: 14,
-    lineHeight: 18,
-  },
-  requestButton: {
-    alignSelf: 'flex-start',
-    marginTop: -4,
-    marginBottom: 16,
-    paddingVertical: 10,
-    paddingHorizontal: 14,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: '#2E7D32',
-    backgroundColor: '#fff',
-  },
-  requestButtonText: {
-    color: '#2E7D32',
-    fontWeight: '600',
-    fontSize: 14,
-  },
+
   error: {
-    color: '#c62828',
+    color: "#C05B4D",
     marginBottom: 12,
     fontSize: 14,
+    textAlign: "center",
   },
+
   buttonsRow: {
-    flexDirection: 'row',
-    marginTop: 10,
-    marginBottom: 30,
+    flexDirection: "row",
+    marginTop: 8,
   },
-  secondaryButton: {
+
+  secondaryWrap: {
     flex: 1,
-    borderWidth: 1.5,
-    borderColor: '#2E7D32',
-    padding: 16,
-    borderRadius: 12,
     marginRight: 8,
-    backgroundColor: '#fff',
   },
-  secondaryButtonText: {
-    color: '#2E7D32',
-    textAlign: 'center',
-    fontWeight: 'bold',
-    fontSize: 16,
+
+  primaryShadow: {
+    borderRadius: 18,
+    shadowColor: "#69B78D",
+    shadowOpacity: 0.45,
+    shadowRadius: 14,
+    shadowOffset: { width: 0, height: 8 },
+    elevation: 6,
   },
-  primaryButton: {
+
+  primaryHalf: {
     flex: 1,
-    backgroundColor: '#2E7D32',
-    padding: 16,
-    borderRadius: 12,
     marginLeft: 8,
   },
+
+  buttonInner: {
+    paddingVertical: 16,
+    alignItems: "center",
+    justifyContent: "center",
+    minHeight: 52,
+  },
+
   primaryButtonText: {
-    color: '#fff',
-    textAlign: 'center',
-    fontWeight: 'bold',
+    color: "#FFFFFF",
     fontSize: 16,
+    fontWeight: "600",
+  },
+
+  secondaryButtonText: {
+    color: "#3F6B5B",
+    fontSize: 16,
+    fontWeight: "600",
+  },
+
+  deleteAccountLink: {
+    color: "#C05B4D",
+    textAlign: "center",
+    fontSize: 14,
+    marginTop: 24,
+    textDecorationLine: "underline",
+  },
+
+  deleteConfirmBox: {
+    marginTop: 16,
+  },
+
+  deleteConfirmInner: {
+    paddingHorizontal: 16,
+    paddingVertical: 16,
+  },
+
+  deleteConfirmTitle: {
+    fontFamily: "Philosopher_700Bold",
+    fontSize: 20,
+    color: "#C05B4D",
+    textAlign: "center",
+  },
+
+  deleteConfirmText: {
+    fontSize: 14,
+    lineHeight: 21,
+    color: "#7E988B",
+    textAlign: "center",
+    marginTop: 8,
+    marginBottom: 8,
+  },
+
+  deleteConfirmButton: {
+    backgroundColor: "#C05B4D",
+    borderRadius: 16,
+    paddingVertical: 12,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  deleteConfirmButtonText: {
+    color: "#FFFFFF",
+    fontSize: 14,
+    fontWeight: "600",
+  },
+
+  disabled: {
+    opacity: 0.7,
   },
 });

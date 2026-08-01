@@ -1,61 +1,59 @@
-import { useCallback, useMemo, useState } from 'react';
+import { router, useFocusEffect } from "expo-router";
+import { useCallback, useMemo, useState } from "react";
 import {
-  View,
-  Text,
-  StyleSheet,
-  TouchableOpacity,
-  ScrollView,
   ActivityIndicator,
   Alert,
   Modal,
+  ScrollView,
+  StyleSheet,
+  Text,
   TextInput,
-} from 'react-native';
-import { router, useFocusEffect } from 'expo-router';
-import { supabase } from '../lib/supabase';
-import { getCurrentProfile } from '../services/sessionService';
+  TouchableOpacity,
+  View,
+} from "react-native";
+import { supabase } from "../lib/supabase";
 import {
-  getPendingUsers,
-  approveUser,
-  rejectUser,
-  getPendingNameChangeRequests,
   approveNameChangeRequest,
-  rejectNameChangeRequest,
+  approveUser,
   getBlockedUsers,
-  unblockUser,
   getPendingComplaints,
-  resolveComplaint,
+  getPendingNameChangeRequests,
+  getPendingUsers,
   rejectComplaint,
-  takeUserModeration,
-  takeNameChangeRequest,
+  rejectNameChangeRequest,
+  rejectUser,
+  resolveComplaint,
   takeComplaint,
-} from '../services/moderationService';
+  takeNameChangeRequest,
+  takeUserModeration,
+  unblockUser,
+} from "../services/moderationService";
+import { getCurrentProfile } from "../services/sessionService";
 
-type QueueTab = 'new' | 'in_progress' | 'needs_revision' | 'done';
-type OwnershipFilter = 'all' | 'mine';
+type QueueTab = "new" | "in_progress" | "needs_revision" | "done";
+type OwnershipFilter = "all" | "mine";
 
-type ModerationAction =
-  | {
-      type:
-        | 'reject_user'
-        | 'revision_user'
-        | 'reject_name_change'
-        | 'reject_complaint'
-        | 'reject_invite_request';
-      targetId: string;
-      title: string;
-      placeholder: string;
-      confirmText: string;
-    }
-  | null;
+type ModerationAction = {
+  type:
+    | "reject_user"
+    | "revision_user"
+    | "reject_name_change"
+    | "reject_complaint"
+    | "reject_invite_request";
+  targetId: string;
+  title: string;
+  placeholder: string;
+  confirmText: string;
+} | null;
 
 type UnifiedItem = {
   id: string;
   kind:
-    | 'registration'
-    | 'invite_request'
-    | 'name_change'
-    | 'complaint'
-    | 'blocked';
+    | "registration"
+    | "invite_request"
+    | "name_change"
+    | "complaint"
+    | "blocked";
   queue: QueueTab;
   createdAt?: string | null;
   assignedTo?: string | null;
@@ -68,11 +66,11 @@ type UnifiedItem = {
 };
 
 export default function ModerationScreen() {
-  const [activeTab, setActiveTab] = useState<QueueTab>('new');
+  const [activeTab, setActiveTab] = useState<QueueTab>("new");
   const [ownershipFilter, setOwnershipFilter] =
-  useState<OwnershipFilter>('all');
+    useState<OwnershipFilter>("all");
   const [expandedCards, setExpandedCards] = useState<Record<string, boolean>>(
-    {}
+    {},
   );
   const [me, setMe] = useState<any>(null);
 
@@ -84,7 +82,7 @@ export default function ModerationScreen() {
 
   const [completedUsers, setCompletedUsers] = useState<any[]>([]);
   const [completedInviteRequests, setCompletedInviteRequests] = useState<any[]>(
-    []
+    [],
   );
   const [completedNameRequests, setCompletedNameRequests] = useState<any[]>([]);
   const [completedComplaints, setCompletedComplaints] = useState<any[]>([]);
@@ -95,7 +93,7 @@ export default function ModerationScreen() {
   const [loading, setLoading] = useState(true);
 
   const [actionModal, setActionModal] = useState<ModerationAction>(null);
-  const [actionComment, setActionComment] = useState('');
+  const [actionComment, setActionComment] = useState("");
   const [submittingAction, setSubmittingAction] = useState(false);
 
   const toggleCard = (cardId: string) => {
@@ -106,21 +104,21 @@ export default function ModerationScreen() {
   };
 
   const openActionModal = (action: NonNullable<ModerationAction>) => {
-    setActionComment('');
+    setActionComment("");
     setActionModal(action);
   };
 
   const closeActionModal = () => {
     setActionModal(null);
-    setActionComment('');
+    setActionComment("");
   };
 
   const loadInviteRequests = async () => {
     const { data, error } = await supabase
-      .from('invite_requests')
-      .select('*')
-      .eq('status', 'new')
-      .order('created_at', { ascending: true });
+      .from("invite_requests")
+      .select("*")
+      .eq("status", "new")
+      .order("created_at", { ascending: true });
 
     if (error) throw new Error(error.message);
     return data || [];
@@ -128,8 +126,9 @@ export default function ModerationScreen() {
 
   const loadCompletedUsers = async () => {
     const { data, error } = await supabase
-      .from('users')
-      .select(`
+      .from("users")
+      .select(
+        `
         *,
         invited_by:invited_by_user_id (
           id,
@@ -138,11 +137,12 @@ export default function ModerationScreen() {
           email,
           phone
         )
-      `)
-      .in('moderation_status', ['approved', 'rejected'])
-      .eq('is_deleted', false)
-      .not('moderation_completed_at', 'is', null)
-      .order('moderation_completed_at', { ascending: false });
+      `,
+      )
+      .in("moderation_status", ["approved", "rejected"])
+      .eq("is_deleted", false)
+      .not("moderation_completed_at", "is", null)
+      .order("moderation_completed_at", { ascending: false });
 
     if (error) throw new Error(error.message);
     return data || [];
@@ -150,11 +150,11 @@ export default function ModerationScreen() {
 
   const loadCompletedInviteRequests = async () => {
     const { data, error } = await supabase
-      .from('invite_requests')
-      .select('*')
-      .in('status', ['approved', 'rejected'])
-      .not('final_decision_at', 'is', null)
-      .order('final_decision_at', { ascending: false });
+      .from("invite_requests")
+      .select("*")
+      .in("status", ["approved", "rejected"])
+      .not("final_decision_at", "is", null)
+      .order("final_decision_at", { ascending: false });
 
     if (error) throw new Error(error.message);
     return data || [];
@@ -162,11 +162,11 @@ export default function ModerationScreen() {
 
   const loadCompletedNameRequests = async () => {
     const { data, error } = await supabase
-      .from('name_change_requests')
-      .select('*')
-      .in('status', ['approved', 'rejected'])
-      .not('reviewed_at', 'is', null)
-      .order('reviewed_at', { ascending: false });
+      .from("name_change_requests")
+      .select("*")
+      .in("status", ["approved", "rejected"])
+      .not("reviewed_at", "is", null)
+      .order("reviewed_at", { ascending: false });
 
     if (error) throw new Error(error.message);
     return data || [];
@@ -174,8 +174,9 @@ export default function ModerationScreen() {
 
   const loadCompletedComplaints = async () => {
     const { data, error } = await supabase
-      .from('complaints')
-      .select(`
+      .from("complaints")
+      .select(
+        `
         *,
         reporter:reporter_user_id (
           id,
@@ -189,10 +190,11 @@ export default function ModerationScreen() {
           last_name,
           email
         )
-      `)
-      .in('status', ['resolved', 'rejected'])
-      .not('reviewed_at', 'is', null)
-      .order('reviewed_at', { ascending: false });
+      `,
+      )
+      .in("status", ["resolved", "rejected"])
+      .not("reviewed_at", "is", null)
+      .order("reviewed_at", { ascending: false });
 
     if (error) throw new Error(error.message);
     return data || [];
@@ -208,11 +210,11 @@ export default function ModerationScreen() {
       }
 
       const { data, error } = await supabase
-        .from('moderation_messages')
-        .select('*')
-        .eq('request_type', 'invite_request')
-        .in('request_id', userIds)
-        .order('created_at', { ascending: false });
+        .from("moderation_messages")
+        .select("*")
+        .eq("request_type", "invite_request")
+        .in("request_id", userIds)
+        .order("created_at", { ascending: false });
 
       if (error) {
         throw new Error(error.message);
@@ -235,7 +237,7 @@ export default function ModerationScreen() {
 
       setLatestInviteMessages(map);
     } catch (e) {
-      console.log('Ошибка загрузки сообщений модерации:', e);
+      console.log("Ошибка загрузки сообщений модерации:", e);
       setLatestInviteMessages({});
     }
   };
@@ -283,8 +285,8 @@ export default function ModerationScreen() {
       await loadLatestInviteMessages(users);
     } catch (e) {
       const message =
-        e instanceof Error ? e.message : 'Ошибка загрузки модерации';
-      Alert.alert('Ошибка', message);
+        e instanceof Error ? e.message : "Ошибка загрузки модерации";
+      Alert.alert("Ошибка", message);
     } finally {
       setLoading(false);
     }
@@ -292,8 +294,9 @@ export default function ModerationScreen() {
 
   const refreshOneUser = async (userId: string) => {
     const { data, error } = await supabase
-      .from('users')
-      .select(`
+      .from("users")
+      .select(
+        `
         *,
         invited_by:invited_by_user_id (
           id,
@@ -308,35 +311,37 @@ export default function ModerationScreen() {
           last_name,
           email
         )
-      `)
-      .eq('id', userId)
+      `,
+      )
+      .eq("id", userId)
       .single();
 
     if (error) throw new Error(error.message);
 
     setPendingUsers((prev) =>
-      prev.map((item) => (item.id === userId ? data : item))
+      prev.map((item) => (item.id === userId ? data : item)),
     );
   };
 
   const refreshOneInviteRequest = async (requestId: string) => {
     const { data, error } = await supabase
-      .from('invite_requests')
-      .select('*')
-      .eq('id', requestId)
+      .from("invite_requests")
+      .select("*")
+      .eq("id", requestId)
       .single();
 
     if (error) throw new Error(error.message);
 
     setInviteRequests((prev) =>
-      prev.map((item) => (item.id === requestId ? data : item))
+      prev.map((item) => (item.id === requestId ? data : item)),
     );
   };
 
   const refreshOneNameChange = async (requestId: string) => {
     const { data, error } = await supabase
-      .from('name_change_requests')
-      .select(`
+      .from("name_change_requests")
+      .select(
+        `
         *,
         assigned_moderator:assigned_to (
           id,
@@ -344,21 +349,23 @@ export default function ModerationScreen() {
           last_name,
           email
         )
-      `)
-      .eq('id', requestId)
+      `,
+      )
+      .eq("id", requestId)
       .single();
 
     if (error) throw new Error(error.message);
 
     setNameRequests((prev) =>
-      prev.map((item) => (item.id === requestId ? data : item))
+      prev.map((item) => (item.id === requestId ? data : item)),
     );
   };
 
   const refreshOneComplaint = async (complaintId: string) => {
     const { data, error } = await supabase
-      .from('complaints')
-      .select(`
+      .from("complaints")
+      .select(
+        `
         *,
         reporter:reporter_user_id (
           id,
@@ -378,14 +385,15 @@ export default function ModerationScreen() {
           last_name,
           email
         )
-      `)
-      .eq('id', complaintId)
+      `,
+      )
+      .eq("id", complaintId)
       .single();
 
     if (error) throw new Error(error.message);
 
     setComplaints((prev) =>
-      prev.map((item) => (item.id === complaintId ? data : item))
+      prev.map((item) => (item.id === complaintId ? data : item)),
     );
   };
 
@@ -395,12 +403,12 @@ export default function ModerationScreen() {
       if (!target?.moderator_has_unread_changes) return;
 
       const { error } = await supabase
-        .from('users')
+        .from("users")
         .update({
           moderator_has_unread_changes: false,
           updated_at: new Date().toISOString(),
         })
-        .eq('id', userId);
+        .eq("id", userId);
 
       if (error) throw new Error(error.message);
 
@@ -408,11 +416,11 @@ export default function ModerationScreen() {
         prev.map((item) =>
           item.id === userId
             ? { ...item, moderator_has_unread_changes: false }
-            : item
-        )
+            : item,
+        ),
       );
     } catch (e) {
-      console.log('Не удалось сбросить маркер изменений:', e);
+      console.log("Не удалось сбросить маркер изменений:", e);
     }
   };
 
@@ -430,14 +438,14 @@ export default function ModerationScreen() {
   useFocusEffect(
     useCallback(() => {
       loadData();
-    }, [])
+    }, []),
   );
 
   const myDisplayName =
-    `${me?.first_name || ''} ${me?.last_name || ''}`.trim() ||
-    'Неизвестный модератор';
+    `${me?.first_name || ""} ${me?.last_name || ""}`.trim() ||
+    "Неизвестный модератор";
 
-  const isOwner = me?.role === 'owner';
+  const isOwner = me?.role === "owner";
 
   const canManageAssignedTask = (assignedTo?: string | null) => {
     if (isOwner) return true;
@@ -446,15 +454,15 @@ export default function ModerationScreen() {
   };
 
   const formatShortDate = (dateString?: string | null) => {
-    if (!dateString) return '—';
+    if (!dateString) return "—";
 
     const date = new Date(dateString);
-    if (Number.isNaN(date.getTime())) return '—';
+    if (Number.isNaN(date.getTime())) return "—";
 
-    return date.toLocaleDateString('ru-RU', {
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric',
+    return date.toLocaleDateString("ru-RU", {
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
     });
   };
 
@@ -477,7 +485,7 @@ export default function ModerationScreen() {
 
   const formatResolutionDuration = (
     createdAt?: string | null,
-    completedAt?: string | null
+    completedAt?: string | null,
   ) => {
     if (!createdAt || !completedAt) return null;
 
@@ -500,22 +508,22 @@ export default function ModerationScreen() {
   };
 
   const getTaskAgeLevel = (dateString?: string | null) => {
-    if (!dateString) return 'normal';
+    if (!dateString) return "normal";
 
     const start = new Date(dateString).getTime();
     const now = Date.now();
     const diffHours = (now - start) / (1000 * 60 * 60);
 
-    if (diffHours >= 24) return 'critical';
-    if (diffHours >= 6) return 'warning';
-    return 'normal';
+    if (diffHours >= 24) return "critical";
+    if (diffHours >= 6) return "warning";
+    return "normal";
   };
 
   const getTaskStatusText = (
     assignedName?: string | null,
-    takenAt?: string | null
+    takenAt?: string | null,
   ) => {
-    if (!assignedName) return 'Свободна';
+    if (!assignedName) return "Свободна";
 
     const duration = formatDuration(takenAt);
     return duration
@@ -526,12 +534,12 @@ export default function ModerationScreen() {
   const getTaskPriorityScore = (
     assignedName?: string | null,
     takenAt?: string | null,
-    createdAt?: string | null
+    createdAt?: string | null,
   ) => {
     const ageLevel = getTaskAgeLevel(takenAt);
 
-    if (ageLevel === 'critical') return 0;
-    if (ageLevel === 'warning') return 1;
+    if (ageLevel === "critical") return 0;
+    if (ageLevel === "warning") return 1;
     if (assignedName) return 2;
     if (createdAt) return 3;
 
@@ -539,23 +547,23 @@ export default function ModerationScreen() {
   };
 
   const getArchiveStatusStyle = (statusLabel: string) => {
-    const normalized = String(statusLabel || '').toLowerCase();
+    const normalized = String(statusLabel || "").toLowerCase();
 
-    if (normalized.includes('одобрено') || normalized.includes('принято')) {
+    if (normalized.includes("одобрено") || normalized.includes("принято")) {
       return {
         container: styles.archiveChipApproved,
         text: styles.archiveChipApprovedText,
       };
     }
 
-    if (normalized.includes('отклонено')) {
+    if (normalized.includes("отклонено")) {
       return {
         container: styles.archiveChipRejected,
         text: styles.archiveChipRejectedText,
       };
     }
 
-    if (normalized.includes('разблокирован')) {
+    if (normalized.includes("разблокирован")) {
       return {
         container: styles.archiveChipNeutral,
         text: styles.archiveChipNeutralText,
@@ -574,14 +582,14 @@ export default function ModerationScreen() {
       await refreshOneUser(userId);
     } catch {
       Alert.alert(
-        'Нельзя принять заявку',
-        'Эту заявку уже взял другой модератор.'
+        "Нельзя принять заявку",
+        "Эту заявку уже взял другой модератор.",
       );
 
       try {
         await refreshOneUser(userId);
       } catch (refreshError) {
-        console.log('Ошибка обновления карточки:', refreshError);
+        console.log("Ошибка обновления карточки:", refreshError);
       }
     }
   };
@@ -590,43 +598,43 @@ export default function ModerationScreen() {
     try {
       if (isOwner) {
         const { error } = await supabase
-          .from('invite_requests')
+          .from("invite_requests")
           .update({
             assigned_to: me.id,
             assigned_name: myDisplayName,
             taken_at: new Date().toISOString(),
           })
-          .eq('id', requestId);
+          .eq("id", requestId);
 
         if (error) throw new Error(error.message);
       } else {
         const { data, error } = await supabase
-          .from('invite_requests')
+          .from("invite_requests")
           .update({
             assigned_to: me.id,
             assigned_name: myDisplayName,
             taken_at: new Date().toISOString(),
           })
-          .eq('id', requestId)
-          .is('assigned_to', null)
-          .select('id')
+          .eq("id", requestId)
+          .is("assigned_to", null)
+          .select("id")
           .maybeSingle();
 
         if (error) throw new Error(error.message);
-        if (!data) throw new Error('Заявка уже занята');
+        if (!data) throw new Error("Заявка уже занята");
       }
 
       await refreshOneInviteRequest(requestId);
     } catch {
       Alert.alert(
-        'Нельзя принять заявку',
-        'Эту заявку уже взял другой модератор.'
+        "Нельзя принять заявку",
+        "Эту заявку уже взял другой модератор.",
       );
 
       try {
         await refreshOneInviteRequest(requestId);
       } catch (refreshError) {
-        console.log('Ошибка обновления карточки:', refreshError);
+        console.log("Ошибка обновления карточки:", refreshError);
       }
     }
   };
@@ -637,14 +645,14 @@ export default function ModerationScreen() {
       await refreshOneNameChange(requestId);
     } catch {
       Alert.alert(
-        'Нельзя принять заявку',
-        'Эту заявку уже взял другой модератор.'
+        "Нельзя принять заявку",
+        "Эту заявку уже взял другой модератор.",
       );
 
       try {
         await refreshOneNameChange(requestId);
       } catch (refreshError) {
-        console.log('Ошибка обновления карточки:', refreshError);
+        console.log("Ошибка обновления карточки:", refreshError);
       }
     }
   };
@@ -655,14 +663,14 @@ export default function ModerationScreen() {
       await refreshOneComplaint(complaintId);
     } catch {
       Alert.alert(
-        'Нельзя принять заявку',
-        'Эту заявку уже взял другой модератор.'
+        "Нельзя принять заявку",
+        "Эту заявку уже взял другой модератор.",
       );
 
       try {
         await refreshOneComplaint(complaintId);
       } catch (refreshError) {
-        console.log('Ошибка обновления карточки:', refreshError);
+        console.log("Ошибка обновления карточки:", refreshError);
       }
     }
   };
@@ -673,17 +681,17 @@ export default function ModerationScreen() {
       await loadData();
     } catch (e) {
       const message =
-        e instanceof Error ? e.message : 'Ошибка одобрения анкеты';
-      Alert.alert('Ошибка', message);
+        e instanceof Error ? e.message : "Ошибка одобрения анкеты";
+      Alert.alert("Ошибка", message);
     }
   };
 
   const handleApproveInviteRequest = async (request: any) => {
     try {
       const { error } = await supabase
-        .from('invite_requests')
+        .from("invite_requests")
         .update({
-          status: 'approved',
+          status: "approved",
           reviewed_by_user_id: me.id,
           completed_by_name: myDisplayName,
           final_decision_at: new Date().toISOString(),
@@ -692,15 +700,15 @@ export default function ModerationScreen() {
           taken_at: null,
           updated_at: new Date().toISOString(),
         })
-        .eq('id', request.id);
+        .eq("id", request.id);
 
       if (error) throw new Error(error.message);
 
       await loadData();
     } catch (e) {
       const message =
-        e instanceof Error ? e.message : 'Ошибка одобрения заявки';
-      Alert.alert('Ошибка', message);
+        e instanceof Error ? e.message : "Ошибка одобрения заявки";
+      Alert.alert("Ошибка", message);
     }
   };
 
@@ -710,8 +718,8 @@ export default function ModerationScreen() {
       await loadData();
     } catch (e) {
       const message =
-        e instanceof Error ? e.message : 'Ошибка одобрения изменения ФИО';
-      Alert.alert('Ошибка', message);
+        e instanceof Error ? e.message : "Ошибка одобрения изменения ФИО";
+      Alert.alert("Ошибка", message);
     }
   };
 
@@ -721,67 +729,67 @@ export default function ModerationScreen() {
       await loadData();
     } catch (e) {
       const message =
-        e instanceof Error ? e.message : 'Ошибка обработки жалобы';
-      Alert.alert('Ошибка', message);
+        e instanceof Error ? e.message : "Ошибка обработки жалобы";
+      Alert.alert("Ошибка", message);
     }
   };
 
   const handleRejectUser = (userId: string) => {
     openActionModal({
-      type: 'reject_user',
+      type: "reject_user",
       targetId: userId,
-      title: 'Отклонение анкеты',
-      placeholder: 'Укажите причину отклонения',
-      confirmText: 'Отклонить',
+      title: "Отклонение анкеты",
+      placeholder: "Укажите причину отклонения",
+      confirmText: "Отклонить",
     });
   };
 
   const handleRevisionUser = (userId: string) => {
     openActionModal({
-      type: 'revision_user',
+      type: "revision_user",
       targetId: userId,
-      title: 'Вернуть на доработку',
-      placeholder: 'Укажите, что нужно исправить',
-      confirmText: 'Отправить',
+      title: "Вернуть на доработку",
+      placeholder: "Укажите, что нужно исправить",
+      confirmText: "Отправить",
     });
   };
 
   const handleRejectInviteRequest = (requestId: string) => {
     openActionModal({
-      type: 'reject_invite_request',
+      type: "reject_invite_request",
       targetId: requestId,
-      title: 'Отклонение заявки',
-      placeholder: 'Укажите причину отклонения',
-      confirmText: 'Отклонить',
+      title: "Отклонение заявки",
+      placeholder: "Укажите причину отклонения",
+      confirmText: "Отклонить",
     });
   };
 
   const handleRejectNameChange = (requestId: string) => {
     openActionModal({
-      type: 'reject_name_change',
+      type: "reject_name_change",
       targetId: requestId,
-      title: 'Отклонение смены ФИО',
-      placeholder: 'Укажите причину отклонения',
-      confirmText: 'Отклонить',
+      title: "Отклонение смены ФИО",
+      placeholder: "Укажите причину отклонения",
+      confirmText: "Отклонить",
     });
   };
 
   const handleRejectComplaint = (complaintId: string) => {
     openActionModal({
-      type: 'reject_complaint',
+      type: "reject_complaint",
       targetId: complaintId,
-      title: 'Отклонение жалобы',
-      placeholder: 'Укажите причину отклонения',
-      confirmText: 'Отклонить',
+      title: "Отклонение жалобы",
+      placeholder: "Укажите причину отклонения",
+      confirmText: "Отклонить",
     });
   };
 
   const handleOpenDraftProfile = (userId: string) => {
     router.push({
-      pathname: '/user-profile',
+      pathname: "/user-profile",
       params: {
         userId,
-        mode: 'moderation',
+        mode: "moderation",
       },
     });
   };
@@ -791,8 +799,8 @@ export default function ModerationScreen() {
       await unblockUser(user.id);
       await loadData();
     } catch (e) {
-      const message = e instanceof Error ? e.message : 'Ошибка разблокировки';
-      Alert.alert('Ошибка', message);
+      const message = e instanceof Error ? e.message : "Ошибка разблокировки";
+      Alert.alert("Ошибка", message);
     }
   };
 
@@ -803,16 +811,16 @@ export default function ModerationScreen() {
       setSubmittingAction(true);
       const comment = actionComment.trim() || undefined;
 
-      if (actionModal.type === 'reject_user') {
-        await rejectUser(actionModal.targetId, comment, 'reject');
-      } else if (actionModal.type === 'revision_user') {
-        await rejectUser(actionModal.targetId, comment, 'revision');
-      } else if (actionModal.type === 'reject_invite_request') {
+      if (actionModal.type === "reject_user") {
+        await rejectUser(actionModal.targetId, comment, "reject");
+      } else if (actionModal.type === "revision_user") {
+        await rejectUser(actionModal.targetId, comment, "revision");
+      } else if (actionModal.type === "reject_invite_request") {
         const { error } = await supabase
-          .from('invite_requests')
+          .from("invite_requests")
           .update({
-            status: 'rejected',
-            review_note: comment || 'Заявка отклонена',
+            status: "rejected",
+            review_note: comment || "Заявка отклонена",
             reviewed_by_user_id: me.id,
             completed_by_name: myDisplayName,
             final_decision_at: new Date().toISOString(),
@@ -821,21 +829,21 @@ export default function ModerationScreen() {
             taken_at: null,
             updated_at: new Date().toISOString(),
           })
-          .eq('id', actionModal.targetId);
+          .eq("id", actionModal.targetId);
 
         if (error) throw new Error(error.message);
-      } else if (actionModal.type === 'reject_name_change') {
+      } else if (actionModal.type === "reject_name_change") {
         await rejectNameChangeRequest(actionModal.targetId, comment);
-      } else if (actionModal.type === 'reject_complaint') {
+      } else if (actionModal.type === "reject_complaint") {
         await rejectComplaint(actionModal.targetId);
       }
 
       setActionModal(null);
-      setActionComment('');
+      setActionComment("");
       await loadData();
     } catch (e) {
-      const message = e instanceof Error ? e.message : 'Ошибка действия';
-      Alert.alert('Ошибка', message);
+      const message = e instanceof Error ? e.message : "Ошибка действия";
+      Alert.alert("Ошибка", message);
     } finally {
       setSubmittingAction(false);
     }
@@ -852,11 +860,11 @@ export default function ModerationScreen() {
         {latestMessages.map((msg) => (
           <View key={msg.id} style={styles.messageItem}>
             <Text style={styles.messageMeta}>
-              {msg.author_role === 'user'
-                ? 'Пользователь'
-                : msg.author_role === 'moderator'
-                ? 'Модератор'
-                : 'Система'}
+              {msg.author_role === "user"
+                ? "Пользователь"
+                : msg.author_role === "moderator"
+                  ? "Модератор"
+                  : "Система"}
             </Text>
             <Text style={styles.messageText} numberOfLines={4}>
               {msg.message}
@@ -873,18 +881,18 @@ export default function ModerationScreen() {
     pendingUsers.forEach((user) => {
       items.push({
         id: `registration-${user.id}`,
-        kind: 'registration',
+        kind: "registration",
         queue:
-          user.moderation_status === 'needs_revision'
-            ? 'needs_revision'
+          user.moderation_status === "needs_revision"
+            ? "needs_revision"
             : user.moderation_assigned_to
-            ? 'in_progress'
-            : 'new',
+              ? "in_progress"
+              : "new",
         createdAt: user.created_at,
         assignedTo: user.moderation_assigned_to,
         assignedName: user.moderation_assigned_name,
         takenAt: user.moderation_taken_at,
-        badge: 'Регистрация',
+        badge: "Регистрация",
         title: `${user.first_name} ${user.last_name}`,
         subtitle: user.email || undefined,
         raw: user,
@@ -894,14 +902,14 @@ export default function ModerationScreen() {
     inviteRequests.forEach((request) => {
       items.push({
         id: `invite_request-${request.id}`,
-        kind: 'invite_request',
-        queue: request.assigned_to ? 'in_progress' : 'new',
+        kind: "invite_request",
+        queue: request.assigned_to ? "in_progress" : "new",
         createdAt: request.created_at,
         assignedTo: request.assigned_to,
         assignedName: request.assigned_name,
         takenAt: request.taken_at,
-        badge: 'Заявка',
-        title: request.full_name || 'Без имени',
+        badge: "Заявка",
+        title: request.full_name || "Без имени",
         subtitle: request.phone || request.telegram || undefined,
         raw: request,
       });
@@ -910,13 +918,13 @@ export default function ModerationScreen() {
     nameRequests.forEach((request) => {
       items.push({
         id: `name_change-${request.id}`,
-        kind: 'name_change',
-        queue: request.assigned_to ? 'in_progress' : 'new',
+        kind: "name_change",
+        queue: request.assigned_to ? "in_progress" : "new",
         createdAt: request.created_at,
         assignedTo: request.assigned_to,
         assignedName: request.assigned_name,
         takenAt: request.taken_at,
-        badge: 'Смена ФИО',
+        badge: "Смена ФИО",
         title: `${request.current_first_name} ${request.current_last_name}`,
         subtitle: `→ ${request.requested_first_name} ${request.requested_last_name}`,
         raw: request,
@@ -926,15 +934,17 @@ export default function ModerationScreen() {
     complaints.forEach((complaint) => {
       items.push({
         id: `complaint-${complaint.id}`,
-        kind: 'complaint',
-        queue: complaint.assigned_to ? 'in_progress' : 'new',
+        kind: "complaint",
+        queue: complaint.assigned_to ? "in_progress" : "new",
         createdAt: complaint.created_at,
         assignedTo: complaint.assigned_to,
         assignedName: complaint.assigned_name,
         takenAt: complaint.taken_at,
-        badge: 'Жалоба',
-        title: `На: ${complaint.target?.first_name || ''} ${complaint.target?.last_name || ''}`.trim(),
-        subtitle: `От: ${complaint.reporter?.first_name || ''} ${complaint.reporter?.last_name || ''}`.trim(),
+        badge: "Жалоба",
+        title:
+          `На: ${complaint.target?.first_name || ""} ${complaint.target?.last_name || ""}`.trim(),
+        subtitle:
+          `От: ${complaint.reporter?.first_name || ""} ${complaint.reporter?.last_name || ""}`.trim(),
         raw: complaint,
       });
     });
@@ -942,10 +952,10 @@ export default function ModerationScreen() {
     blockedUsers.forEach((user) => {
       items.push({
         id: `blocked-${user.id}`,
-        kind: 'blocked',
-        queue: 'in_progress',
+        kind: "blocked",
+        queue: "in_progress",
         createdAt: user.updated_at,
-        badge: 'Блокировка',
+        badge: "Блокировка",
         title: `${user.first_name} ${user.last_name}`,
         subtitle: user.email || undefined,
         raw: user,
@@ -955,23 +965,23 @@ export default function ModerationScreen() {
     completedUsers.forEach((user) => {
       items.push({
         id: `done-registration-${user.id}`,
-        kind: 'registration',
-        queue: 'done',
+        kind: "registration",
+        queue: "done",
         createdAt: user.created_at,
-        badge: 'Регистрация',
+        badge: "Регистрация",
         title:
-          `${user.first_name || ''} ${user.last_name || ''}`.trim() ||
-          'Без имени',
+          `${user.first_name || ""} ${user.last_name || ""}`.trim() ||
+          "Без имени",
         subtitle: user.moderation_note || undefined,
         raw: {
           entityId: user.id,
-          type: 'registration',
+          type: "registration",
           title:
-            `${user.first_name || ''} ${user.last_name || ''}`.trim() ||
-            'Без имени',
+            `${user.first_name || ""} ${user.last_name || ""}`.trim() ||
+            "Без имени",
           subtitle: user.moderation_note || undefined,
           statusLabel:
-            user.moderation_status === 'approved' ? 'Одобрено' : 'Отклонено',
+            user.moderation_status === "approved" ? "Одобрено" : "Отклонено",
           moderatorName: user.moderation_completed_by_name || undefined,
           createdAt: user.created_at,
           startedAt: user.moderation_taken_at,
@@ -983,18 +993,18 @@ export default function ModerationScreen() {
     completedInviteRequests.forEach((request) => {
       items.push({
         id: `done-invite_request-${request.id}`,
-        kind: 'invite_request',
-        queue: 'done',
+        kind: "invite_request",
+        queue: "done",
         createdAt: request.created_at,
-        badge: 'Заявка',
-        title: request.full_name || 'Без имени',
+        badge: "Заявка",
+        title: request.full_name || "Без имени",
         subtitle: request.review_note || undefined,
         raw: {
           entityId: request.id,
-          type: 'invite_request',
-          title: request.full_name || 'Без имени',
+          type: "invite_request",
+          title: request.full_name || "Без имени",
           subtitle: request.review_note || undefined,
-          statusLabel: request.status === 'approved' ? 'Одобрено' : 'Отклонено',
+          statusLabel: request.status === "approved" ? "Одобрено" : "Отклонено",
           moderatorName: request.completed_by_name || undefined,
           createdAt: request.created_at,
           startedAt: request.taken_at,
@@ -1006,22 +1016,22 @@ export default function ModerationScreen() {
     completedNameRequests.forEach((request) => {
       items.push({
         id: `done-name_change-${request.id}`,
-        kind: 'name_change',
-        queue: 'done',
+        kind: "name_change",
+        queue: "done",
         createdAt: request.created_at,
-        badge: 'Смена ФИО',
+        badge: "Смена ФИО",
         title: `${request.current_first_name} ${request.current_last_name}`,
         subtitle:
           request.review_note ||
           `→ ${request.requested_first_name} ${request.requested_last_name}`,
         raw: {
           entityId: request.id,
-          type: 'name_change',
+          type: "name_change",
           title: `${request.current_first_name} ${request.current_last_name}`,
           subtitle:
             request.review_note ||
             `→ ${request.requested_first_name} ${request.requested_last_name}`,
-          statusLabel: request.status === 'approved' ? 'Одобрено' : 'Отклонено',
+          statusLabel: request.status === "approved" ? "Одобрено" : "Отклонено",
           moderatorName: request.completed_by_name || undefined,
           createdAt: request.created_at,
           startedAt: request.taken_at,
@@ -1033,19 +1043,21 @@ export default function ModerationScreen() {
     completedComplaints.forEach((complaint) => {
       items.push({
         id: `done-complaint-${complaint.id}`,
-        kind: 'complaint',
-        queue: 'done',
+        kind: "complaint",
+        queue: "done",
         createdAt: complaint.created_at,
-        badge: 'Жалоба',
-        title: `Жалоба на ${complaint.target?.first_name || ''} ${complaint.target?.last_name || ''}`.trim(),
+        badge: "Жалоба",
+        title:
+          `Жалоба на ${complaint.target?.first_name || ""} ${complaint.target?.last_name || ""}`.trim(),
         subtitle: complaint.review_note || complaint.reason || undefined,
         raw: {
           entityId: complaint.id,
-          type: 'complaint',
-          title: `Жалоба на ${complaint.target?.first_name || ''} ${complaint.target?.last_name || ''}`.trim(),
+          type: "complaint",
+          title:
+            `Жалоба на ${complaint.target?.first_name || ""} ${complaint.target?.last_name || ""}`.trim(),
           subtitle: complaint.review_note || complaint.reason || undefined,
           statusLabel:
-            complaint.status === 'resolved' ? 'Принято' : 'Отклонено',
+            complaint.status === "resolved" ? "Принято" : "Отклонено",
           moderatorName: complaint.completed_by_name || undefined,
           createdAt: complaint.created_at,
           startedAt: complaint.taken_at,
@@ -1055,41 +1067,42 @@ export default function ModerationScreen() {
     });
 
     return items
-  .filter((item) => item.queue === activeTab)
-  .filter((item) => {
-    const shouldApplyOwnershipFilter =
-      activeTab === 'in_progress' || activeTab === 'needs_revision';
+      .filter((item) => item.queue === activeTab)
+      .filter((item) => {
+        const shouldApplyOwnershipFilter =
+          activeTab === "in_progress" || activeTab === "needs_revision";
 
-    if (!shouldApplyOwnershipFilter) return true;
-    if (ownershipFilter === 'all') return true;
+        if (!shouldApplyOwnershipFilter) return true;
+        if (ownershipFilter === "all") return true;
 
-    return item.assignedTo === me?.id;
-  })
-  .sort((a, b) => {
-    const priorityDiff =
-      getTaskPriorityScore(a.assignedName, a.takenAt, a.createdAt) -
-      getTaskPriorityScore(b.assignedName, b.takenAt, b.createdAt);
+        return item.assignedTo === me?.id;
+      })
+      .sort((a, b) => {
+        const priorityDiff =
+          getTaskPriorityScore(a.assignedName, a.takenAt, a.createdAt) -
+          getTaskPriorityScore(b.assignedName, b.takenAt, b.createdAt);
 
-    if (priorityDiff !== 0) return priorityDiff;
+        if (priorityDiff !== 0) return priorityDiff;
 
-    return (
-      new Date(a.createdAt || 0).getTime() -
-      new Date(b.createdAt || 0).getTime()
-    );
-  });
+        // Новые заявки сверху: более свежая дата — первой
+        return (
+          new Date(b.createdAt || 0).getTime() -
+          new Date(a.createdAt || 0).getTime()
+        );
+      });
   }, [
     activeTab,
-  ownershipFilter,
-  me?.id,
-  pendingUsers,
-  inviteRequests,
-  nameRequests,
-  complaints,
-  blockedUsers,
-  completedUsers,
-  completedInviteRequests,
-  completedNameRequests,
-  completedComplaints,
+    ownershipFilter,
+    me?.id,
+    pendingUsers,
+    inviteRequests,
+    nameRequests,
+    complaints,
+    blockedUsers,
+    completedUsers,
+    completedInviteRequests,
+    completedNameRequests,
+    completedComplaints,
   ]);
 
   const centeredCount = useMemo(() => {
@@ -1108,29 +1121,24 @@ export default function ModerationScreen() {
     blockedUsers.length,
   ]);
   const myTasksCount = useMemo(() => {
-  const myId = me?.id;
-  if (!myId) return 0;
+    const myId = me?.id;
+    if (!myId) return 0;
 
-  return (
-    pendingUsers.filter((item) => item.moderation_assigned_to === myId).length +
-    inviteRequests.filter((item) => item.assigned_to === myId).length +
-    nameRequests.filter((item) => item.assigned_to === myId).length +
-    complaints.filter((item) => item.assigned_to === myId).length
-  );
-}, [
-  me?.id,
-  pendingUsers,
-  inviteRequests,
-  nameRequests,
-  complaints,
-]);
+    return (
+      pendingUsers.filter((item) => item.moderation_assigned_to === myId)
+        .length +
+      inviteRequests.filter((item) => item.assigned_to === myId).length +
+      nameRequests.filter((item) => item.assigned_to === myId).length +
+      complaints.filter((item) => item.assigned_to === myId).length
+    );
+  }, [me?.id, pendingUsers, inviteRequests, nameRequests, complaints]);
   const renderUnifiedCard = (item: UnifiedItem) => {
-    if (item.queue === 'done') {
+    if (item.queue === "done") {
       const archiveItem = item.raw;
       const statusStyle = getArchiveStatusStyle(archiveItem.statusLabel);
       const resolutionTime = formatResolutionDuration(
         archiveItem.createdAt,
-        archiveItem.completedAt
+        archiveItem.completedAt,
       );
       const isExpanded = !!expandedCards[item.id];
 
@@ -1180,7 +1188,7 @@ export default function ModerationScreen() {
                 style={styles.secondaryActionFull}
                 onPress={() =>
                   router.push({
-                    pathname: '/moderation-case-details',
+                    pathname: "/moderation-case-details",
                     params: {
                       kind: archiveItem.type,
                       entityId: archiveItem.entityId,
@@ -1202,7 +1210,7 @@ export default function ModerationScreen() {
         style={styles.card}
         activeOpacity={0.9}
         onPress={() => {
-          if (item.kind === 'registration') {
+          if (item.kind === "registration") {
             handleRegistrationCardPress(item.raw.id);
           } else {
             toggleCard(item.id);
@@ -1212,23 +1220,23 @@ export default function ModerationScreen() {
         <View
           style={[
             styles.statusLine,
-            getTaskAgeLevel(item.takenAt) === 'critical'
+            getTaskAgeLevel(item.takenAt) === "critical"
               ? styles.statusLineCritical
-              : getTaskAgeLevel(item.takenAt) === 'warning'
-              ? styles.statusLineWarning
-              : styles.statusLineNormal,
+              : getTaskAgeLevel(item.takenAt) === "warning"
+                ? styles.statusLineWarning
+                : styles.statusLineNormal,
           ]}
         >
           <Text style={styles.statusLineText}>
-            {item.kind === 'blocked'
-              ? 'Заблокирован'
+            {item.kind === "blocked"
+              ? "Заблокирован"
               : getTaskStatusText(item.assignedName, item.takenAt)}
           </Text>
         </View>
 
         <View style={styles.cardHeader}>
           <View style={styles.cardHeaderMain}>
-            {item.kind === 'registration' ? (
+            {item.kind === "registration" ? (
               <View style={styles.nameRow}>
                 <Text style={styles.name}>{item.title}</Text>
                 {item.raw?.moderator_has_unread_changes && (
@@ -1238,12 +1246,14 @@ export default function ModerationScreen() {
             ) : (
               <Text style={styles.name}>{item.title}</Text>
             )}
-            <Text style={styles.cardCollapsedHint}>Нажмите, чтобы раскрыть</Text>
+            <Text style={styles.cardCollapsedHint}>
+              Нажмите, чтобы раскрыть
+            </Text>
           </View>
           <View
             style={[
               styles.statusChip,
-              item.kind === 'blocked' && styles.statusChipBlocked,
+              item.kind === "blocked" && styles.statusChipBlocked,
             ]}
           >
             <Text style={styles.statusChipText}>{item.badge}</Text>
@@ -1252,25 +1262,25 @@ export default function ModerationScreen() {
 
         {expandedCards[item.id] && (
           <>
-            {item.kind === 'registration' &&
+            {item.kind === "registration" &&
               (() => {
                 const user = item.raw;
                 return (
                   <>
                     <View style={styles.infoBlock}>
                       <Text style={styles.text}>
-                        Телефон: {user.phone || 'Без телефона'}
+                        Телефон: {user.phone || "Без телефона"}
                       </Text>
                       <Text style={styles.text}>
-                        Пригласил:{' '}
+                        Пригласил:{" "}
                         {user.invited_by
-                          ? `${user.invited_by.first_name || ''} ${user.invited_by.last_name || ''}`.trim() ||
+                          ? `${user.invited_by.first_name || ""} ${user.invited_by.last_name || ""}`.trim() ||
                             user.invited_by.email ||
-                            'Неизвестно'
-                          : 'Неизвестно'}
+                            "Неизвестно"
+                          : "Неизвестно"}
                       </Text>
                       <Text style={styles.text}>
-                        Профессия: {user.profession || '—'}
+                        Профессия: {user.profession || "—"}
                       </Text>
                     </View>
 
@@ -1287,7 +1297,7 @@ export default function ModerationScreen() {
 
                     <View style={styles.assignmentBlock}>
                       {!user.moderation_assigned_to &&
-                      user.moderation_status !== 'needs_revision' ? (
+                      user.moderation_status !== "needs_revision" ? (
                         <TouchableOpacity
                           style={styles.takeAction}
                           onPress={() => handleTakeUser(user.id)}
@@ -1300,7 +1310,9 @@ export default function ModerationScreen() {
                             style={styles.primaryAction}
                             onPress={() => handleApproveUser(user)}
                           >
-                            <Text style={styles.actionButtonText}>Одобрить</Text>
+                            <Text style={styles.actionButtonText}>
+                              Одобрить
+                            </Text>
                           </TouchableOpacity>
 
                           <TouchableOpacity
@@ -1316,7 +1328,9 @@ export default function ModerationScreen() {
                             style={styles.dangerAction}
                             onPress={() => handleRejectUser(user.id)}
                           >
-                            <Text style={styles.actionButtonText}>Отклонить</Text>
+                            <Text style={styles.actionButtonText}>
+                              Отклонить
+                            </Text>
                           </TouchableOpacity>
                         </View>
                       ) : (
@@ -1329,7 +1343,7 @@ export default function ModerationScreen() {
                 );
               })()}
 
-            {item.kind === 'invite_request' &&
+            {item.kind === "invite_request" &&
               (() => {
                 const request = item.raw;
                 return (
@@ -1363,14 +1377,20 @@ export default function ModerationScreen() {
                             style={styles.primaryAction}
                             onPress={() => handleApproveInviteRequest(request)}
                           >
-                            <Text style={styles.actionButtonText}>Одобрить</Text>
+                            <Text style={styles.actionButtonText}>
+                              Одобрить
+                            </Text>
                           </TouchableOpacity>
 
                           <TouchableOpacity
                             style={styles.dangerAction}
-                            onPress={() => handleRejectInviteRequest(request.id)}
+                            onPress={() =>
+                              handleRejectInviteRequest(request.id)
+                            }
                           >
-                            <Text style={styles.actionButtonText}>Отклонить</Text>
+                            <Text style={styles.actionButtonText}>
+                              Отклонить
+                            </Text>
                           </TouchableOpacity>
                         </View>
                       ) : (
@@ -1383,13 +1403,13 @@ export default function ModerationScreen() {
                 );
               })()}
 
-            {item.kind === 'name_change' &&
+            {item.kind === "name_change" &&
               (() => {
                 const request = item.raw;
                 return (
                   <>
                     <Text style={styles.mutedText}>
-                      → {request.requested_first_name}{' '}
+                      → {request.requested_first_name}{" "}
                       {request.requested_last_name}
                     </Text>
 
@@ -1410,14 +1430,18 @@ export default function ModerationScreen() {
                             style={styles.primaryAction}
                             onPress={() => handleApproveNameChange(request)}
                           >
-                            <Text style={styles.actionButtonText}>Одобрить</Text>
+                            <Text style={styles.actionButtonText}>
+                              Одобрить
+                            </Text>
                           </TouchableOpacity>
 
                           <TouchableOpacity
                             style={styles.dangerAction}
                             onPress={() => handleRejectNameChange(request.id)}
                           >
-                            <Text style={styles.actionButtonText}>Отклонить</Text>
+                            <Text style={styles.actionButtonText}>
+                              Отклонить
+                            </Text>
                           </TouchableOpacity>
                         </View>
                       ) : (
@@ -1430,14 +1454,14 @@ export default function ModerationScreen() {
                 );
               })()}
 
-            {item.kind === 'complaint' &&
+            {item.kind === "complaint" &&
               (() => {
                 const complaint = item.raw;
                 return (
                   <>
                     <Text style={styles.mutedText}>
-                      От: {complaint.reporter?.first_name || ''}{' '}
-                      {complaint.reporter?.last_name || ''}
+                      От: {complaint.reporter?.first_name || ""}{" "}
+                      {complaint.reporter?.last_name || ""}
                     </Text>
 
                     <Text style={styles.reasonLabel}>Причина</Text>
@@ -1466,7 +1490,9 @@ export default function ModerationScreen() {
                             style={styles.dangerAction}
                             onPress={() => handleRejectComplaint(complaint.id)}
                           >
-                            <Text style={styles.actionButtonText}>Отклонить</Text>
+                            <Text style={styles.actionButtonText}>
+                              Отклонить
+                            </Text>
                           </TouchableOpacity>
                         </View>
                       ) : (
@@ -1479,16 +1505,16 @@ export default function ModerationScreen() {
                 );
               })()}
 
-            {item.kind === 'blocked' &&
+            {item.kind === "blocked" &&
               (() => {
                 const user = item.raw;
                 return (
                   <>
                     <Text style={styles.mutedText}>
-                      {user.email || 'Без email'}
+                      {user.email || "Без email"}
                     </Text>
                     <Text style={styles.text}>
-                      {user.city || '—'}, {user.country || '—'}
+                      {user.city || "—"}, {user.country || "—"}
                     </Text>
 
                     <TouchableOpacity
@@ -1527,33 +1553,33 @@ export default function ModerationScreen() {
         </View>
 
         <View style={styles.centerCounterWrap}>
-  <View style={styles.countersInline}>
-    <View style={styles.counterItem}>
-      <Text style={styles.centerCounterValue}>{centeredCount}</Text>
-      <Text style={styles.centerCounterLabel}>всего активных</Text>
-    </View>
+          <View style={styles.countersInline}>
+            <View style={styles.counterItem}>
+              <Text style={styles.centerCounterValue}>{centeredCount}</Text>
+              <Text style={styles.centerCounterLabel}>всего активных</Text>
+            </View>
 
-    <View style={styles.counterDivider} />
+            <View style={styles.counterDivider} />
 
-    <View style={styles.counterItem}>
-      <Text style={styles.centerCounterValue}>{myTasksCount}</Text>
-      <Text style={styles.centerCounterLabel}>моих задач</Text>
-    </View>
-  </View>
-</View>
+            <View style={styles.counterItem}>
+              <Text style={styles.centerCounterValue}>{myTasksCount}</Text>
+              <Text style={styles.centerCounterLabel}>моих задач</Text>
+            </View>
+          </View>
+        </View>
 
         <View style={styles.tabsRow}>
           <TouchableOpacity
             style={[
               styles.tabButton,
-              activeTab === 'new' && styles.tabButtonActive,
+              activeTab === "new" && styles.tabButtonActive,
             ]}
-            onPress={() => setActiveTab('new')}
+            onPress={() => setActiveTab("new")}
           >
             <Text
               style={[
                 styles.tabButtonText,
-                activeTab === 'new' && styles.tabButtonTextActive,
+                activeTab === "new" && styles.tabButtonTextActive,
               ]}
             >
               Новое
@@ -1563,14 +1589,14 @@ export default function ModerationScreen() {
           <TouchableOpacity
             style={[
               styles.tabButton,
-              activeTab === 'in_progress' && styles.tabButtonActive,
+              activeTab === "in_progress" && styles.tabButtonActive,
             ]}
-            onPress={() => setActiveTab('in_progress')}
+            onPress={() => setActiveTab("in_progress")}
           >
             <Text
               style={[
                 styles.tabButtonText,
-                activeTab === 'in_progress' && styles.tabButtonTextActive,
+                activeTab === "in_progress" && styles.tabButtonTextActive,
               ]}
             >
               В работе
@@ -1580,14 +1606,14 @@ export default function ModerationScreen() {
           <TouchableOpacity
             style={[
               styles.tabButton,
-              activeTab === 'needs_revision' && styles.tabButtonActive,
+              activeTab === "needs_revision" && styles.tabButtonActive,
             ]}
-            onPress={() => setActiveTab('needs_revision')}
+            onPress={() => setActiveTab("needs_revision")}
           >
             <Text
               style={[
                 styles.tabButtonText,
-                activeTab === 'needs_revision' && styles.tabButtonTextActive,
+                activeTab === "needs_revision" && styles.tabButtonTextActive,
               ]}
             >
               На доработке
@@ -1597,14 +1623,14 @@ export default function ModerationScreen() {
           <TouchableOpacity
             style={[
               styles.tabButton,
-              activeTab === 'done' && styles.tabButtonActive,
+              activeTab === "done" && styles.tabButtonActive,
             ]}
-            onPress={() => setActiveTab('done')}
+            onPress={() => setActiveTab("done")}
           >
             <Text
               style={[
                 styles.tabButtonText,
-                activeTab === 'done' && styles.tabButtonTextActive,
+                activeTab === "done" && styles.tabButtonTextActive,
               ]}
             >
               Завершено
@@ -1612,43 +1638,43 @@ export default function ModerationScreen() {
           </TouchableOpacity>
         </View>
 
-        {(activeTab === 'in_progress' || activeTab === 'needs_revision') && (
-  <View style={styles.subTabsRow}>
-    <TouchableOpacity
-      style={[
-        styles.subTabButton,
-        ownershipFilter === 'all' && styles.subTabButtonActive,
-      ]}
-      onPress={() => setOwnershipFilter('all')}
-    >
-      <Text
-        style={[
-          styles.subTabButtonText,
-          ownershipFilter === 'all' && styles.subTabButtonTextActive,
-        ]}
-      >
-        Все
-      </Text>
-    </TouchableOpacity>
+        {(activeTab === "in_progress" || activeTab === "needs_revision") && (
+          <View style={styles.subTabsRow}>
+            <TouchableOpacity
+              style={[
+                styles.subTabButton,
+                ownershipFilter === "all" && styles.subTabButtonActive,
+              ]}
+              onPress={() => setOwnershipFilter("all")}
+            >
+              <Text
+                style={[
+                  styles.subTabButtonText,
+                  ownershipFilter === "all" && styles.subTabButtonTextActive,
+                ]}
+              >
+                Все
+              </Text>
+            </TouchableOpacity>
 
-    <TouchableOpacity
-      style={[
-        styles.subTabButton,
-        ownershipFilter === 'mine' && styles.subTabButtonActive,
-      ]}
-      onPress={() => setOwnershipFilter('mine')}
-    >
-      <Text
-        style={[
-          styles.subTabButtonText,
-          ownershipFilter === 'mine' && styles.subTabButtonTextActive,
-        ]}
-      >
-        Мои
-      </Text>
-    </TouchableOpacity>
-  </View>
-)}
+            <TouchableOpacity
+              style={[
+                styles.subTabButton,
+                ownershipFilter === "mine" && styles.subTabButtonActive,
+              ]}
+              onPress={() => setOwnershipFilter("mine")}
+            >
+              <Text
+                style={[
+                  styles.subTabButtonText,
+                  ownershipFilter === "mine" && styles.subTabButtonTextActive,
+                ]}
+              >
+                Мои
+              </Text>
+            </TouchableOpacity>
+          </View>
+        )}
         <ScrollView contentContainerStyle={styles.container}>
           {unifiedItems.length === 0 ? (
             <Text style={styles.emptyText}>Список пуст</Text>
@@ -1693,8 +1719,8 @@ export default function ModerationScreen() {
               >
                 <Text style={styles.modalConfirmButtonText}>
                   {submittingAction
-                    ? 'Сохранение...'
-                    : actionModal?.confirmText || 'Сохранить'}
+                    ? "Сохранение..."
+                    : actionModal?.confirmText || "Сохранить"}
                 </Text>
               </TouchableOpacity>
             </View>
@@ -1708,109 +1734,109 @@ export default function ModerationScreen() {
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: '#fff',
+    backgroundColor: "#fff",
   },
   countersInline: {
-  flexDirection: 'row',
-  alignItems: 'center',
-  justifyContent: 'center',
-},
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+  },
 
-counterItem: {
-  alignItems: 'center',
-  minWidth: 110,
-},
+  counterItem: {
+    alignItems: "center",
+    minWidth: 110,
+  },
 
-counterDivider: {
-  width: 1,
-  height: 42,
-  backgroundColor: '#e0e0e0',
-  marginHorizontal: 18,
-},
+  counterDivider: {
+    width: 1,
+    height: 42,
+    backgroundColor: "#e0e0e0",
+    marginHorizontal: 18,
+  },
   loader: {
     flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#fff',
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: "#fff",
   },
   header: {
     paddingTop: 64,
     paddingHorizontal: 16,
     paddingBottom: 12,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: '#fff',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    backgroundColor: "#fff",
   },
   title: {
     fontSize: 28,
-    fontWeight: '800',
-    color: '#111',
+    fontWeight: "800",
+    color: "#111",
   },
   refreshButton: {
     borderWidth: 1,
-    borderColor: '#d8e3d8',
-    backgroundColor: '#f7faf7',
+    borderColor: "#d8e3d8",
+    backgroundColor: "#f7faf7",
     borderRadius: 12,
     paddingHorizontal: 14,
     paddingVertical: 10,
   },
   refreshButtonText: {
     fontSize: 14,
-    fontWeight: '700',
-    color: '#2E7D32',
+    fontWeight: "700",
+    color: "#2E7D32",
   },
   centerCounterWrap: {
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
     paddingTop: 6,
     paddingBottom: 14,
   },
   centerCounterValue: {
     fontSize: 34,
-    fontWeight: '900',
-    color: '#111',
+    fontWeight: "900",
+    color: "#111",
   },
   centerCounterLabel: {
     fontSize: 13,
-    color: '#666',
+    color: "#666",
     marginTop: 2,
   },
   tabsRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
+    flexDirection: "row",
+    flexWrap: "wrap",
     paddingHorizontal: 16,
     paddingBottom: 10,
   },
   subTabsRow: {
-  flexDirection: 'row',
-  paddingHorizontal: 16,
-  paddingBottom: 10,
-},
+    flexDirection: "row",
+    paddingHorizontal: 16,
+    paddingBottom: 10,
+  },
 
-subTabButton: {
-  backgroundColor: '#f4f6f4',
-  borderRadius: 10,
-  paddingVertical: 8,
-  paddingHorizontal: 12,
-  marginRight: 8,
-},
+  subTabButton: {
+    backgroundColor: "#f4f6f4",
+    borderRadius: 10,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    marginRight: 8,
+  },
 
-subTabButtonActive: {
-  backgroundColor: '#111',
-},
+  subTabButtonActive: {
+    backgroundColor: "#111",
+  },
 
-subTabButtonText: {
-  fontSize: 13,
-  fontWeight: '700',
-  color: '#555',
-},
+  subTabButtonText: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: "#555",
+  },
 
-subTabButtonTextActive: {
-  color: '#fff',
-},
+  subTabButtonTextActive: {
+    color: "#fff",
+  },
   tabButton: {
-    backgroundColor: '#f4f6f4',
+    backgroundColor: "#f4f6f4",
     borderRadius: 12,
     paddingVertical: 10,
     paddingHorizontal: 14,
@@ -1818,41 +1844,41 @@ subTabButtonTextActive: {
     marginBottom: 8,
   },
   tabButtonActive: {
-    backgroundColor: '#2E7D32',
+    backgroundColor: "#2E7D32",
   },
   tabButtonText: {
     fontSize: 13,
-    fontWeight: '800',
-    color: '#444',
+    fontWeight: "800",
+    color: "#444",
   },
   tabButtonTextActive: {
-    color: '#fff',
+    color: "#fff",
   },
   container: {
     padding: 16,
     paddingBottom: 40,
-    backgroundColor: '#fff',
+    backgroundColor: "#fff",
     flexGrow: 1,
   },
   emptyText: {
-    color: '#777',
+    color: "#777",
     fontSize: 15,
     marginTop: 10,
     lineHeight: 22,
-    textAlign: 'center',
+    textAlign: "center",
   },
   card: {
-    backgroundColor: '#fafafa',
+    backgroundColor: "#fafafa",
     borderRadius: 18,
     padding: 16,
     marginBottom: 12,
     borderWidth: 1,
-    borderColor: '#f0f0f0',
+    borderColor: "#f0f0f0",
   },
   cardHeader: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    justifyContent: 'space-between',
+    flexDirection: "row",
+    alignItems: "flex-start",
+    justifyContent: "space-between",
     marginBottom: 10,
   },
   cardHeaderMain: {
@@ -1862,7 +1888,7 @@ subTabButtonTextActive: {
   cardCollapsedHint: {
     marginTop: 4,
     fontSize: 12,
-    color: '#888',
+    color: "#888",
   },
   statusLine: {
     marginBottom: 10,
@@ -1871,83 +1897,83 @@ subTabButtonTextActive: {
     borderRadius: 10,
   },
   statusLineNormal: {
-    backgroundColor: '#eef6ee',
+    backgroundColor: "#eef6ee",
   },
   statusLineWarning: {
-    backgroundColor: '#fff6e5',
+    backgroundColor: "#fff6e5",
   },
   statusLineCritical: {
-    backgroundColor: '#fff1f1',
+    backgroundColor: "#fff1f1",
   },
   statusLineText: {
     fontSize: 13,
-    fontWeight: '700',
-    color: '#333',
+    fontWeight: "700",
+    color: "#333",
   },
   statusChip: {
     borderRadius: 999,
-    backgroundColor: '#eef6ee',
+    backgroundColor: "#eef6ee",
     paddingHorizontal: 10,
     paddingVertical: 6,
   },
   statusChipBlocked: {
-    backgroundColor: '#fff2f2',
+    backgroundColor: "#fff2f2",
   },
   statusChipText: {
     fontSize: 12,
-    fontWeight: '800',
-    color: '#2E7D32',
+    fontWeight: "800",
+    color: "#2E7D32",
   },
   archiveChip: {
     borderRadius: 999,
-    backgroundColor: '#eef2ff',
+    backgroundColor: "#eef2ff",
     paddingHorizontal: 10,
     paddingVertical: 6,
   },
   archiveChipText: {
     fontSize: 12,
-    fontWeight: '800',
-    color: '#4456a6',
+    fontWeight: "800",
+    color: "#4456a6",
   },
   archiveChipApproved: {
-    backgroundColor: '#e8f5e9',
+    backgroundColor: "#e8f5e9",
   },
   archiveChipApprovedText: {
-    color: '#2E7D32',
+    color: "#2E7D32",
   },
   archiveChipRejected: {
-    backgroundColor: '#fdecec',
+    backgroundColor: "#fdecec",
   },
   archiveChipRejectedText: {
-    color: '#c62828',
+    color: "#c62828",
   },
   archiveChipNeutral: {
-    backgroundColor: '#eef2ff',
+    backgroundColor: "#eef2ff",
   },
   archiveChipNeutralText: {
-    color: '#4456a6',
+    color: "#4456a6",
   },
   name: {
     fontSize: 18,
-    fontWeight: '800',
-    color: '#111',
+    fontWeight: "800",
+    color: "#111",
     marginBottom: 4,
   },
   nameRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
   },
   unreadDot: {
     width: 10,
     height: 10,
     borderRadius: 5,
-    backgroundColor: '#2563eb',
+    backgroundColor: "#2563eb",
     marginLeft: 8,
     marginTop: 2,
   },
   mutedText: {
     fontSize: 13,
-    color: '#6b7280',
+    color: "#6b7280",
     lineHeight: 18,
   },
   infoBlock: {
@@ -1955,7 +1981,7 @@ subTabButtonTextActive: {
   },
   text: {
     fontSize: 14,
-    color: '#555',
+    color: "#555",
     marginBottom: 4,
     lineHeight: 20,
   },
@@ -1963,73 +1989,73 @@ subTabButtonTextActive: {
     marginTop: 4,
     marginBottom: 4,
     fontSize: 14,
-    fontWeight: '700',
-    color: '#222',
+    fontWeight: "700",
+    color: "#222",
   },
   messageBox: {
     marginTop: 10,
     padding: 10,
     borderRadius: 12,
-    backgroundColor: '#f2f6f2',
+    backgroundColor: "#f2f6f2",
   },
   messageLabel: {
     fontSize: 13,
-    fontWeight: '800',
-    color: '#2E7D32',
+    fontWeight: "800",
+    color: "#2E7D32",
     marginBottom: 4,
   },
   messageItem: {
     marginTop: 8,
     paddingTop: 8,
     borderTopWidth: 1,
-    borderTopColor: '#dfe8df',
+    borderTopColor: "#dfe8df",
   },
   messageMeta: {
     fontSize: 12,
-    fontWeight: '700',
-    color: '#666',
+    fontWeight: "700",
+    color: "#666",
     marginBottom: 4,
   },
   messageText: {
     fontSize: 14,
-    color: '#333',
+    color: "#333",
     lineHeight: 20,
   },
   assignmentBlock: {
     marginTop: 14,
   },
   takeAction: {
-    alignSelf: 'flex-start',
-    backgroundColor: '#2563eb',
+    alignSelf: "flex-start",
+    backgroundColor: "#2563eb",
     paddingVertical: 8,
     paddingHorizontal: 14,
     borderRadius: 10,
   },
   primaryActionFull: {
     marginTop: 14,
-    backgroundColor: '#2E7D32',
+    backgroundColor: "#2E7D32",
     paddingVertical: 12,
     borderRadius: 12,
-    alignItems: 'center',
+    alignItems: "center",
   },
   secondaryActionFull: {
     marginTop: 14,
-    backgroundColor: '#f4f6f4',
+    backgroundColor: "#f4f6f4",
     borderWidth: 1,
-    borderColor: '#d8e3d8',
+    borderColor: "#d8e3d8",
     paddingVertical: 12,
     borderRadius: 12,
-    alignItems: 'center',
+    alignItems: "center",
   },
   secondaryActionFullText: {
-    color: '#2E7D32',
-    textAlign: 'center',
-    fontWeight: '800',
+    color: "#2E7D32",
+    textAlign: "center",
+    fontWeight: "800",
     fontSize: 13,
     lineHeight: 16,
   },
   primaryAction: {
-    backgroundColor: '#2E7D32',
+    backgroundColor: "#2E7D32",
     paddingVertical: 12,
     paddingHorizontal: 20,
     borderRadius: 10,
@@ -2037,7 +2063,7 @@ subTabButtonTextActive: {
     marginBottom: 8,
   },
   warningAction: {
-    backgroundColor: '#f9a825',
+    backgroundColor: "#f9a825",
     paddingVertical: 12,
     paddingHorizontal: 20,
     borderRadius: 10,
@@ -2045,7 +2071,7 @@ subTabButtonTextActive: {
     marginBottom: 8,
   },
   dangerAction: {
-    backgroundColor: '#c62828',
+    backgroundColor: "#c62828",
     paddingVertical: 12,
     paddingHorizontal: 20,
     borderRadius: 10,
@@ -2054,81 +2080,81 @@ subTabButtonTextActive: {
   },
   actionGrid: {
     marginTop: 14,
-    flexDirection: 'row',
-    flexWrap: 'wrap',
+    flexDirection: "row",
+    flexWrap: "wrap",
   },
   actionRow: {
     marginTop: 14,
-    flexDirection: 'row',
-    flexWrap: 'wrap',
+    flexDirection: "row",
+    flexWrap: "wrap",
   },
   actionButtonText: {
-    color: '#fff',
-    textAlign: 'center',
-    fontWeight: '800',
+    color: "#fff",
+    textAlign: "center",
+    fontWeight: "800",
     fontSize: 13,
     lineHeight: 16,
   },
   lockedText: {
     fontSize: 13,
-    color: '#c62828',
-    fontWeight: '700',
+    color: "#c62828",
+    fontWeight: "700",
   },
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.35)',
-    justifyContent: 'center',
+    backgroundColor: "rgba(0,0,0,0.35)",
+    justifyContent: "center",
     padding: 20,
   },
   modalCard: {
-    backgroundColor: '#fff',
+    backgroundColor: "#fff",
     borderRadius: 18,
     padding: 16,
   },
   modalTitle: {
     fontSize: 20,
-    fontWeight: '800',
+    fontWeight: "800",
     marginBottom: 12,
-    color: '#111',
+    color: "#111",
   },
   modalInput: {
     minHeight: 110,
     borderWidth: 1,
-    borderColor: '#ddd',
+    borderColor: "#ddd",
     borderRadius: 12,
     padding: 12,
-    backgroundColor: '#fff',
+    backgroundColor: "#fff",
     fontSize: 15,
-    color: '#222',
+    color: "#222",
   },
   modalButtonsRow: {
-    flexDirection: 'row',
+    flexDirection: "row",
     marginTop: 14,
   },
   modalCancelButton: {
     flex: 1,
     borderWidth: 1.5,
-    borderColor: '#bbb',
+    borderColor: "#bbb",
     borderRadius: 12,
     paddingVertical: 14,
     marginRight: 8,
-    backgroundColor: '#fff',
+    backgroundColor: "#fff",
   },
   modalCancelButtonText: {
-    textAlign: 'center',
-    fontWeight: '700',
-    color: '#555',
+    textAlign: "center",
+    fontWeight: "700",
+    color: "#555",
   },
   modalConfirmButton: {
     flex: 1,
-    backgroundColor: '#2E7D32',
+    backgroundColor: "#2E7D32",
     borderRadius: 12,
     paddingVertical: 14,
     marginLeft: 8,
   },
   modalConfirmButtonText: {
-    textAlign: 'center',
-    fontWeight: '800',
-    color: '#fff',
+    textAlign: "center",
+    fontWeight: "800",
+    color: "#fff",
   },
 });

@@ -6,7 +6,7 @@ import {
 import * as ImagePicker from "expo-image-picker";
 import { router, useLocalSearchParams } from "expo-router";
 import { StatusBar } from "expo-status-bar";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   Alert,
   Image,
@@ -118,6 +118,10 @@ export default function RegisterScreen() {
   const [submitting, setSubmitting] = useState(false);
   const [checkingEmail, setCheckingEmail] = useState(false);
 
+  const [codeInput, setCodeInput] = useState("");
+  const [verifyingCode, setVerifyingCode] = useState(false);
+  const [resendIn, setResendIn] = useState(0);
+
   const filteredCategories = useMemo(() => {
     const search = category.trim().toLowerCase();
     if (!search) return categories;
@@ -153,6 +157,80 @@ export default function RegisterScreen() {
       .filter((item) => item.toLowerCase().includes(search))
       .slice(0, 6);
   }, [profession]);
+
+  // Таймер «Отправить код ещё раз»
+  useEffect(() => {
+    if (step !== 2 || resendIn <= 0) return;
+    const timer = setInterval(() => {
+      setResendIn((value) => (value > 0 ? value - 1 : 0));
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [step, resendIn]);
+
+  // Обращение к почтальону (серверной функции send-email-code)
+  const callEmailCode = async (body: {
+    action: "send" | "verify";
+    email: string;
+    code?: string;
+  }) => {
+    const { data, error } = await supabase.functions.invoke("send-email-code", {
+      body,
+    });
+
+    if (error) {
+      let message = "Не удалось связаться с сервером. Попробуйте ещё раз.";
+      try {
+        const context = await (error as any).context?.json?.();
+        if (context?.error) message = context.error;
+      } catch {}
+      throw new Error(message);
+    }
+
+    return data;
+  };
+
+  const sendVerificationCode = async () => {
+    await callEmailCode({
+      action: "send",
+      email: email.trim().toLowerCase(),
+    });
+    setCodeInput("");
+    setResendIn(60);
+  };
+
+  const handleResendCode = async () => {
+    if (resendIn > 0 || checkingEmail) return;
+    try {
+      setCheckingEmail(true);
+      setError("");
+      await sendVerificationCode();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Не удалось отправить код");
+    } finally {
+      setCheckingEmail(false);
+    }
+  };
+
+  const handleVerifyCode = async () => {
+    if (verifyingCode) return;
+
+    try {
+      setVerifyingCode(true);
+      setError("");
+
+      await callEmailCode({
+        action: "verify",
+        email: email.trim().toLowerCase(),
+        code: codeInput.trim(),
+      });
+
+      setStep(3);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Неверный код");
+    } finally {
+      setVerifyingCode(false);
+    }
+  };
 
   const checkEmailExists = async (rawEmail: string) => {
     const normalizedEmail = rawEmail.trim().toLowerCase();
@@ -231,6 +309,8 @@ export default function RegisterScreen() {
         return;
       }
 
+      // Отправляем код подтверждения и переходим на шаг ввода кода
+      await sendVerificationCode();
       setStep(2);
     } catch (e) {
       setError(translateAuthError(e));
@@ -334,13 +414,15 @@ export default function RegisterScreen() {
           showsVerticalScrollIndicator={false}
         >
           <Text style={styles.title}>Регистрация</Text>
-          <Text style={styles.subtitle}>ШАГ {step} ИЗ 2</Text>
+          <Text style={styles.subtitle}>ШАГ {step} ИЗ 3</Text>
 
           <Tekmet style={styles.tekmet} />
 
-          <Text style={styles.requiredHint}>
-            Поля со звёздочкой (*) обязательны
-          </Text>
+          {step !== 2 && (
+            <Text style={styles.requiredHint}>
+              Поля со звёздочкой (*) обязательны
+            </Text>
+          )}
 
           {step === 1 && (
             <>
@@ -507,7 +589,7 @@ export default function RegisterScreen() {
                 >
                   <View style={styles.buttonInner}>
                     <Text style={styles.primaryButtonText}>
-                      {checkingEmail ? "Проверка..." : "Далее"}
+                      {checkingEmail ? "Отправка кода..." : "Далее"}
                     </Text>
                   </View>
                 </Glass>
@@ -516,6 +598,83 @@ export default function RegisterScreen() {
           )}
 
           {step === 2 && (
+            <>
+              <Text style={styles.codeText}>
+                Мы отправили 6-значный код на{"\n"}
+                <Text style={styles.codeEmail}>{email.trim()}</Text>
+              </Text>
+
+              <Glass {...glassInputProps} style={styles.inputWrap}>
+                <TextInput
+                  placeholder="Код из письма"
+                  placeholderTextColor="#8FA79A"
+                  style={[styles.input, styles.codeInput]}
+                  value={codeInput}
+                  onChangeText={(text) => {
+                    setCodeInput(text.replace(/[^0-9]/g, ""));
+                    setError("");
+                  }}
+                  keyboardType="number-pad"
+                  maxLength={6}
+                />
+              </Glass>
+
+              <Text style={styles.hintCentered}>
+                Код действует 10 минут. Письмо не пришло? Проверьте папку «Спам»
+              </Text>
+
+              {!!error && <Text style={styles.error}>{error}</Text>}
+
+              <TouchableOpacity
+                activeOpacity={0.85}
+                onPress={handleVerifyCode}
+                disabled={verifyingCode || codeInput.length !== 6}
+                style={[
+                  styles.primaryShadow,
+                  (verifyingCode || codeInput.length !== 6) && styles.disabled,
+                ]}
+              >
+                <Glass
+                  radius={18}
+                  tintColor="rgba(105,183,141,0.92)"
+                  borderColor="rgba(255,255,255,0.85)"
+                >
+                  <View style={styles.buttonInner}>
+                    <Text style={styles.primaryButtonText}>
+                      {verifyingCode ? "Проверка..." : "Подтвердить"}
+                    </Text>
+                  </View>
+                </Glass>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                onPress={handleResendCode}
+                disabled={resendIn > 0 || checkingEmail}
+                activeOpacity={0.8}
+              >
+                <Text style={[styles.link, resendIn > 0 && styles.linkMuted]}>
+                  {resendIn > 0
+                    ? `Запросить новый код можно через ${resendIn} сек`
+                    : checkingEmail
+                      ? "Отправка..."
+                      : "Отправить код ещё раз"}
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                onPress={() => {
+                  setStep(1);
+                  setCodeInput("");
+                  setError("");
+                }}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.link}>Изменить почту</Text>
+              </TouchableOpacity>
+            </>
+          )}
+
+          {step === 3 && (
             <>
               <Glass {...glassInputProps} style={styles.inputWrap}>
                 <TextInput
@@ -736,6 +895,44 @@ const styles = StyleSheet.create({
     color: "#96AC9E",
     textAlign: "center",
     marginBottom: 16,
+  },
+
+  codeText: {
+    fontSize: 14.5,
+    lineHeight: 22,
+    color: "#7E988B",
+    textAlign: "center",
+    marginBottom: 16,
+  },
+
+  codeEmail: {
+    color: "#3F6B5B",
+    fontWeight: "600",
+  },
+
+  codeInput: {
+    textAlign: "center",
+    fontSize: 22,
+    letterSpacing: 8,
+  },
+
+  hintCentered: {
+    fontSize: 12.5,
+    color: "#96AC9E",
+    textAlign: "center",
+    marginBottom: 12,
+  },
+
+  link: {
+    color: "#96AC9E",
+    textAlign: "center",
+    fontSize: 14,
+    marginTop: 18,
+    textDecorationLine: "underline",
+  },
+
+  linkMuted: {
+    opacity: 0.6,
   },
 
   avatarPicker: {

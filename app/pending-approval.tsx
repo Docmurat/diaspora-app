@@ -1,29 +1,54 @@
-import { useCallback, useState } from 'react';
 import {
-  View,
-  Text,
-  StyleSheet,
-  TouchableOpacity,
-  ScrollView,
-  Alert,
+  Philosopher_400Regular,
+  Philosopher_700Bold,
+  useFonts,
+} from "@expo-google-fonts/philosopher";
+import { router, useFocusEffect } from "expo-router";
+import { useCallback, useEffect, useRef, useState } from "react";
+import {
   ActivityIndicator,
+  Alert,
+  ScrollView,
+  StyleSheet,
+  Text,
   TextInput,
-} from 'react-native';
-import { router, useFocusEffect } from 'expo-router';
-import { signOutUser } from '../services/sessionService';
-import { getMyProfile } from '../services/profileService';
-import { supabase } from '../lib/supabase';
+  TouchableOpacity,
+  View,
+} from "react-native";
+import { Glass, MingiBackground, Tekmet } from "../components/mingi";
+import { supabase } from "../lib/supabase";
+import { getMyProfile } from "../services/profileService";
+import { signOutUser } from "../services/sessionService";
 
 const RESUBMIT_DEFAULT_MESSAGE =
-  'Я исправил(а) анкету и отправляю её на повторное рассмотрение.';
+  "Я исправил(а) анкету и отправляю её на повторное рассмотрение.";
+
+const glassCardProps = {
+  radius: 18,
+  tintColor: "rgba(255,255,255,0.55)",
+  borderColor: "rgba(93,140,120,0.45)",
+  borderWidth: 0.75,
+} as const;
+
+const glassInputProps = {
+  radius: 16,
+  tintColor: "rgba(255,255,255,0.85)",
+  borderColor: "rgba(93,140,120,0.45)",
+  borderWidth: 0.75,
+} as const;
 
 export default function PendingApprovalScreen() {
+  const [fontsLoaded] = useFonts({
+    Philosopher_400Regular,
+    Philosopher_700Bold,
+  });
+
   const [messages, setMessages] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [profile, setProfile] = useState<any>(null);
   const [sendingAgain, setSendingAgain] = useState(false);
   const [resubmitMessage, setResubmitMessage] = useState(
-    RESUBMIT_DEFAULT_MESSAGE
+    RESUBMIT_DEFAULT_MESSAGE,
   );
 
   const loadData = useCallback(async () => {
@@ -39,11 +64,11 @@ export default function PendingApprovalScreen() {
       }
 
       const { data, error } = await supabase
-        .from('moderation_messages')
-        .select('*')
-        .eq('request_type', 'invite_request')
-        .eq('request_id', myProfile.id)
-        .order('created_at', { ascending: true });
+        .from("moderation_messages")
+        .select("*")
+        .eq("request_type", "invite_request")
+        .eq("request_id", myProfile.id)
+        .order("created_at", { ascending: true });
 
       if (error) {
         throw new Error(error.message);
@@ -51,7 +76,7 @@ export default function PendingApprovalScreen() {
 
       setMessages(data || []);
     } catch (e) {
-      console.log('Ошибка загрузки pending approval:', e);
+      console.log("Ошибка загрузки pending approval:", e);
       setMessages([]);
     } finally {
       setLoading(false);
@@ -61,15 +86,44 @@ export default function PendingApprovalScreen() {
   useFocusEffect(
     useCallback(() => {
       loadData();
-    }, [loadData])
+    }, [loadData]),
   );
 
+  // Текущий статус анкеты (для сравнения в автопроверке)
+  const statusRef = useRef<string | undefined>(undefined);
+  useEffect(() => {
+    statusRef.current = (profile as any)?.moderation_status;
+  }, [profile]);
+
+  // Автопроверка: экран сам замечает решение модератора без повторного входа
+  useEffect(() => {
+    const interval = setInterval(async () => {
+      try {
+        const fresh = await getMyProfile();
+        if (!fresh) return;
+
+        if (fresh.moderation_status === "approved") {
+          router.replace("/splash");
+          return;
+        }
+
+        if (fresh.moderation_status !== statusRef.current) {
+          await loadData();
+        }
+      } catch (e) {
+        console.log("Ошибка автопроверки статуса:", e);
+      }
+    }, 7000);
+
+    return () => clearInterval(interval);
+  }, [loadData]);
+
   const isNeedsRevision =
-    (profile as any)?.moderation_status === 'needs_revision';
-  const isRejected = (profile as any)?.moderation_status === 'rejected';
+    (profile as any)?.moderation_status === "needs_revision";
+  const isRejected = (profile as any)?.moderation_status === "rejected";
 
   const moderatorMessages = messages.filter(
-    (msg) => msg.author_role === 'moderator' || msg.author_role === 'system'
+    (msg) => msg.author_role === "moderator" || msg.author_role === "system",
   );
 
   const lastModeratorMessage =
@@ -81,19 +135,19 @@ export default function PendingApprovalScreen() {
     messages.length > 0 ? messages[messages.length - 1] : null;
 
   const hasUserResubmittedAfterRevision =
-    isNeedsRevision && lastMessage?.author_role === 'user';
+    isNeedsRevision && lastMessage?.author_role === "user";
 
   const showRevisionActions =
     isNeedsRevision && !hasUserResubmittedAfterRevision;
 
   const handleSubmitAgain = async () => {
     if (!profile?.id) {
-      Alert.alert('Ошибка', 'Профиль не найден');
+      Alert.alert("Ошибка", "Профиль не найден");
       return;
     }
 
     if (!resubmitMessage.trim()) {
-      Alert.alert('Ошибка', 'Введите сообщение для модератора');
+      Alert.alert("Ошибка", "Введите сообщение для модератора");
       return;
     }
 
@@ -101,25 +155,25 @@ export default function PendingApprovalScreen() {
       setSendingAgain(true);
 
       const { error: updateError } = await supabase
-        .from('users')
+        .from("users")
         .update({
-          moderation_status: 'needs_revision',
+          moderation_status: "needs_revision",
           moderator_has_unread_changes: true,
           updated_at: new Date().toISOString(),
         })
-        .eq('id', profile.id);
+        .eq("id", profile.id);
 
       if (updateError) {
         throw new Error(updateError.message);
       }
 
       const { error: messageError } = await supabase
-        .from('moderation_messages')
+        .from("moderation_messages")
         .insert({
-          request_type: 'invite_request',
+          request_type: "invite_request",
           request_id: profile.id, // ВАЖНОЕ 1
           author_user_id: profile.id,
-          author_role: 'user',
+          author_role: "user",
           message: resubmitMessage.trim(),
           read_by_user: true,
           read_by_moderator: false,
@@ -133,235 +187,302 @@ export default function PendingApprovalScreen() {
       await loadData();
 
       Alert.alert(
-        'Отправлено',
-        'Анкета повторно отправлена модератору на рассмотрение.'
+        "Отправлено",
+        "Анкета повторно отправлена модератору на рассмотрение.",
       );
     } catch (e) {
       const message =
-        e instanceof Error ? e.message : 'Не удалось отправить анкету повторно';
-      Alert.alert('Ошибка', message);
+        e instanceof Error ? e.message : "Не удалось отправить анкету повторно";
+      Alert.alert("Ошибка", message);
     } finally {
       setSendingAgain(false);
     }
   };
 
-  if (loading) {
+  if (!fontsLoaded || loading) {
     return (
       <View style={styles.loader}>
-        <ActivityIndicator size="large" color="#2E7D32" />
+        <ActivityIndicator size="large" color="#69B78D" />
       </View>
     );
   }
 
   return (
-    <ScrollView contentContainerStyle={styles.container}>
-      <Text style={styles.title}>
-        {isRejected
-          ? 'Анкета отклонена'
-          : showRevisionActions
-          ? 'Анкета требует доработки'
-          : 'Анкета на рассмотрении'}
-      </Text>
-
-      <Text style={styles.text}>
-        {isRejected
-          ? 'Модератор отклонил вашу анкету. Ознакомьтесь с комментарием ниже.'
-          : 'Спасибо за регистрацию. Сейчас ваша анкета проверяется модератором.'}
-      </Text>
-
-      {showRevisionActions && (
-        <Text style={styles.text}>
-          Исправьте данные, затем отправьте анкету на повторное рассмотрение.
-        </Text>
-      )}
-
-      {(showRevisionActions || isRejected) && lastModeratorMessage && (
-        <View style={styles.messagesBlock}>
-          <Text style={styles.messagesTitle}>
-            Последнее сообщение от модерации:
-          </Text>
-
-          <View style={styles.messageCard}>
-            <Text style={styles.messageAuthor}>
-              {lastModeratorMessage.author_role === 'moderator'
-                ? 'Модератор'
-                : 'Система'}
-            </Text>
-            <Text style={styles.messageText}>
-              {lastModeratorMessage.message}
-            </Text>
-          </View>
-        </View>
-      )}
-
-      {showRevisionActions ? (
-        <>
-          <TouchableOpacity
-            style={styles.editButton}
-            onPress={() => router.push('/edit-profile')}
-          >
-            <Text style={styles.editButtonText}>Исправить анкету</Text>
-          </TouchableOpacity>
-
-          <Text style={styles.inputLabel}>Сообщение модератору</Text>
-
-          <TextInput
-            style={styles.textArea}
-            value={resubmitMessage}
-            onChangeText={setResubmitMessage}
-            placeholder="Введите сообщение"
-            multiline
-            textAlignVertical="top"
-          />
-
-          <TouchableOpacity
-            style={[styles.primaryButton, sendingAgain && styles.buttonDisabled]}
-            onPress={handleSubmitAgain}
-            disabled={sendingAgain}
-          >
-            <Text style={styles.primaryButtonText}>
-              {sendingAgain ? 'Отправка...' : 'Отправить повторно'}
-            </Text>
-          </TouchableOpacity>
-        </>
-      ) : !isRejected ? (
-        <TouchableOpacity
-          style={styles.primaryButton}
-          onPress={() => router.push('/contact-admin')}
-        >
-          <Text style={styles.primaryButtonText}>
-            Связаться с администратором
-          </Text>
-        </TouchableOpacity>
-      ) : null}
-
-      <TouchableOpacity
-        style={styles.secondaryButton}
-        onPress={async () => {
-          await signOutUser();
-          router.replace('/welcome');
-        }}
+    <MingiBackground idPrefix="pa">
+      <ScrollView
+        contentContainerStyle={styles.container}
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
       >
-        <Text style={styles.secondaryButtonText}>Выйти</Text>
-      </TouchableOpacity>
-    </ScrollView>
+        <Text style={styles.title}>
+          {isRejected
+            ? "Анкета отклонена"
+            : showRevisionActions
+              ? "Нужна доработка"
+              : "На рассмотрении"}
+        </Text>
+        <Text style={styles.subtitle}>МИНГИ·ТАУ</Text>
+
+        <Tekmet style={styles.tekmet} />
+
+        <Text style={styles.text}>
+          {isRejected
+            ? "Модератор отклонил вашу анкету. Ознакомьтесь с комментарием ниже."
+            : showRevisionActions
+              ? "Исправьте данные, затем отправьте анкету на повторное рассмотрение."
+              : "Спасибо за регистрацию. Сейчас ваша анкета проверяется модератором."}
+        </Text>
+
+        {!isRejected && !showRevisionActions && (
+          <Text style={styles.autoHint}>
+            Как только анкету одобрят, экран обновится сам
+          </Text>
+        )}
+
+        {(showRevisionActions || isRejected) && lastModeratorMessage && (
+          <Glass {...glassCardProps} style={styles.messageCard}>
+            <View style={styles.messageInner}>
+              <Text style={styles.messageAuthor}>
+                {lastModeratorMessage.author_role === "moderator"
+                  ? "СООБЩЕНИЕ МОДЕРАТОРА"
+                  : "СИСТЕМНОЕ СООБЩЕНИЕ"}
+              </Text>
+              <Text style={styles.messageText}>
+                {lastModeratorMessage.message}
+              </Text>
+            </View>
+          </Glass>
+        )}
+
+        {showRevisionActions ? (
+          <>
+            <TouchableOpacity
+              activeOpacity={0.85}
+              onPress={() => router.push("/edit-profile")}
+              style={styles.secondaryWrap}
+            >
+              <Glass
+                radius={18}
+                tintColor="rgba(255,255,255,0.5)"
+                borderColor="rgba(93,140,120,0.45)"
+                borderWidth={0.75}
+              >
+                <View style={styles.buttonInner}>
+                  <Text style={styles.secondaryButtonText}>
+                    Исправить анкету
+                  </Text>
+                </View>
+              </Glass>
+            </TouchableOpacity>
+
+            <Text style={styles.inputLabel}>Сообщение модератору</Text>
+
+            <Glass {...glassInputProps} style={styles.inputWrap}>
+              <TextInput
+                style={styles.textArea}
+                value={resubmitMessage}
+                onChangeText={setResubmitMessage}
+                placeholder="Введите сообщение"
+                placeholderTextColor="#8FA79A"
+                multiline
+                textAlignVertical="top"
+              />
+            </Glass>
+
+            <TouchableOpacity
+              activeOpacity={0.85}
+              onPress={handleSubmitAgain}
+              disabled={sendingAgain}
+              style={[styles.primaryShadow, sendingAgain && styles.disabled]}
+            >
+              <Glass
+                radius={18}
+                tintColor="rgba(105,183,141,0.92)"
+                borderColor="rgba(255,255,255,0.85)"
+              >
+                <View style={styles.buttonInner}>
+                  <Text style={styles.primaryButtonText}>
+                    {sendingAgain ? "Отправка..." : "Отправить повторно"}
+                  </Text>
+                </View>
+              </Glass>
+            </TouchableOpacity>
+          </>
+        ) : !isRejected ? (
+          <TouchableOpacity
+            activeOpacity={0.85}
+            onPress={() => router.push("/contact-admin")}
+            style={styles.primaryShadow}
+          >
+            <Glass
+              radius={18}
+              tintColor="rgba(105,183,141,0.92)"
+              borderColor="rgba(255,255,255,0.85)"
+            >
+              <View style={styles.buttonInner}>
+                <Text style={styles.primaryButtonText}>
+                  Связаться с администратором
+                </Text>
+              </View>
+            </Glass>
+          </TouchableOpacity>
+        ) : null}
+
+        <TouchableOpacity
+          onPress={async () => {
+            await signOutUser();
+            router.replace("/welcome");
+          }}
+          activeOpacity={0.8}
+        >
+          <Text style={styles.link}>Выйти</Text>
+        </TouchableOpacity>
+      </ScrollView>
+    </MingiBackground>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flexGrow: 1,
-    backgroundColor: '#fff',
-    justifyContent: 'center',
-    padding: 24,
-  },
   loader: {
     flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#fff',
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: "#F4FAF4",
   },
+
+  container: {
+    flexGrow: 1,
+    justifyContent: "center",
+    paddingHorizontal: 28,
+    paddingVertical: 48,
+  },
+
   title: {
-    fontSize: 30,
-    fontWeight: 'bold',
-    marginBottom: 20,
-    textAlign: 'center',
-    color: '#111',
+    fontFamily: "Philosopher_700Bold",
+    fontSize: 34,
+    color: "#3F6B5B",
+    textAlign: "center",
   },
+
+  subtitle: {
+    fontFamily: "Philosopher_400Regular",
+    fontSize: 13.5,
+    letterSpacing: 2.5,
+    color: "#719686",
+    textAlign: "center",
+    marginTop: 8,
+  },
+
+  tekmet: {
+    alignSelf: "center",
+    marginTop: 14,
+    marginBottom: 18,
+  },
+
   text: {
-    fontSize: 16,
-    lineHeight: 24,
-    color: '#555',
-    textAlign: 'center',
-    marginBottom: 14,
-  },
-  messagesBlock: {
-    marginTop: 30,
-    marginBottom: 10,
-  },
-  messagesTitle: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    marginBottom: 10,
-    color: '#111',
-  },
-  messageCard: {
-    backgroundColor: '#fff8e1',
-    borderWidth: 1,
-    borderColor: '#f3d37a',
-    padding: 12,
-    borderRadius: 10,
+    fontSize: 14.5,
+    lineHeight: 22,
+    color: "#4E7364",
+    textAlign: "center",
     marginBottom: 8,
   },
+
+  autoHint: {
+    fontSize: 12.5,
+    color: "#96AC9E",
+    textAlign: "center",
+    marginBottom: 16,
+  },
+
+  messageCard: {
+    marginTop: 12,
+    marginBottom: 16,
+  },
+
+  messageInner: {
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+  },
+
   messageAuthor: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#2E7D32',
-    marginBottom: 4,
+    fontFamily: "Philosopher_400Regular",
+    fontSize: 11.5,
+    letterSpacing: 2,
+    color: "#719686",
+    marginBottom: 6,
   },
+
   messageText: {
-    fontSize: 14,
-    color: '#333',
-    lineHeight: 20,
+    fontSize: 14.5,
+    lineHeight: 21,
+    color: "#2F4A3C",
   },
-  editButton: {
-    backgroundColor: '#f9a825',
-    paddingVertical: 15,
-    borderRadius: 12,
-    marginTop: 20,
+
+  secondaryWrap: {
+    marginTop: 8,
+    marginBottom: 16,
+  },
+
+  inputLabel: {
+    fontFamily: "Philosopher_400Regular",
+    fontSize: 14,
+    color: "#719686",
+    marginBottom: 8,
+    marginLeft: 4,
+  },
+
+  inputWrap: {
     marginBottom: 12,
   },
-  editButtonText: {
-    color: '#fff',
-    textAlign: 'center',
-    fontWeight: 'bold',
-    fontSize: 16,
-  },
-  inputLabel: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#444',
-    marginTop: 6,
-    marginBottom: 8,
-  },
+
   textArea: {
     minHeight: 110,
-    borderWidth: 1,
-    borderColor: '#ddd',
-    borderRadius: 12,
-    padding: 12,
-    backgroundColor: '#fff',
+    paddingHorizontal: 16,
+    paddingTop: 14,
+    paddingBottom: 14,
     fontSize: 15,
-    color: '#222',
-    marginBottom: 12,
+    color: "#2F4A3C",
+    textAlignVertical: "top",
   },
-  primaryButton: {
-    backgroundColor: '#2E7D32',
-    paddingVertical: 15,
-    borderRadius: 12,
+
+  primaryShadow: {
     marginTop: 8,
-    marginBottom: 12,
+    borderRadius: 18,
+    shadowColor: "#69B78D",
+    shadowOpacity: 0.45,
+    shadowRadius: 14,
+    shadowOffset: { width: 0, height: 8 },
+    elevation: 6,
   },
-  buttonDisabled: {
-    opacity: 0.7,
+
+  buttonInner: {
+    paddingVertical: 16,
+    alignItems: "center",
+    justifyContent: "center",
+    minHeight: 52,
   },
+
   primaryButtonText: {
-    color: '#fff',
-    textAlign: 'center',
-    fontWeight: 'bold',
+    color: "#FFFFFF",
     fontSize: 16,
+    fontWeight: "600",
   },
-  secondaryButton: {
-    borderWidth: 1.5,
-    borderColor: '#2E7D32',
-    paddingVertical: 15,
-    borderRadius: 12,
-    backgroundColor: '#fff',
-  },
+
   secondaryButtonText: {
-    color: '#2E7D32',
-    textAlign: 'center',
-    fontWeight: 'bold',
+    color: "#3F6B5B",
     fontSize: 16,
+    fontWeight: "600",
+  },
+
+  link: {
+    color: "#96AC9E",
+    textAlign: "center",
+    fontSize: 14,
+    marginTop: 22,
+    textDecorationLine: "underline",
+  },
+
+  disabled: {
+    opacity: 0.7,
   },
 });
