@@ -1,53 +1,57 @@
-import { useCallback, useState } from 'react';
 import {
-  ScrollView,
-  View,
-  Text,
-  StyleSheet,
-  TouchableOpacity,
-  Alert,
-  Linking,
-  Image,
+  Philosopher_400Regular,
+  Philosopher_700Bold,
+  useFonts,
+} from "@expo-google-fonts/philosopher";
+import { Ionicons } from "@expo/vector-icons";
+import * as Clipboard from "expo-clipboard";
+import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
+import { StatusBar } from "expo-status-bar";
+import { useCallback, useState } from "react";
+import {
   ActivityIndicator,
+  Alert,
+  Image,
+  Linking,
   Modal,
-  ImageBackground,
-} from 'react-native';
-import * as Clipboard from 'expo-clipboard';
-import { Ionicons } from '@expo/vector-icons';
-import { useFocusEffect, useLocalSearchParams, router } from 'expo-router';
-import { getAgeFromBirthDate } from '../store/user';
-import { supabase } from '../lib/supabase';
-import { getMyProfile } from '../services/profileService';
-import {
-  assignModerator,
-  removeModerator,
-  blockUser,
-  softDeleteUser,
-} from '../services/moderationService';
-import {
-  blockUserForMe,
-  unblockUserForMe,
-  hasMutualBlock,
-} from '../services/userBlockService';
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from "react-native";
+
+import { Glass, Tekmet } from "../components/mingi";
+import { supabase } from "../lib/supabase";
 import {
   addFavoriteToDb,
-  removeFavoriteFromDb,
   isFavoriteInDb,
-} from '../services/favoritesService';
+  removeFavoriteFromDb,
+} from "../services/favoritesService";
+import {
+  assignModerator,
+  blockUser,
+  removeModerator,
+  softDeleteUser,
+} from "../services/moderationService";
+import { getMyProfile } from "../services/profileService";
+import {
+  blockUserForMe,
+  hasMutualBlock,
+  unblockUserForMe,
+} from "../services/userBlockService";
+import { getAgeFromBirthDate } from "../store/user";
 
 function formatCreatedAt(dateString?: string | null) {
-  if (!dateString) return 'Неизвестно';
+  if (!dateString) return "Неизвестно";
 
   const date = new Date(dateString);
+  if (Number.isNaN(date.getTime())) return "Неизвестно";
 
-  if (Number.isNaN(date.getTime())) {
-    return 'Неизвестно';
-  }
-
-  return date.toLocaleDateString('ru-RU', {
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
+  return date.toLocaleDateString("ru-RU", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
   });
 }
 
@@ -61,7 +65,7 @@ function splitTextWithLinks(text: string) {
 }
 
 function trimTrailingPunctuation(value: string) {
-  return value.replace(/[),.!?;:]+$/g, '');
+  return value.replace(/[),.!?;:]+$/g, "");
 }
 
 function isEmail(value: string) {
@@ -75,30 +79,32 @@ function looksLikeLink(value: string) {
   if (isEmail(trimmed)) return true;
 
   return /^(https?:\/\/|www\.|t\.me\/|telegram\.me\/|instagram\.com\/|facebook\.com\/|linkedin\.com\/|github\.com\/|x\.com\/|twitter\.com\/)/i.test(
-    trimmed
+    trimmed,
   );
 }
 
 function buildOpenableLink(value: string) {
   const trimmed = trimTrailingPunctuation(value.trim());
 
-  if (isEmail(trimmed)) {
-    return `mailto:${trimmed}`;
-  }
-
-  if (/^https?:\/\//i.test(trimmed)) {
-    return trimmed;
-  }
+  if (isEmail(trimmed)) return `mailto:${trimmed}`;
+  if (/^https?:\/\//i.test(trimmed)) return trimmed;
 
   return `https://${trimmed}`;
 }
 
 export default function UserProfileScreen() {
+  const [fontsLoaded] = useFonts({
+    Philosopher_400Regular,
+    Philosopher_700Bold,
+  });
+
   const params = useLocalSearchParams();
-  const profileId = String(params.id || '');
+  const profileId = String(params.id || "");
   const moderationUserId =
-    typeof params.userId === 'string' ? params.userId : String(params.userId || '');
-  const isModerationMode = params.mode === 'moderation';
+    typeof params.userId === "string"
+      ? params.userId
+      : String(params.userId || "");
+  const isModerationMode = params.mode === "moderation";
   const targetUserId = isModerationMode ? moderationUserId : profileId;
 
   const [avatarModalVisible, setAvatarModalVisible] = useState(false);
@@ -120,8 +126,9 @@ export default function UserProfileScreen() {
       if (isModerationMode) {
         const [profileResult, myProfile] = await Promise.all([
           supabase
-            .from('users')
-            .select(`
+            .from("users")
+            .select(
+              `
               *,
               invited_by:invited_by_user_id (
                 id,
@@ -129,15 +136,14 @@ export default function UserProfileScreen() {
                 last_name,
                 email
               )
-            `)
-            .eq('id', targetUserId)
+            `,
+            )
+            .eq("id", targetUserId)
             .single(),
           getMyProfile(),
         ]);
 
-        if (profileResult.error) {
-          throw new Error(profileResult.error.message);
-        }
+        if (profileResult.error) throw new Error(profileResult.error.message);
 
         setUser(profileResult.data);
         setMe(myProfile);
@@ -150,10 +156,12 @@ export default function UserProfileScreen() {
         return;
       }
 
-      const [profileResult, myProfile, relation, favoriteStatus] = await Promise.all([
-        supabase
-          .from('users')
-          .select(`
+      const [profileResult, myProfile, relation, favoriteStatus] =
+        await Promise.all([
+          supabase
+            .from("users")
+            .select(
+              `
             *,
             invited_by:invited_by_user_id (
               id,
@@ -161,24 +169,23 @@ export default function UserProfileScreen() {
               last_name,
               email
             )
-          `)
-          .eq('id', targetUserId)
-          .single(),
-        getMyProfile(),
-        hasMutualBlock(targetUserId),
-        isFavoriteInDb(targetUserId).catch(() => false),
-      ]);
+          `,
+            )
+            .eq("id", targetUserId)
+            .single(),
+          getMyProfile(),
+          hasMutualBlock(targetUserId),
+          isFavoriteInDb(targetUserId).catch(() => false),
+        ]);
 
-      if (profileResult.error) {
-        throw new Error(profileResult.error.message);
-      }
+      if (profileResult.error) throw new Error(profileResult.error.message);
 
       setUser(profileResult.data);
       setMe(myProfile);
       setBlockState(relation);
       setIsFavorite(!!favoriteStatus);
     } catch (e) {
-      console.log('Ошибка загрузки профиля:', e);
+      console.log("Ошибка загрузки профиля:", e);
       setUser(null);
     } finally {
       setLoading(false);
@@ -186,41 +193,53 @@ export default function UserProfileScreen() {
   };
 
   useFocusEffect(
-  useCallback(() => {
-    if (targetUserId) {
-      loadProfile();
-    } else {
-      setLoading(false);
-    }
-  }, [targetUserId, isModerationMode])
-);
+    useCallback(() => {
+      if (targetUserId) {
+        loadProfile();
+      } else {
+        setLoading(false);
+      }
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [targetUserId, isModerationMode]),
+  );
+
+  if (!fontsLoaded) {
+    return <View style={styles.screen} />;
+  }
 
   if (loading) {
     return (
       <View style={styles.loader}>
-        <ActivityIndicator size="large" color="#2E7D32" />
+        <StatusBar style="dark" />
+        <ActivityIndicator size="large" color="#69B78D" />
       </View>
     );
   }
 
   if (!user) {
     return (
-      <View style={styles.emptyContainer}>
-        <Text style={styles.emptyTitle}>Пользователь не найден</Text>
+      <View style={styles.centerState}>
+        <StatusBar style="dark" />
+
+        <Text style={styles.stateTitle}>Участник не найден</Text>
+
+        <TouchableOpacity onPress={() => router.back()} activeOpacity={0.8}>
+          <Text style={styles.backLinkText}>← Назад</Text>
+        </TouchableOpacity>
       </View>
     );
   }
 
-  const fullName = `${user.first_name || ''} ${user.last_name || ''}`.trim();
-  const age = getAgeFromBirthDate(user.birth_date || '');
+  const fullName = `${user.first_name || ""} ${user.last_name || ""}`.trim();
+  const age = getAgeFromBirthDate(user.birth_date || "");
 
-  const isAdmin = me?.role === 'owner' || me?.role === 'moderator';
-  const isOwner = me?.role === 'owner';
+  const isAdmin = me?.role === "owner" || me?.role === "moderator";
+  const isOwner = me?.role === "owner";
   const isOwnProfile = me?.id === user.id;
 
   const invitedByName = user.invited_by
-    ? `${user.invited_by.first_name || ''} ${user.invited_by.last_name || ''}`.trim()
-    : '';
+    ? `${user.invited_by.first_name || ""} ${user.invited_by.last_name || ""}`.trim()
+    : "";
 
   const restrictedByTargetUser = blockState.userBlockedMe;
   const iBlockedThisUser = blockState.iBlockedUser;
@@ -259,15 +278,15 @@ export default function UserProfileScreen() {
     const text = value?.trim();
 
     if (!text) {
-      Alert.alert('Нечего копировать');
+      Alert.alert("Нечего копировать");
       return;
     }
 
     try {
       await Clipboard.setStringAsync(text);
-      Alert.alert('Скопировано', `${label} скопировано`);
+      Alert.alert("Скопировано", `${label} скопировано`);
     } catch {
-      Alert.alert('Ошибка', 'Не удалось скопировать текст');
+      Alert.alert("Ошибка", "Не удалось скопировать текст");
     }
   };
 
@@ -276,11 +295,12 @@ export default function UserProfileScreen() {
       await assignModerator(user.id);
       setShowMenu(false);
       await loadProfile();
-      Alert.alert('Готово', 'Пользователь назначен модератором.');
+      Alert.alert("Готово", "Участник назначен модератором.");
     } catch (e) {
-      const message =
-        e instanceof Error ? e.message : 'Ошибка назначения модератора';
-      Alert.alert('Ошибка', message);
+      Alert.alert(
+        "Ошибка",
+        e instanceof Error ? e.message : "Ошибка назначения модератора",
+      );
     }
   };
 
@@ -289,11 +309,12 @@ export default function UserProfileScreen() {
       await removeModerator(user.id);
       setShowMenu(false);
       await loadProfile();
-      Alert.alert('Готово', 'Модератор снят.');
+      Alert.alert("Готово", "Модератор снят.");
     } catch (e) {
-      const message =
-        e instanceof Error ? e.message : 'Ошибка снятия модератора';
-      Alert.alert('Ошибка', message);
+      Alert.alert(
+        "Ошибка",
+        e instanceof Error ? e.message : "Ошибка снятия модератора",
+      );
     }
   };
 
@@ -301,11 +322,13 @@ export default function UserProfileScreen() {
     try {
       await blockUser(user.id);
       setShowMenu(false);
-      Alert.alert('Готово', 'Пользователь заблокирован.');
+      Alert.alert("Готово", "Участник заблокирован.");
       router.back();
     } catch (e) {
-      const message = e instanceof Error ? e.message : 'Ошибка блокировки';
-      Alert.alert('Ошибка', message);
+      Alert.alert(
+        "Ошибка",
+        e instanceof Error ? e.message : "Ошибка блокировки",
+      );
     }
   };
 
@@ -313,11 +336,13 @@ export default function UserProfileScreen() {
     try {
       await softDeleteUser(user.id);
       setShowMenu(false);
-      Alert.alert('Готово', 'Профиль помечен как удалённый.');
+      Alert.alert("Готово", "Профиль помечен как удалённый.");
       router.back();
     } catch (e) {
-      const message = e instanceof Error ? e.message : 'Ошибка удаления профиля';
-      Alert.alert('Ошибка', message);
+      Alert.alert(
+        "Ошибка",
+        e instanceof Error ? e.message : "Ошибка удаления профиля",
+      );
     }
   };
 
@@ -331,7 +356,7 @@ export default function UserProfileScreen() {
           isAnyBlocked: blockState.userBlockedMe,
         });
         setShowMenu(false);
-        Alert.alert('Готово', 'Пользователь снова доступен для взаимодействия.');
+        Alert.alert("Готово", "Участник снова доступен для общения.");
       } else {
         await blockUserForMe(user.id);
         setBlockState({
@@ -341,25 +366,23 @@ export default function UserProfileScreen() {
         });
         setShowMenu(false);
         Alert.alert(
-          'Пользователь заблокирован',
-          'Теперь этот пользователь не сможет писать вам и не увидит ваши контактные данные.'
+          "Участник заблокирован",
+          "Теперь он не сможет вам писать и не увидит ваши контакты.",
         );
       }
     } catch (e) {
-      const message =
-        e instanceof Error ? e.message : 'Ошибка пользовательской блокировки';
-      Alert.alert('Ошибка', message);
+      Alert.alert(
+        "Ошибка",
+        e instanceof Error ? e.message : "Ошибка блокировки",
+      );
     }
   };
 
   const handleReport = () => {
     setShowMenu(false);
     router.push({
-      pathname: '/report-user',
-      params: {
-        userId: user.id,
-        userName: fullName,
-      },
+      pathname: "/report-user",
+      params: { userId: user.id, userName: fullName },
     });
   };
 
@@ -373,43 +396,37 @@ export default function UserProfileScreen() {
         setIsFavorite(true);
       }
     } catch (e) {
-      const message =
-        e instanceof Error ? e.message : 'Ошибка изменения избранного';
-      Alert.alert('Ошибка', message);
+      Alert.alert(
+        "Ошибка",
+        e instanceof Error ? e.message : "Ошибка изменения избранного",
+      );
     }
   };
 
   const handleTelegramOpen = async () => {
     if (!user?.telegram) return;
 
-    const username = String(user.telegram).replace('@', '');
+    const username = String(user.telegram).replace("@", "");
     const appUrl = `tg://resolve?domain=${username}`;
-    const webUrl = `https://t.me/${username}`;
 
     const canOpenApp = await Linking.canOpenURL(appUrl);
-
-    if (canOpenApp) {
-      await Linking.openURL(appUrl);
-    } else {
-      await Linking.openURL(webUrl);
-    }
+    await Linking.openURL(canOpenApp ? appUrl : `https://t.me/${username}`);
   };
 
   const handleOpenEmail = async () => {
     if (!user?.email) return;
 
-    const emailUrl = `mailto:${user.email}`;
-
     try {
+      const emailUrl = `mailto:${user.email}`;
       const canOpen = await Linking.canOpenURL(emailUrl);
 
       if (canOpen) {
         await Linking.openURL(emailUrl);
       } else {
-        Alert.alert('Ошибка', 'Не удалось открыть email');
+        Alert.alert("Ошибка", "Не удалось открыть почту");
       }
     } catch {
-      Alert.alert('Ошибка', 'Не удалось открыть email');
+      Alert.alert("Ошибка", "Не удалось открыть почту");
     }
   };
 
@@ -421,17 +438,15 @@ export default function UserProfileScreen() {
       if (canOpen) {
         await Linking.openURL(url);
       } else {
-        Alert.alert('Ошибка', 'Не удалось открыть ссылку');
+        Alert.alert("Ошибка", "Не удалось открыть ссылку");
       }
     } catch {
-      Alert.alert('Ошибка', 'Не удалось открыть ссылку');
+      Alert.alert("Ошибка", "Не удалось открыть ссылку");
     }
   };
 
   const renderTextWithLinks = (text?: string | null) => {
-    if (!text) {
-      return <Text style={styles.infoText}>—</Text>;
-    }
+    if (!text) return <Text style={styles.infoText}>—</Text>;
 
     const parts = splitTextWithLinks(text);
 
@@ -469,17 +484,16 @@ export default function UserProfileScreen() {
   };
 
   const renderMenu = () => {
-    if (isOwnProfile || isModerationMode) {
-      return null;
-    }
+    if (isOwnProfile || isModerationMode) return null;
 
     return (
       <View style={styles.menuWrap}>
         <TouchableOpacity
           style={styles.menuButton}
           onPress={() => setShowMenu((prev) => !prev)}
+          activeOpacity={0.8}
         >
-          <Text style={styles.menuButtonText}>⋮</Text>
+          <Ionicons name="ellipsis-vertical" size={20} color="#4E7364" />
         </TouchableOpacity>
 
         {showMenu && (
@@ -487,16 +501,16 @@ export default function UserProfileScreen() {
             {isAdmin && (
               <>
                 <View style={styles.menuInfoBlock}>
-                  <Text style={styles.menuInfoLabel}>Дата регистрации</Text>
+                  <Text style={styles.menuInfoLabel}>ДАТА РЕГИСТРАЦИИ</Text>
                   <Text style={styles.menuInfoText}>
                     {formatCreatedAt(user.created_at)}
                   </Text>
                 </View>
 
                 <View style={styles.menuInfoBlock}>
-                  <Text style={styles.menuInfoLabel}>Пригласил</Text>
+                  <Text style={styles.menuInfoLabel}>ПРИГЛАСИЛ</Text>
                   <Text style={styles.menuInfoText}>
-                    {invitedByName || user.invited_by?.email || 'Не указано'}
+                    {invitedByName || user.invited_by?.email || "Не указано"}
                   </Text>
                 </View>
 
@@ -504,7 +518,7 @@ export default function UserProfileScreen() {
               </>
             )}
 
-            {isOwner && user.role !== 'moderator' && (
+            {isOwner && user.role !== "moderator" && (
               <TouchableOpacity
                 style={styles.menuItem}
                 onPress={handleAssignModerator}
@@ -513,7 +527,7 @@ export default function UserProfileScreen() {
               </TouchableOpacity>
             )}
 
-            {isOwner && user.role === 'moderator' && (
+            {isOwner && user.role === "moderator" && (
               <TouchableOpacity
                 style={styles.menuItem}
                 onPress={handleRemoveModerator}
@@ -539,7 +553,7 @@ export default function UserProfileScreen() {
                 onPress={handleBlockUserAdmin}
               >
                 <Text style={[styles.menuItemText, styles.dangerText]}>
-                  Заблокировать пользователя
+                  Заблокировать участника
                 </Text>
               </TouchableOpacity>
             )}
@@ -558,7 +572,7 @@ export default function UserProfileScreen() {
                   onPress={handleTogglePersonalBlock}
                 >
                   <Text style={[styles.menuItemText, styles.dangerText]}>
-                    {iBlockedThisUser ? 'Снять блок' : 'Заблокировать'}
+                    {iBlockedThisUser ? "Снять блокировку" : "Заблокировать"}
                   </Text>
                 </TouchableOpacity>
               </>
@@ -569,102 +583,291 @@ export default function UserProfileScreen() {
     );
   };
 
-  const renderProfileActions = () => {
+  const renderActions = () => {
     if (isModerationMode) {
       return (
-        <>
+        <View style={styles.actionsRow}>
           <TouchableOpacity
-            style={styles.secondaryActionButton}
+            style={styles.actionFlex}
+            activeOpacity={0.85}
             onPress={() =>
               router.push({
-                pathname: '/moderation-edit-profile',
+                pathname: "/moderation-edit-profile",
                 params: { userId: user.id },
               })
             }
           >
-            <Text style={styles.secondaryActionButtonText}>Редактировать</Text>
+            <Glass
+              radius={18}
+              tintColor="rgba(255,255,255,0.95)"
+              borderColor="rgba(93,140,120,0.45)"
+              borderWidth={0.75}
+            >
+              <View style={styles.buttonInner}>
+                <Text style={styles.secondaryButtonText}>Редактировать</Text>
+              </View>
+            </Glass>
           </TouchableOpacity>
 
           <TouchableOpacity
-            style={[styles.secondaryActionButton, styles.lastActionButton]}
+            style={styles.actionFlex}
+            activeOpacity={0.85}
             onPress={() => router.back()}
           >
-            <Text style={styles.secondaryActionButtonText}>
-              Назад в модерацию
-            </Text>
+            <Glass
+              radius={18}
+              tintColor="rgba(255,255,255,0.95)"
+              borderColor="rgba(93,140,120,0.45)"
+              borderWidth={0.75}
+            >
+              <View style={styles.buttonInner}>
+                <Text style={styles.secondaryButtonText}>В модерацию</Text>
+              </View>
+            </Glass>
           </TouchableOpacity>
-        </>
+        </View>
       );
     }
 
     if (isOwnProfile) {
       return (
-        <>
+        <View style={styles.actionsRow}>
           <TouchableOpacity
-            style={styles.secondaryActionButton}
-            onPress={() => router.push('/invites' as any)}
+            style={styles.actionFlex}
+            activeOpacity={0.85}
+            onPress={() => router.push("/invites" as any)}
           >
-            <Text style={styles.secondaryActionButtonText}>Инвайты</Text>
+            <Glass
+              radius={18}
+              tintColor="rgba(255,255,255,0.95)"
+              borderColor="rgba(93,140,120,0.45)"
+              borderWidth={0.75}
+            >
+              <View style={styles.buttonInner}>
+                <Text style={styles.secondaryButtonText}>Инвайты</Text>
+              </View>
+            </Glass>
           </TouchableOpacity>
 
           <TouchableOpacity
-            style={[styles.secondaryActionButton, styles.lastActionButton]}
-            onPress={() => router.push('/edit-profile' as any)}
+            style={styles.actionFlex}
+            activeOpacity={0.85}
+            onPress={() => router.push("/edit-profile" as any)}
           >
-            <Text style={styles.secondaryActionButtonText}>Редактировать</Text>
+            <Glass
+              radius={18}
+              tintColor="rgba(255,255,255,0.95)"
+              borderColor="rgba(93,140,120,0.45)"
+              borderWidth={0.75}
+            >
+              <View style={styles.buttonInner}>
+                <Text style={styles.secondaryButtonText}>Редактировать</Text>
+              </View>
+            </Glass>
           </TouchableOpacity>
-        </>
+        </View>
       );
     }
 
     return (
-      <>
+      <View style={styles.actionsRow}>
         <TouchableOpacity
-          style={[styles.secondaryActionButton, styles.messageButton]}
+          style={[
+            styles.actionFlex,
+            styles.primaryShadow,
+            !showDirectContact && styles.disabled,
+          ]}
+          activeOpacity={0.85}
+          disabled={!showDirectContact}
           onPress={() =>
             router.push({
-              pathname: '/chat',
+              pathname: "/chat",
               params: { name: fullName, userId: user.id },
             })
           }
-          disabled={!showDirectContact}
         >
-          <Text
-            style={[
-              styles.secondaryActionButtonText,
-              !showDirectContact && styles.disabledActionButtonText,
-            ]}
+          <Glass
+            radius={18}
+            tintColor="rgba(105,183,141,0.92)"
+            borderColor="rgba(255,255,255,0.85)"
           >
-            Написать
-          </Text>
+            <View style={styles.buttonInner}>
+              <Text style={styles.primaryButtonText}>Написать</Text>
+            </View>
+          </Glass>
         </TouchableOpacity>
 
         <TouchableOpacity
-          style={[styles.favoriteButton, styles.lastActionButton]}
+          style={styles.bookmarkButton}
           onPress={handleToggleFavorite}
-          activeOpacity={0.7}
+          activeOpacity={0.8}
         >
           <Ionicons
-            name={isFavorite ? 'bookmark' : 'bookmark-outline'}
-            size={20}
-            color="#2E7D32"
+            name={isFavorite ? "bookmark" : "bookmark-outline"}
+            size={22}
+            color="#69B78D"
           />
         </TouchableOpacity>
-      </>
+      </View>
     );
   };
 
   return (
-    <ScrollView
-      contentContainerStyle={styles.container}
-      showsVerticalScrollIndicator={false}
-    >
-      <ImageBackground
-        source={require('../assets/mountains.png')}
-        style={styles.heroBackground}
-        imageStyle={styles.heroBackgroundImage}
-        resizeMode="contain"
-      />
+    <>
+      <View style={styles.screen}>
+        <StatusBar style="dark" />
+
+        <ScrollView
+          contentContainerStyle={styles.container}
+          showsVerticalScrollIndicator={false}
+        >
+          <View style={styles.topRow}>
+            <TouchableOpacity onPress={() => router.back()} activeOpacity={0.8}>
+              <Text style={styles.backLinkText}>← Назад</Text>
+            </TouchableOpacity>
+
+            {renderMenu()}
+          </View>
+
+          {showMenu && (
+            <TouchableOpacity
+              style={styles.menuOverlay}
+              activeOpacity={1}
+              onPress={() => setShowMenu(false)}
+            />
+          )}
+
+          <TouchableOpacity
+            activeOpacity={0.9}
+            onPress={() => setAvatarModalVisible(true)}
+            style={styles.avatarWrap}
+          >
+            <Image
+              source={
+                user.avatar_path
+                  ? { uri: user.avatar_path }
+                  : require("../assets/default-avatar.png")
+              }
+              style={styles.avatar}
+            />
+          </TouchableOpacity>
+
+          <Text style={styles.name} numberOfLines={2}>
+            {fullName || "Без имени"}
+          </Text>
+
+          <Text style={styles.subInfo}>
+            {[user.category, user.city].filter(Boolean).join(", ") || "—"}
+          </Text>
+
+          {!!age && <Text style={styles.age}>{age} лет</Text>}
+
+          {isModerationMode && (
+            <View style={styles.modeBadge}>
+              <Text style={styles.modeBadgeText}>РЕЖИМ МОДЕРАЦИИ</Text>
+            </View>
+          )}
+
+          {iBlockedThisUser && !isOwnProfile && !isModerationMode && (
+            <View style={styles.blockLine}>
+              <Text style={styles.blockLineText}>Участник заблокирован</Text>
+            </View>
+          )}
+
+          <Tekmet style={styles.tekmet} />
+
+          {renderActions()}
+
+          <TouchableOpacity
+            activeOpacity={0.9}
+            onLongPress={() => handleCopyText("Профессия", user.profession)}
+            delayLongPress={300}
+            style={styles.infoBlock}
+          >
+            <Text style={styles.infoTitle}>ПРОФЕССИЯ</Text>
+            <Text style={styles.infoText}>{user.profession || "—"}</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            activeOpacity={0.95}
+            onLongPress={() => handleCopyText("Описание", user.bio)}
+            delayLongPress={300}
+            style={styles.quoteBlock}
+          >
+            <Text style={styles.quoteMark}>“</Text>
+            <Text style={styles.quoteText}>{user.bio || "—"}</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            activeOpacity={0.9}
+            onLongPress={() =>
+              handleCopyText(
+                "Локация",
+                [user.city, user.country].filter(Boolean).join(", "),
+              )
+            }
+            delayLongPress={300}
+            style={styles.infoBlock}
+          >
+            <Text style={styles.infoTitle}>ЛОКАЦИЯ</Text>
+            <Text style={styles.infoText}>
+              {[user.city, user.country].filter(Boolean).join(", ") || "—"}
+            </Text>
+          </TouchableOpacity>
+
+          {showEmail && (
+            <TouchableOpacity
+              style={styles.infoBlock}
+              onPress={handleOpenEmail}
+              onLongPress={() => handleCopyText("Почта", user.email)}
+              delayLongPress={300}
+              activeOpacity={0.9}
+            >
+              <Text style={styles.infoTitle}>ПОЧТА</Text>
+              <Text style={styles.linkText}>{user.email}</Text>
+            </TouchableOpacity>
+          )}
+
+          {showPhone && (
+            <TouchableOpacity
+              activeOpacity={0.9}
+              onLongPress={() => handleCopyText("Телефон", user.phone)}
+              delayLongPress={300}
+              style={styles.infoBlock}
+            >
+              <Text style={styles.infoTitle}>ТЕЛЕФОН</Text>
+              <Text style={styles.infoText}>{user.phone || "—"}</Text>
+            </TouchableOpacity>
+          )}
+
+          {showTelegram && (
+            <TouchableOpacity
+              style={styles.infoBlock}
+              onPress={handleTelegramOpen}
+              onLongPress={() => handleCopyText("Telegram", user.telegram)}
+              delayLongPress={300}
+              activeOpacity={0.9}
+            >
+              <Text style={styles.infoTitle}>TELEGRAM</Text>
+              <Text style={styles.linkText}>{user.telegram}</Text>
+            </TouchableOpacity>
+          )}
+
+          {showAdditional && (
+            <TouchableOpacity
+              style={styles.infoBlock}
+              onLongPress={() =>
+                handleCopyText("Дополнительно", user.extra_info)
+              }
+              delayLongPress={300}
+              activeOpacity={1}
+            >
+              <Text style={styles.infoTitle}>ДОПОЛНИТЕЛЬНО</Text>
+              {renderTextWithLinks(user.extra_info)}
+            </TouchableOpacity>
+          )}
+        </ScrollView>
+      </View>
 
       <Modal
         visible={avatarModalVisible}
@@ -672,491 +875,350 @@ export default function UserProfileScreen() {
         animationType="fade"
         onRequestClose={() => setAvatarModalVisible(false)}
       >
-        <View style={styles.avatarModalOverlay}>
+        <View style={styles.modalOverlay}>
           <TouchableOpacity
-            style={styles.avatarModalBackdrop}
+            style={StyleSheet.absoluteFill}
             activeOpacity={1}
             onPress={() => setAvatarModalVisible(false)}
           />
 
-          <View style={styles.avatarModalContent}>
-            <TouchableOpacity
-              style={styles.avatarModalClose}
-              onPress={() => setAvatarModalVisible(false)}
-            >
-              <Ionicons name="close" size={24} color="#fff" />
-            </TouchableOpacity>
-
-            <Image
-              source={
-                user.avatar_path
-                  ? { uri: user.avatar_path }
-                  : require('../assets/default-avatar.png')
-              }
-              style={styles.avatarModalImage}
-              resizeMode="contain"
-            />
-          </View>
+          <Image
+            source={
+              user.avatar_path
+                ? { uri: user.avatar_path }
+                : require("../assets/default-avatar.png")
+            }
+            style={styles.modalAvatar}
+            resizeMode="contain"
+          />
         </View>
       </Modal>
-
-      <View style={styles.card}>
-        {showMenu && (
-          <TouchableOpacity
-            style={styles.menuOverlay}
-            activeOpacity={1}
-            onPress={() => setShowMenu(false)}
-          />
-        )}
-
-        {renderMenu()}
-
-        <View style={styles.headerRow}>
-          <TouchableOpacity
-            activeOpacity={0.9}
-            onPress={() => setAvatarModalVisible(true)}
-          >
-            <Image
-              source={
-                user.avatar_path
-                  ? { uri: user.avatar_path }
-                  : require('../assets/default-avatar.png')
-              }
-              style={styles.avatar}
-            />
-          </TouchableOpacity>
-
-          <View style={styles.headerInfo}>
-            <Text
-              style={styles.name}
-              numberOfLines={2}
-              ellipsizeMode="tail"
-            >
-              {fullName || 'Без имени'}
-            </Text>
-            {!!age && <Text style={styles.age}>{age} лет</Text>}
-            <Text style={styles.profession}>
-              {[user.category, user.city].filter(Boolean).join(', ') || '—'}
-            </Text>
-          </View>
-        </View>
-
-        <View style={styles.actionsRow}>{renderProfileActions()}</View>
-
-        {isOwnProfile && isAdmin && !isModerationMode && (
-          <TouchableOpacity
-            style={styles.adminButton}
-            onPress={() => router.push('/moderation' as any)}
-          >
-            <Text style={styles.adminButtonText}>Модерация</Text>
-          </TouchableOpacity>
-        )}
-
-        {isModerationMode && (
-          <View style={styles.moderationModeBadge}>
-            <Text style={styles.moderationModeBadgeText}>
-              Режим модерации
-            </Text>
-          </View>
-        )}
-
-        {iBlockedThisUser && !isOwnProfile && !isModerationMode && (
-          <View style={styles.blockLine}>
-            <Text style={styles.blockLineText}>Пользователь заблокирован</Text>
-          </View>
-        )}
-
-        <TouchableOpacity
-          activeOpacity={0.9}
-          onLongPress={() => handleCopyText('Профессия', user.profession)}
-          delayLongPress={300}
-          style={styles.infoBlock}
-        >
-          <Text style={styles.infoTitle}>Профессия</Text>
-          <Text style={styles.infoText}>{user.profession || '—'}</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          activeOpacity={0.95}
-          onLongPress={() => handleCopyText('Описание', user.bio)}
-          delayLongPress={300}
-          style={styles.quoteSoftBlock}
-        >
-          <Text style={styles.quoteSoftMark}>“</Text>
-          <Text style={styles.quoteSoftText}>{user.bio || '—'}</Text>
-          <Text style={styles.quoteSoftMarkEnd}>”</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          activeOpacity={0.9}
-          onLongPress={() =>
-            handleCopyText(
-              'Локация',
-              [user.city, user.country].filter(Boolean).join(', ')
-            )
-          }
-          delayLongPress={300}
-          style={styles.infoBlock}
-        >
-          <Text style={styles.infoTitle}>Локация</Text>
-          <Text style={styles.infoText}>
-            {[user.city, user.country].filter(Boolean).join(', ') || '—'}
-          </Text>
-        </TouchableOpacity>
-
-        {showEmail && (
-          <TouchableOpacity
-            style={styles.infoBlock}
-            onPress={handleOpenEmail}
-            onLongPress={() => handleCopyText('Email', user.email)}
-            delayLongPress={300}
-            activeOpacity={0.9}
-          >
-            <Text style={styles.infoTitle}>Email</Text>
-            <Text style={styles.linkText}>{user.email}</Text>
-          </TouchableOpacity>
-        )}
-
-        {showPhone && (
-          <TouchableOpacity
-            activeOpacity={0.9}
-            onLongPress={() => handleCopyText('Телефон', user.phone)}
-            delayLongPress={300}
-            style={styles.infoBlock}
-          >
-            <Text style={styles.infoTitle}>Телефон</Text>
-            <Text style={styles.infoText}>{user.phone || '—'}</Text>
-          </TouchableOpacity>
-        )}
-
-        {showTelegram && (
-          <TouchableOpacity
-            style={styles.infoBlock}
-            onPress={handleTelegramOpen}
-            onLongPress={() => handleCopyText('Telegram', user.telegram)}
-            delayLongPress={300}
-            activeOpacity={0.9}
-          >
-            <Text style={styles.infoTitle}>Telegram</Text>
-            <Text style={styles.linkText}>{user.telegram}</Text>
-          </TouchableOpacity>
-        )}
-
-        {showAdditional && (
-          <TouchableOpacity
-            style={styles.infoBlock}
-            onLongPress={() => handleCopyText('Дополнительно', user.extra_info)}
-            delayLongPress={300}
-            activeOpacity={1}
-          >
-            <Text style={styles.infoTitle}>Дополнительно</Text>
-            {renderTextWithLinks(user.extra_info)}
-          </TouchableOpacity>
-        )}
-      </View>
-    </ScrollView>
+    </>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    paddingBottom: 40,
-    backgroundColor: '#f4f7f4',
-    flexGrow: 1,
-  },
-  heroBackground: {
-    height: 220,
-    backgroundColor: '#f4f7f4',
-    borderBottomLeftRadius: 28,
-    borderBottomRightRadius: 28,
-    overflow: 'hidden',
-    justifyContent: 'center',
-  },
-  heroBackgroundImage: {
-    width: '100%',
-    height: '100%',
-  },
-  card: {
-    marginTop: -68,
-    marginHorizontal: 16,
-    backgroundColor: '#fff',
-    borderRadius: 24,
-    padding: 20,
-    position: 'relative',
-  },
-  menuOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    zIndex: 10,
-  },
-  avatarModalOverlay: {
+  screen: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.82)',
-    justifyContent: 'center',
-    alignItems: 'center',
+    backgroundColor: "#FFFFFF",
   },
-  avatarModalBackdrop: {
-    ...StyleSheet.absoluteFillObject,
-  },
-  avatarModalContent: {
-    width: '88%',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  avatarModalClose: {
-    position: 'absolute',
-    top: -44,
-    right: 0,
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: 'rgba(255,255,255,0.14)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    zIndex: 2,
-  },
-  avatarModalImage: {
-    width: '100%',
-    height: 360,
-    borderRadius: 24,
-    backgroundColor: '#111',
-  },
+
   loader: {
     flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#fff',
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: "#FFFFFF",
   },
-  emptyContainer: {
+
+  centerState: {
     flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#fff',
-    padding: 24,
+    backgroundColor: "#FFFFFF",
+    justifyContent: "center",
+    alignItems: "center",
+    paddingHorizontal: 28,
   },
-  emptyTitle: {
-    fontSize: 24,
-    fontWeight: 'bold',
+
+  stateTitle: {
+    fontFamily: "Philosopher_700Bold",
+    fontSize: 26,
+    color: "#3F6B5B",
+    marginBottom: 14,
+    textAlign: "center",
   },
-  menuWrap: {
-    position: 'absolute',
-    top: 14,
-    right: 14,
+
+  container: {
+    paddingHorizontal: 20,
+    paddingTop: 56,
+    paddingBottom: 40,
+    flexGrow: 1,
+  },
+
+  topRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 8,
     zIndex: 20,
-    alignItems: 'flex-end',
   },
+
+  backLinkText: {
+    fontSize: 15,
+    color: "#96AC9E",
+  },
+
+  menuWrap: {
+    position: "relative",
+  },
+
   menuButton: {
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: '#f3f3f3',
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
   },
-  menuButtonText: {
-    fontSize: 20,
-    color: '#222',
-    marginTop: -2,
+
+  menuOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    zIndex: 10,
   },
+
   menuDropdown: {
-    marginTop: 8,
-    minWidth: 240,
-    backgroundColor: '#fff',
-    borderRadius: 12,
+    position: "absolute",
+    top: 40,
+    right: 0,
+    minWidth: 236,
+    backgroundColor: "#FFFFFF",
+    borderRadius: 18,
+    borderWidth: 0.75,
+    borderColor: "rgba(93,140,120,0.28)",
     paddingVertical: 6,
-    borderWidth: 1,
-    borderColor: '#e8e8e8',
+    zIndex: 30,
+    shadowColor: "#3F6B5B",
+    shadowOpacity: 0.14,
+    shadowRadius: 16,
+    shadowOffset: { width: 0, height: 8 },
+    elevation: 8,
   },
+
   menuInfoBlock: {
-    paddingHorizontal: 14,
+    paddingHorizontal: 16,
     paddingVertical: 8,
   },
+
   menuInfoLabel: {
-    fontSize: 12,
-    color: '#777',
-    marginBottom: 2,
+    fontSize: 10.5,
+    fontWeight: "600",
+    letterSpacing: 1.3,
+    color: "#719686",
+    marginBottom: 3,
   },
+
   menuInfoText: {
     fontSize: 14,
-    color: '#222',
-    fontWeight: '500',
+    color: "#2F4A3C",
   },
+
   menuDivider: {
-    height: 1,
-    backgroundColor: '#f0f0f0',
-    marginVertical: 4,
+    height: 0.75,
+    backgroundColor: "rgba(93,140,120,0.18)",
+    marginVertical: 6,
   },
+
   menuItem: {
+    paddingHorizontal: 16,
     paddingVertical: 12,
-    paddingHorizontal: 14,
   },
+
   menuItemText: {
-    fontSize: 14,
-    color: '#222',
+    fontSize: 14.5,
+    color: "#2F4A3C",
   },
+
   dangerText: {
-    color: '#b3261e',
-    fontWeight: '600',
+    color: "#C05B4D",
   },
-  headerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 18,
-    paddingRight: 44,
+
+  avatarWrap: {
+    alignSelf: "center",
+    marginTop: 4,
   },
+
   avatar: {
-    width: 96,
-    height: 96,
-    borderRadius: 22,
-    marginRight: 16,
+    width: 128,
+    height: 128,
+    borderRadius: 64,
+    backgroundColor: "#EAF4EE",
+    borderWidth: 1,
+    borderColor: "rgba(93,140,120,0.28)",
   },
-  headerInfo: {
-    flex: 1,
-    justifyContent: 'center',
-    minWidth: 0,
-  },
+
   name: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    color: '#111',
-    marginBottom: 6,
-  },
-  age: {
-    fontSize: 14,
-    color: '#2E7D32',
-    fontWeight: '600',
-    marginBottom: 4,
-  },
-  profession: {
-    fontSize: 15,
-    color: '#666',
-  },
-  actionsRow: {
-    flexDirection: 'row',
-    marginBottom: 14,
-  },
-  secondaryActionButton: {
-    flex: 1,
-    borderWidth: 1.5,
-    borderColor: '#2E7D32',
-    backgroundColor: '#fff',
-    paddingVertical: 13,
-    borderRadius: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 8,
-  },
-  messageButton: {
-    flex: 4,
-  },
-  favoriteButton: {
-    flex: 1,
-    borderWidth: 1.5,
-    borderColor: '#2E7D32',
-    backgroundColor: '#fff',
-    paddingVertical: 13,
-    borderRadius: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 0,
-  },
-  lastActionButton: {
-    marginRight: 0,
-  },
-  secondaryActionButtonText: {
-    color: '#2E7D32',
-    fontWeight: '600',
-    fontSize: 15,
-  },
-  disabledActionButtonText: {
-    color: '#9aa59b',
-  },
-  adminButton: {
-    marginBottom: 14,
-    backgroundColor: '#111',
-    paddingVertical: 13,
-    borderRadius: 14,
-    alignItems: 'center',
-  },
-  adminButtonText: {
-    color: '#fff',
-    fontWeight: '600',
-    fontSize: 15,
-  },
-  moderationModeBadge: {
-    marginBottom: 14,
-    backgroundColor: '#eef6ee',
-    borderRadius: 14,
-    paddingVertical: 10,
-    alignItems: 'center',
-  },
-  moderationModeBadgeText: {
-    color: '#2E7D32',
-    fontWeight: '700',
-    fontSize: 14,
-  },
-  blockLine: {
-    width: '100%',
-    borderTopWidth: 1,
-    borderBottomWidth: 1,
-    borderColor: '#ececec',
-    paddingVertical: 10,
-    marginBottom: 12,
-    alignItems: 'center',
-  },
-  blockLineText: {
-    fontSize: 13,
-    color: '#888',
-  },
-  infoBlock: {
-    backgroundColor: '#f8f8f8',
-    borderRadius: 16,
-    padding: 16,
-    marginTop: 12,
-  },
-  infoTitle: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: '#111',
-    marginBottom: 8,
-  },
-  infoText: {
-    fontSize: 14,
-    lineHeight: 20,
-    color: '#444',
-  },
-  linkText: {
-    fontSize: 14,
-    lineHeight: 20,
-    color: '#2E7D32',
-  },
-  quoteSoftBlock: {
+    fontFamily: "Philosopher_700Bold",
+    fontSize: 26,
+    color: "#3F6B5B",
+    textAlign: "center",
     marginTop: 14,
-    backgroundColor: '#FFFBEA',
-    borderRadius: 20,
-    paddingVertical: 20,
+  },
+
+  subInfo: {
+    fontSize: 14,
+    color: "#7E988B",
+    marginTop: 4,
+    textAlign: "center",
+  },
+
+  age: {
+    fontSize: 13,
+    color: "#69B78D",
+    marginTop: 4,
+    fontWeight: "600",
+    textAlign: "center",
+  },
+
+  modeBadge: {
+    alignSelf: "center",
+    marginTop: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 3,
+    borderRadius: 999,
+    backgroundColor: "rgba(105,183,141,0.12)",
+    borderWidth: 1,
+    borderColor: "rgba(105,183,141,0.55)",
+  },
+
+  modeBadgeText: {
+    color: "#3F6B5B",
+    fontSize: 11.5,
+    fontWeight: "600",
+    letterSpacing: 1.4,
+  },
+
+  blockLine: {
+    alignSelf: "center",
+    marginTop: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 4,
+    borderRadius: 999,
+    backgroundColor: "rgba(192,91,77,0.08)",
+    borderWidth: 1,
+    borderColor: "rgba(192,91,77,0.45)",
+  },
+
+  blockLineText: {
+    color: "#C05B4D",
+    fontSize: 12.5,
+    fontWeight: "600",
+  },
+
+  tekmet: {
+    alignSelf: "center",
+    marginTop: 18,
+    marginBottom: 18,
+  },
+
+  actionsRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    marginBottom: 22,
+  },
+
+  actionFlex: {
+    flex: 1,
+  },
+
+  primaryShadow: {
+    borderRadius: 18,
+    shadowColor: "#69B78D",
+    shadowOpacity: 0.45,
+    shadowRadius: 14,
+    shadowOffset: { width: 0, height: 8 },
+    elevation: 6,
+  },
+
+  buttonInner: {
+    paddingVertical: 14,
+    paddingHorizontal: 12,
+    alignItems: "center",
+    justifyContent: "center",
+    minHeight: 50,
+  },
+
+  primaryButtonText: {
+    color: "#FFFFFF",
+    fontSize: 15.5,
+    fontWeight: "600",
+  },
+
+  secondaryButtonText: {
+    color: "#3F6B5B",
+    fontSize: 15.5,
+    fontWeight: "600",
+  },
+
+  disabled: {
+    opacity: 0.55,
+  },
+
+  bookmarkButton: {
+    width: 52,
+    height: 52,
+    borderRadius: 18,
+    borderWidth: 0.75,
+    borderColor: "rgba(93,140,120,0.45)",
+    backgroundColor: "#FFFFFF",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  infoBlock: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: 18,
+    borderWidth: 0.75,
+    borderColor: "rgba(93,140,120,0.28)",
+    padding: 16,
+    marginBottom: 10,
+  },
+
+  infoTitle: {
+    fontSize: 11.5,
+    fontWeight: "600",
+    letterSpacing: 1.4,
+    marginBottom: 8,
+    color: "#719686",
+  },
+
+  infoText: {
+    fontSize: 14.5,
+    lineHeight: 21,
+    color: "#2F4A3C",
+  },
+
+  linkText: {
+    fontSize: 14.5,
+    lineHeight: 21,
+    color: "#3F6B5B",
+    textDecorationLine: "underline",
+  },
+
+  quoteBlock: {
+    backgroundColor: "rgba(105,183,141,0.08)",
+    borderRadius: 18,
+    borderWidth: 0.75,
+    borderColor: "rgba(105,183,141,0.35)",
     paddingHorizontal: 18,
-    borderWidth: 1.2,
-    borderColor: '#E8DFAF',
-    borderStyle: 'dashed',
+    paddingTop: 6,
+    paddingBottom: 18,
+    marginBottom: 10,
   },
-  quoteSoftMark: {
+
+  quoteMark: {
+    fontFamily: "Philosopher_700Bold",
     fontSize: 40,
-    lineHeight: 40,
-    color: '#D6C27A',
-    marginBottom: -10,
+    lineHeight: 46,
+    color: "#9FC5AF",
   },
-  quoteSoftMarkEnd: {
-    fontSize: 40,
-    lineHeight: 40,
-    color: '#D6C27A',
-    alignSelf: 'flex-end',
-    marginTop: -10,
-  },
-  quoteSoftText: {
+
+  quoteText: {
+    fontFamily: "Philosopher_400Regular",
     fontSize: 16,
-    lineHeight: 26,
-    color: '#3A3320',
-    fontStyle: 'italic',
-    marginLeft: 2,
+    lineHeight: 24,
+    color: "#3F6B5B",
+    marginTop: -8,
+  },
+
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(31,58,47,0.88)",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: 20,
+  },
+
+  modalAvatar: {
+    width: "100%",
+    height: "70%",
+    borderRadius: 20,
   },
 });

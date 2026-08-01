@@ -1,4 +1,5 @@
 import { supabase } from '../lib/supabase';
+import { createNotification } from './notificationService';
 
 export type ChatMessage = {
   id: string;
@@ -91,6 +92,37 @@ export async function sendMessage(chatId: string, text: string): Promise<ChatMes
 
   if (error || !data) {
     throw new Error(error?.message || 'Не удалось отправить сообщение');
+  }
+
+  // Уведомляем собеседников. Ошибка здесь не должна мешать отправке.
+  try {
+    const { data: participants } = await supabase
+      .from('chat_participants')
+      .select('user_id')
+      .eq('chat_id', chatId);
+
+    const { data: me } = await supabase
+      .from('users')
+      .select('first_name, last_name')
+      .eq('id', senderId)
+      .maybeSingle();
+
+    const senderName =
+      `${me?.first_name || ''} ${me?.last_name || ''}`.trim() || 'Участник';
+
+    for (const participant of participants || []) {
+      if (participant.user_id === senderId) continue;
+
+      await createNotification({
+        userId: participant.user_id,
+        type: 'message',
+        title: `Новое сообщение: ${senderName}`,
+        body: trimmedText.slice(0, 140),
+        link: `/chat?userId=${senderId}&name=${encodeURIComponent(senderName)}`,
+      });
+    }
+  } catch (e) {
+    console.log('Уведомление о сообщении не создано:', e);
   }
 
   return data as ChatMessage;

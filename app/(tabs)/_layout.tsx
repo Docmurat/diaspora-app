@@ -15,10 +15,9 @@ export default function TabLayout() {
       <Tabs.Screen name="knowledge" options={{ title: "Знания" }} />
       <Tabs.Screen name="chats" options={{ title: "Чаты" }} />
 
-      {/* Экраны без кнопки в панели: профиль открывается по аватару вверху,
-          избранное позже переедет внутрь вкладки «Люди». */}
+      {/* Профиль открывается по аватару вверху, кнопки в панели у него нет.
+          Избранное переехало внутрь «Людей» переключателем «Все / Мои». */}
       <Tabs.Screen name="profile" options={{ href: null }} />
-      <Tabs.Screen name="favorites" options={{ href: null }} />
     </Tabs>
   );
 }

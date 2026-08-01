@@ -7,19 +7,19 @@ import { ReactNode, useCallback, useState } from "react";
 import { Image, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import { getUnreadCount } from "../services/notificationService";
 import { getMyProfile } from "../services/profileService";
 
 export default function TopBar({
-  unreadCount = 0,
   transparent = false,
   centerContent,
 }: {
-  unreadCount?: number;
   transparent?: boolean;
   centerContent?: ReactNode;
 }) {
   const insets = useSafeAreaInsets();
   const [avatarPath, setAvatarPath] = useState<string | null>(null);
+  const [unreadCount, setUnreadCount] = useState(0);
 
   useFocusEffect(
     useCallback(() => {
@@ -31,6 +31,13 @@ export default function TopBar({
           if (alive) setAvatarPath(profile?.avatar_path || null);
         } catch (e) {
           if (alive) setAvatarPath(null);
+        }
+
+        try {
+          const count = await getUnreadCount();
+          if (alive) setUnreadCount(count);
+        } catch (e) {
+          if (alive) setUnreadCount(0);
         }
       };
 

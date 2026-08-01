@@ -1,4 +1,5 @@
 import { supabase } from "../lib/supabase";
+import { createNotification } from "./notificationService";
 import { getMyProfile } from "./profileService";
 
 async function checkAccess() {
@@ -103,6 +104,14 @@ export async function approveUser(userId: string) {
     });
 
   if (messageError) throw new Error(messageError.message);
+
+  await createNotification({
+    userId,
+    type: "moderation",
+    title: "Заявка одобрена",
+    body: "Добро пожаловать в «Минги-Тау». Теперь вам доступно всё сообщество.",
+    link: "/(tabs)",
+  });
 }
 
 export async function rejectUser(
@@ -160,6 +169,15 @@ export async function rejectUser(
     });
 
   if (messageError) throw new Error(messageError.message);
+
+  await createNotification({
+    userId,
+    type: "moderation",
+    title:
+      mode === "revision" ? "Анкету нужно исправить" : "Заявка отклонена",
+    body: message,
+    link: "/pending-approval",
+  });
 }
 
 export async function getPendingNameChangeRequests() {

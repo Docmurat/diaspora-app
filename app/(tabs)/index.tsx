@@ -4,7 +4,7 @@ import {
   useFonts,
 } from "@expo-google-fonts/philosopher";
 import { Feather, Ionicons } from "@expo/vector-icons";
-import { router, useFocusEffect } from "expo-router";
+import { router, useFocusEffect, useNavigation } from "expo-router";
 import { ReactNode, useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
@@ -12,7 +12,6 @@ import {
   Image,
   Platform,
   ScrollView,
-  Share,
   StyleSheet,
   Text,
   TextInput,
@@ -27,7 +26,6 @@ import {
   getMyFavorites,
   removeFavoriteFromDb,
 } from "../../services/favoritesService";
-import { createInvite, markInviteAsSent } from "../../services/inviteService";
 import {
   DirectoryUser,
   getApprovedUsers,
@@ -74,42 +72,11 @@ export default function HomeScreen() {
 
   const [query, setQuery] = useState("");
   const [users, setUsers] = useState<PreparedUser[]>([]);
-  const [results, setResults] = useState<PreparedUser[]>([]);
   const [isSearching, setIsSearching] = useState(false);
+  // «Все» — всё сообщество, «Мои» — сохранённые закладкой (бывшее избранное)
+  const [mode, setMode] = useState<"all" | "saved">("all");
   const [loading, setLoading] = useState(true);
   const [favoriteIds, setFavoriteIds] = useState<string[]>([]);
-  const [creatingInvite, setCreatingInvite] = useState(false);
-
-  const runSearch = useCallback(
-    (searchText: string, sourceUsers: PreparedUser[]) => {
-      const cleanQuery = searchText.trim().toLowerCase();
-
-      if (!cleanQuery) {
-        setResults(sourceUsers);
-        return;
-      }
-
-      const words = cleanQuery.split(/\s+/).filter(Boolean);
-
-      const filtered = sourceUsers.filter((user) => {
-        const searchableText = [
-          user.fullName,
-          user.category || "",
-          user.profession || "",
-          user.city || "",
-          user.country || "",
-          user.bio || "",
-        ]
-          .join(" ")
-          .toLowerCase();
-
-        return words.every((word) => searchableText.includes(word));
-      });
-
-      setResults(filtered);
-    },
-    [],
-  );
 
   useFocusEffect(
     useCallback(() => {
@@ -136,7 +103,6 @@ export default function HomeScreen() {
         } catch (e) {
           console.log("Ошибка загрузки пользователей:", e);
           setUsers([]);
-          setResults([]);
           setFavoriteIds([]);
         } finally {
           setLoading(false);
@@ -147,14 +113,50 @@ export default function HomeScreen() {
     }, []),
   );
 
-  useEffect(() => {
-    if (!isSearching) return;
-    runSearch(query, users);
-  }, [isSearching, query, users, runSearch]);
+  // Нажатие на вкладку «Люди» сразу открывает список.
+  // Главный экран остаётся при запуске приложения и после «Сбросить поиск».
+  const navigation = useNavigation();
 
+  useEffect(() => {
+    const unsubscribe = navigation.addListener("tabPress" as any, () => {
+      setIsSearching(true);
+    });
+
+    return unsubscribe;
+  }, [navigation]);
+
+  // Что показываем в списке: сначала выбираем набор («Все» или «Мои»),
+  // потом, если идёт поиск, отфильтровываем его по словам запроса.
   const visibleResults = useMemo(() => {
-    return isSearching ? results : [];
-  }, [isSearching, results]);
+    const base =
+      mode === "saved"
+        ? users.filter((user) => favoriteIds.includes(user.id))
+        : users;
+
+    const cleanQuery = query.trim().toLowerCase();
+
+    if (!isSearching || !cleanQuery) return base;
+
+    const words = cleanQuery.split(/\s+/).filter(Boolean);
+
+    return base.filter((user) => {
+      const searchableText = [
+        user.fullName,
+        user.category || "",
+        user.profession || "",
+        user.city || "",
+        user.country || "",
+        user.bio || "",
+      ]
+        .join(" ")
+        .toLowerCase();
+
+      return words.every((word) => searchableText.includes(word));
+    });
+  }, [mode, users, favoriteIds, isSearching, query]);
+
+  // Список виден при поиске и всегда в режиме «Мои»
+  const showList = isSearching || mode === "saved";
 
   // Список уже приходит из базы свежими вперёд.
   // Разрезаем его на ряды пирамиды: 4, затем 3, затем 2, затем 1.
@@ -191,28 +193,6 @@ export default function HomeScreen() {
     });
   };
 
-  const handleCreateInvite = async () => {
-    try {
-      setCreatingInvite(true);
-
-      const invite = await createInvite();
-
-      const result = await Share.share({
-        message: `Мой инвайт-код для «Минги-Тау»: ${invite.code}`,
-      });
-
-      if (result.action === Share.sharedAction) {
-        await markInviteAsSent(invite.id);
-      }
-    } catch (e) {
-      const message =
-        e instanceof Error ? e.message : "Ошибка создания инвайта";
-      Alert.alert("Ошибка", message);
-    } finally {
-      setCreatingInvite(false);
-    }
-  };
-
   const handleSupport = () => {
     Alert.alert(
       "Скоро",
@@ -222,12 +202,10 @@ export default function HomeScreen() {
 
   const handleSearch = () => {
     setIsSearching(true);
-    runSearch(query, users);
   };
 
   const handleReset = () => {
     setQuery("");
-    setResults([]);
     setIsSearching(false);
   };
 
@@ -251,7 +229,7 @@ export default function HomeScreen() {
     return <View style={styles.whiteScreen} />;
   }
 
-  if (loading && !isSearching) {
+  if (loading && !showList) {
     return (
       <MingiBackground idPrefix="pplload">
         <View style={styles.loader}>
@@ -262,10 +240,10 @@ export default function HomeScreen() {
   }
 
   return (
-    <ScreenBackground alive={!isSearching}>
+    <ScreenBackground alive={!showList}>
       <TopBar transparent />
 
-      {!isSearching && (
+      {!showList && (
         <TouchableOpacity
           onPress={handleSupport}
           activeOpacity={0.85}
@@ -285,7 +263,7 @@ export default function HomeScreen() {
         </TouchableOpacity>
       )}
 
-      {!isSearching && users.length > 0 && (
+      {!showList && users.length > 0 && (
         <View style={styles.counterRow}>
           <Text style={styles.counterLabel}>Нас уже</Text>
           <Text style={styles.counterValue}>{users.length}</Text>
@@ -298,14 +276,14 @@ export default function HomeScreen() {
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
-        <View style={!isSearching && styles.halfTop}>
+        <View style={!showList && styles.halfTop}>
           <Text style={styles.title}>Поиск</Text>
           <Text style={styles.subtitle}>МИНГИ·ТАУ</Text>
 
           <Tekmet style={styles.tekmet} />
         </View>
 
-        <View style={[styles.stickyBar, isSearching && styles.stickyBarSolid]}>
+        <View style={[styles.stickyBar, showList && styles.stickyBarSolid]}>
           <View style={styles.searchRow}>
             <Glass {...glassInputProps} style={styles.inputWrap}>
               <TextInput
@@ -337,19 +315,53 @@ export default function HomeScreen() {
             </TouchableOpacity>
           </View>
 
-          {isSearching && (
-            <TouchableOpacity
-              style={styles.resetButton}
-              onPress={handleReset}
-              activeOpacity={0.8}
-            >
-              <Text style={styles.resetButtonText}>Сбросить поиск</Text>
-            </TouchableOpacity>
+          {showList && (
+            <View style={styles.modeRow}>
+              <TouchableOpacity
+                activeOpacity={0.85}
+                onPress={() => setMode("all")}
+                style={[styles.pill, mode === "all" && styles.pillActive]}
+              >
+                <Text
+                  style={[
+                    styles.pillText,
+                    mode === "all" && styles.pillTextActive,
+                  ]}
+                >
+                  Все
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                activeOpacity={0.85}
+                onPress={() => setMode("saved")}
+                style={[styles.pill, mode === "saved" && styles.pillActive]}
+              >
+                <Text
+                  style={[
+                    styles.pillText,
+                    mode === "saved" && styles.pillTextActive,
+                  ]}
+                >
+                  Избранные
+                </Text>
+              </TouchableOpacity>
+
+              {isSearching && (
+                <TouchableOpacity
+                  style={styles.resetButton}
+                  onPress={handleReset}
+                  activeOpacity={0.8}
+                >
+                  <Text style={styles.resetButtonText}>Сбросить поиск</Text>
+                </TouchableOpacity>
+              )}
+            </View>
           )}
         </View>
 
-        <View style={!isSearching && styles.halfBottom}>
-          {!isSearching && newMemberRows.length > 0 && (
+        <View style={!showList && styles.halfBottom}>
+          {!showList && newMemberRows.length > 0 && (
             <View style={styles.newBlock}>
               <Text style={styles.blockLabel}>НОВЫЕ УЧАСТНИКИ</Text>
 
@@ -380,7 +392,7 @@ export default function HomeScreen() {
             </View>
           )}
 
-          {isSearching &&
+          {showList &&
             visibleResults.map((user) => {
               const age = user.birth_date
                 ? getAgeFromBirthDate(user.birth_date)
@@ -438,22 +450,25 @@ export default function HomeScreen() {
               );
             })}
 
-          {isSearching && visibleResults.length === 0 && (
-            <Text style={styles.emptyText}>Ничего не найдено</Text>
+          {showList && visibleResults.length === 0 && (
+            <Text style={styles.emptyText}>
+              {mode === "saved" && !isSearching
+                ? "В избранных пока никого нет. Отмечайте людей закладкой — они появятся здесь."
+                : "Ничего не найдено"}
+            </Text>
           )}
         </View>
       </ScrollView>
 
-      {!isSearching && (
+      {!showList && (
         <Text style={styles.founder}>Основатель проекта — Мурат Курджиев</Text>
       )}
 
-      {isSearching && (
+      {showList && (
         <TouchableOpacity
-          style={[styles.fabShadow, creatingInvite && styles.disabled]}
+          style={styles.fabShadow}
           activeOpacity={0.85}
-          onPress={handleCreateInvite}
-          disabled={creatingInvite}
+          onPress={() => router.push("/invites" as any)}
         >
           <Glass
             radius={31}
@@ -554,9 +569,39 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
 
-  resetButton: {
+  modeRow: {
+    flexDirection: "row",
+    alignItems: "center",
     marginTop: 10,
-    alignSelf: "flex-start",
+    gap: 8,
+  },
+
+  pill: {
+    paddingHorizontal: 16,
+    paddingVertical: 7,
+    borderRadius: 999,
+    borderWidth: 0.75,
+    borderColor: "rgba(93,140,120,0.45)",
+    backgroundColor: "#FFFFFF",
+  },
+
+  pillActive: {
+    backgroundColor: "rgba(105,183,141,0.92)",
+    borderColor: "rgba(255,255,255,0.85)",
+  },
+
+  pillText: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: "#3F6B5B",
+  },
+
+  pillTextActive: {
+    color: "#FFFFFF",
+  },
+
+  resetButton: {
+    marginLeft: "auto",
   },
 
   resetButtonText: {

@@ -1,26 +1,33 @@
-import { useCallback, useMemo, useState } from 'react';
 import {
-  View,
-  Text,
-  StyleSheet,
-  TouchableOpacity,
-  ScrollView,
+  Philosopher_400Regular,
+  Philosopher_700Bold,
+  useFonts,
+} from "@expo-google-fonts/philosopher";
+import * as Clipboard from "expo-clipboard";
+import { router, useFocusEffect } from "expo-router";
+import { StatusBar } from "expo-status-bar";
+import { useCallback, useMemo, useState } from "react";
+import {
   ActivityIndicator,
-  Share,
   Alert,
-} from 'react-native';
-import * as Clipboard from 'expo-clipboard';
-import { useFocusEffect } from 'expo-router';
+  Linking,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from "react-native";
 
+import { Glass, Tekmet } from "../components/mingi";
 import {
   createInvite,
+  disableInvite,
+  getMyInvitedUsers,
   getMyInvites,
   markInviteAsSent,
-  getMyInvitedUsers,
-  disableInvite,
-} from '../services/inviteService';
+} from "../services/inviteService";
 
-type TabType = 'created' | 'sent' | 'invited';
+type TabType = "created" | "sent" | "invited";
 
 function formatDate(dateString?: string | null) {
   if (!dateString) return null;
@@ -28,17 +35,36 @@ function formatDate(dateString?: string | null) {
   const date = new Date(dateString);
   if (Number.isNaN(date.getTime())) return null;
 
-  return date.toLocaleString('ru-RU');
+  return date.toLocaleString("ru-RU");
+}
+
+function inviteMessage(code: string) {
+  return `Приглашаю вас в «Минги-Тау» — закрытое сообщество карачаевцев и балкарцев. Мой инвайт-код: ${code}`;
+}
+
+// Прямые ссылки с готовым текстом: работают и в браузере, и на телефоне,
+// в отличие от системного меню «Поделиться».
+function telegramShareLink(code: string) {
+  return `https://t.me/share/url?url=${encodeURIComponent(inviteMessage(code))}`;
+}
+
+function whatsappShareLink(code: string) {
+  return `https://wa.me/?text=${encodeURIComponent(inviteMessage(code))}`;
 }
 
 export default function Invites() {
+  const [fontsLoaded] = useFonts({
+    Philosopher_400Regular,
+    Philosopher_700Bold,
+  });
+
   const [invites, setInvites] = useState<any[]>([]);
   const [invitedUsers, setInvitedUsers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
-  const [sharingId, setSharingId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<TabType>('created');
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<TabType>("created");
 
   const loadData = async () => {
     try {
@@ -52,9 +78,8 @@ export default function Invites() {
       setInvites(invitesData || []);
       setInvitedUsers(invitedUsersData || []);
     } catch (e) {
-      const message =
-        e instanceof Error ? e.message : 'Ошибка загрузки данных';
-      Alert.alert('Ошибка', message);
+      const message = e instanceof Error ? e.message : "Ошибка загрузки данных";
+      Alert.alert("Ошибка", message);
     } finally {
       setLoading(false);
     }
@@ -63,7 +88,7 @@ export default function Invites() {
   useFocusEffect(
     useCallback(() => {
       loadData();
-    }, [])
+    }, []),
   );
 
   const handleCreateInvite = async () => {
@@ -72,114 +97,93 @@ export default function Invites() {
 
       const invite = await createInvite();
       setInvites((prev) => [invite, ...prev]);
-      setActiveTab('created');
-
-      const result = await Share.share({
-        message: `Мой инвайт-код для Diaspora: ${invite.code}`,
-      });
-
-      if (result.action === Share.sharedAction) {
-        const sentAt = new Date().toISOString();
-        await markInviteAsSent(invite.id);
-
-        setInvites((prev) =>
-          prev.map((item) =>
-            item.id === invite.id
-              ? {
-                  ...item,
-                  sent_at: sentAt,
-                }
-              : item
-          )
-        );
-
-        setActiveTab('sent');
-      }
+      setActiveTab("created");
 
       await loadData();
     } catch (e) {
       const message =
-        e instanceof Error ? e.message : 'Ошибка создания инвайта';
-      Alert.alert('Ошибка', message);
+        e instanceof Error ? e.message : "Ошибка создания инвайта";
+      Alert.alert("Ошибка", message);
     } finally {
       setCreating(false);
     }
   };
 
-  const handleCopyInvite = async (code: string) => {
+  // Любая передача кода наружу помечает инвайт как переданный,
+  // чтобы случайно не отдать один код двум людям.
+  const markAsHandedOver = async (invite: any) => {
+    if (invite.sent_at) return;
+
+    const sentAt = new Date().toISOString();
+
     try {
-      await Clipboard.setStringAsync(code);
-      Alert.alert('Готово', 'Инвайт-код скопирован');
-    } catch {
-      Alert.alert('Ошибка', 'Не удалось скопировать код');
+      await markInviteAsSent(invite.id);
+
+      setInvites((prev) =>
+        prev.map((item) =>
+          item.id === invite.id ? { ...item, sent_at: sentAt } : item,
+        ),
+      );
+
+      setActiveTab("sent");
+    } catch (e) {
+      console.log("Не удалось отметить инвайт переданным:", e);
     }
   };
 
-  const handleShareInvite = async (invite: any) => {
+  const handleCopyInvite = async (invite: any) => {
     try {
-      setSharingId(invite.id);
+      await Clipboard.setStringAsync(invite.code);
+      await markAsHandedOver(invite);
 
-      const result = await Share.share({
-        message: `Мой инвайт-код для Diaspora: ${invite.code}`,
-      });
+      Alert.alert(
+        "Скопировано",
+        "Код скопирован. Инвайт перенесён в «Переданные», чтобы вы не отдали его дважды.",
+      );
+    } catch {
+      Alert.alert("Ошибка", "Не удалось скопировать код");
+    }
+  };
 
-      if (result.action === Share.sharedAction) {
-        const sentAt = new Date().toISOString();
-        await markInviteAsSent(invite.id);
+  const handleTelegramInvite = async (invite: any) => {
+    try {
+      await Linking.openURL(telegramShareLink(invite.code));
+      await markAsHandedOver(invite);
+    } catch {
+      Alert.alert("Ошибка", "Не удалось открыть Телеграм");
+    }
+  };
 
-        setInvites((prev) =>
-          prev.map((item) =>
-            item.id === invite.id
-              ? {
-                  ...item,
-                  sent_at: sentAt,
-                }
-              : item
-          )
-        );
+  const handleWhatsappInvite = async (invite: any) => {
+    try {
+      await Linking.openURL(whatsappShareLink(invite.code));
+      await markAsHandedOver(invite);
+    } catch {
+      Alert.alert("Ошибка", "Не удалось открыть WhatsApp");
+    }
+  };
 
-        setActiveTab('sent');
-        await loadData();
-      }
+  // Удаление подтверждается вторым нажатием: всплывающие окна с «Да/Нет»
+  // в браузере не работают.
+  const handleDeletePress = async (invite: any) => {
+    if (confirmDeleteId !== invite.id) {
+      setConfirmDeleteId(invite.id);
+      return;
+    }
+
+    try {
+      setDeletingId(invite.id);
+      await disableInvite(invite.id);
+      setInvites((prev) => prev.filter((item) => item.id !== invite.id));
     } catch (e) {
       const message =
-        e instanceof Error ? e.message : 'Ошибка отправки инвайта';
-      Alert.alert('Ошибка', message);
+        e instanceof Error ? e.message : "Ошибка удаления инвайта";
+      Alert.alert("Ошибка", message);
     } finally {
-      setSharingId(null);
+      setDeletingId(null);
+      setConfirmDeleteId(null);
     }
   };
-
-  const confirmDeleteInvite = (invite: any) => {
-  Alert.alert(
-    'Удалить инвайт?',
-    'Инвайт исчезнет из списка и больше не сможет быть использован.',
-    [
-      { text: 'Отмена', style: 'cancel' },
-      {
-        text: 'Удалить',
-        style: 'destructive',
-        onPress: () => {
-          void handleDeleteInvite(invite);
-        },
-      },
-    ]
-  );
-};
-
-const handleDeleteInvite = async (invite: any) => {
-  try {
-    setDeletingId(invite.id);
-    await disableInvite(invite.id);
-    setInvites((prev) => prev.filter((item) => item.id !== invite.id));
-  } catch (e) {
-    const message =
-      e instanceof Error ? e.message : 'Ошибка удаления инвайта';
-    Alert.alert('Ошибка', message);
-  } finally {
-    setDeletingId(null);
-  }
-};
 
   const sortedInvites = useMemo(() => {
     return [...invites]
@@ -192,465 +196,448 @@ const handleDeleteInvite = async (invite: any) => {
   }, [invites]);
 
   const createdInvites = sortedInvites.filter(
-    (invite) => !invite.is_used && !invite.sent_at
+    (invite) => !invite.is_used && !invite.sent_at,
   );
 
   const sentInvites = sortedInvites.filter(
-    (invite) => !invite.is_used && !!invite.sent_at
+    (invite) => !invite.is_used && !!invite.sent_at,
   );
 
-  const createdCount = createdInvites.length;
-  const sentCount = sentInvites.length;
-  const invitedCount = invitedUsers.length;
+  if (!fontsLoaded) {
+    return <View style={styles.screen} />;
+  }
 
   if (loading) {
     return (
       <View style={styles.loader}>
-        <ActivityIndicator size="large" color="#2E7D32" />
+        <StatusBar style="dark" />
+        <ActivityIndicator size="large" color="#69B78D" />
       </View>
     );
   }
 
-  return (
-    <ScrollView
-      contentContainerStyle={styles.container}
-      showsVerticalScrollIndicator={false}
-    >
-      <Text style={styles.title}>Инвайты</Text>
+  const stats: { key: TabType; value: number; label: string }[] = [
+    { key: "created", value: createdInvites.length, label: "Создано" },
+    { key: "sent", value: sentInvites.length, label: "Передано" },
+    { key: "invited", value: invitedUsers.length, label: "Пришли" },
+  ];
 
-      <View style={styles.statsRow}>
-        <TouchableOpacity
-          style={[
-            styles.statCard,
-            activeTab === 'created' && styles.activeStatCard,
-          ]}
-          activeOpacity={0.85}
-          onPress={() => setActiveTab('created')}
-        >
-          <Text
-            style={[
-              styles.statNumber,
-              activeTab === 'created' && styles.activeStatNumber,
-            ]}
-          >
-            {createdCount}
-          </Text>
-          <Text
-            style={[
-              styles.statLabel,
-              activeTab === 'created' && styles.activeStatLabel,
-            ]}
-          >
-            Создано
-          </Text>
-        </TouchableOpacity>
+  const renderInviteCard = (invite: any) => {
+    const isConfirming = confirmDeleteId === invite.id;
+    const isDeleting = deletingId === invite.id;
 
-        <TouchableOpacity
-          style={[
-            styles.statCard,
-            activeTab === 'sent' && styles.activeStatCard,
-          ]}
-          activeOpacity={0.85}
-          onPress={() => setActiveTab('sent')}
-        >
-          <Text
-            style={[
-              styles.statNumber,
-              activeTab === 'sent' && styles.activeStatNumber,
-            ]}
-          >
-            {sentCount}
-          </Text>
-          <Text
-            style={[
-              styles.statLabel,
-              activeTab === 'sent' && styles.activeStatLabel,
-            ]}
-          >
-            Отправлено
-          </Text>
-        </TouchableOpacity>
+    return (
+      <View key={invite.id} style={styles.card}>
+        <View style={styles.codeRow}>
+          <Text style={styles.code}>{invite.code}</Text>
 
-        <TouchableOpacity
-          style={[
-            styles.statCard,
-            activeTab === 'invited' && styles.activeStatCard,
-          ]}
-          activeOpacity={0.85}
-          onPress={() => setActiveTab('invited')}
-        >
-          <Text
-            style={[
-              styles.statNumber,
-              activeTab === 'invited' && styles.activeStatNumber,
-            ]}
-          >
-            {invitedCount}
+          {!!invite.sent_at && (
+            <View style={styles.badge}>
+              <Text style={styles.badgeText}>ПЕРЕДАН</Text>
+            </View>
+          )}
+        </View>
+
+        {!!formatDate(invite.sent_at || invite.created_at) && (
+          <Text style={styles.meta}>
+            {invite.sent_at ? "Передан: " : "Создан: "}
+            {formatDate(invite.sent_at || invite.created_at)}
           </Text>
-          <Text
-            style={[
-              styles.statLabel,
-              activeTab === 'invited' && styles.activeStatLabel,
-            ]}
+        )}
+
+        <View style={styles.cardActions}>
+          <TouchableOpacity
+            style={styles.smallButton}
+            onPress={() => handleCopyInvite(invite)}
+            activeOpacity={0.85}
           >
-            Приглашённых
-          </Text>
-        </TouchableOpacity>
+            <Text style={styles.smallButtonText}>Копировать</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.smallButton}
+            onPress={() => handleTelegramInvite(invite)}
+            activeOpacity={0.85}
+          >
+            <Text style={styles.smallButtonText}>Телеграм</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.smallButton}
+            onPress={() => handleWhatsappInvite(invite)}
+            activeOpacity={0.85}
+          >
+            <Text style={styles.smallButtonText}>WhatsApp</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[
+              styles.smallButton,
+              styles.dangerButton,
+              isDeleting && styles.disabled,
+            ]}
+            onPress={() => handleDeletePress(invite)}
+            disabled={isDeleting}
+            activeOpacity={0.85}
+          >
+            <Text style={[styles.smallButtonText, styles.dangerButtonText]}>
+              {isDeleting
+                ? "Удаление..."
+                : isConfirming
+                  ? "Точно удалить?"
+                  : "Удалить"}
+            </Text>
+          </TouchableOpacity>
+        </View>
+
+        {isConfirming && !isDeleting && (
+          <TouchableOpacity
+            onPress={() => setConfirmDeleteId(null)}
+            activeOpacity={0.8}
+          >
+            <Text style={styles.cancelLink}>Не удалять</Text>
+          </TouchableOpacity>
+        )}
       </View>
+    );
+  };
 
-      <TouchableOpacity
-        style={[styles.primaryButton, creating && styles.disabled]}
-        onPress={handleCreateInvite}
-        disabled={creating}
-        activeOpacity={0.85}
+  return (
+    <View style={styles.screen}>
+      <StatusBar style="dark" />
+
+      <ScrollView
+        contentContainerStyle={styles.container}
+        showsVerticalScrollIndicator={false}
       >
-        <Text style={styles.primaryButtonText}>
-          {creating ? 'Создание...' : 'Создать и отправить инвайт'}
-        </Text>
-      </TouchableOpacity>
+        <TouchableOpacity
+          onPress={() => router.back()}
+          activeOpacity={0.8}
+          style={styles.backLink}
+        >
+          <Text style={styles.backLinkText}>← Назад</Text>
+        </TouchableOpacity>
 
-      {activeTab === 'created' && (
-        <>
-          <Text style={styles.sectionTitle}>Созданные инвайты</Text>
+        <Text style={styles.title}>Инвайты</Text>
+        <Text style={styles.subtitle}>МИНГИ·ТАУ</Text>
 
-          {createdInvites.length === 0 ? (
-            <View style={styles.emptyCard}>
-              <Text style={styles.emptyText}>У вас пока нет инвайтов</Text>
-            </View>
-          ) : (
-            <View style={styles.listContainer}>
-              {createdInvites.map((invite) => (
-                <View key={invite.id} style={styles.card}>
-                  <View style={styles.cardHeader}>
-                    <Text style={styles.code}>{invite.code}</Text>
-                  </View>
+        <Tekmet style={styles.tekmet} />
 
-                  {invite.created_at ? (
-                    <Text style={styles.meta}>
-                      Создан: {formatDate(invite.created_at)}
-                    </Text>
-                  ) : null}
+        <View style={styles.statsRow}>
+          {stats.map((stat) => {
+            const isActive = activeTab === stat.key;
 
-                  <View style={styles.actionsRow}>
-                    <TouchableOpacity
-                      style={styles.actionButton}
-                      onPress={() => handleCopyInvite(invite.code)}
-                      activeOpacity={0.85}
-                    >
-                      <Text style={styles.actionButtonText}>Копировать</Text>
-                    </TouchableOpacity>
+            return (
+              <TouchableOpacity
+                key={stat.key}
+                style={[styles.statCard, isActive && styles.statCardActive]}
+                activeOpacity={0.85}
+                onPress={() => setActiveTab(stat.key)}
+              >
+                <Text
+                  style={[styles.statNumber, isActive && styles.statTextActive]}
+                >
+                  {stat.value}
+                </Text>
+                <Text
+                  style={[styles.statLabel, isActive && styles.statTextActive]}
+                >
+                  {stat.label}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
 
-                    <TouchableOpacity
-                      style={[
-                        styles.actionButton,
-                        sharingId === invite.id && styles.disabled,
-                      ]}
-                      onPress={() => handleShareInvite(invite)}
-                      disabled={sharingId === invite.id}
-                      activeOpacity={0.85}
-                    >
-                      <Text style={styles.actionButtonText}>
-                        {sharingId === invite.id ? 'Отправка...' : 'Отправить'}
-                      </Text>
-                    </TouchableOpacity>
-
-                    <TouchableOpacity
-                      style={[
-                        styles.deleteButton,
-                        deletingId === invite.id && styles.disabled,
-                      ]}
-                      onPress={() => confirmDeleteInvite(invite)}
-                      disabled={deletingId === invite.id}
-                      activeOpacity={0.85}
-                    >
-                      <Text style={styles.deleteButtonText}>
-                        {deletingId === invite.id ? 'Удаление...' : 'Удалить'}
-                      </Text>
-                    </TouchableOpacity>
-                  </View>
-                </View>
-              ))}
-            </View>
-          )}
-        </>
-      )}
-
-      {activeTab === 'sent' && (
-        <>
-          <Text style={styles.sectionTitle}>Отправленные инвайты</Text>
-
-          {sentInvites.length === 0 ? (
-            <View style={styles.emptyCard}>
-              <Text style={styles.emptyText}>У вас пока нет отправленных инвайтов</Text>
-            </View>
-          ) : (
-            <View style={styles.listContainer}>
-              {sentInvites.map((invite) => (
-                <View key={invite.id} style={styles.card}>
-                  <View style={styles.cardHeader}>
-                    <Text style={styles.code}>{invite.code}</Text>
-                    <View style={[styles.badge, styles.badgeSent]}>
-                      <Text style={[styles.badgeText, styles.badgeSentText]}>
-                        Отправлен
-                      </Text>
-                    </View>
-                  </View>
-
-                  {invite.sent_at ? (
-                    <Text style={styles.meta}>
-                      Отправлен: {formatDate(invite.sent_at)}
-                    </Text>
-                  ) : null}
-
-                  <View style={styles.actionsRow}>
-                    <TouchableOpacity
-                      style={styles.actionButton}
-                      onPress={() => handleCopyInvite(invite.code)}
-                      activeOpacity={0.85}
-                    >
-                      <Text style={styles.actionButtonText}>Копировать</Text>
-                    </TouchableOpacity>
-
-                    <TouchableOpacity
-                      style={[
-                        styles.deleteButton,
-                        deletingId === invite.id && styles.disabled,
-                      ]}
-                      onPress={() => confirmDeleteInvite(invite)}
-                      disabled={deletingId === invite.id}
-                      activeOpacity={0.85}
-                    >
-                      <Text style={styles.deleteButtonText}>
-                        {deletingId === invite.id ? 'Удаление...' : 'Удалить'}
-                      </Text>
-                    </TouchableOpacity>
-                  </View>
-                </View>
-              ))}
-            </View>
-          )}
-        </>
-      )}
-
-      {activeTab === 'invited' && (
-        <>
-          <Text style={styles.sectionTitle}>Мои приглашённые</Text>
-
-          {invitedUsers.length === 0 ? (
-            <View style={styles.emptyCard}>
-              <Text style={styles.emptyText}>
-                Пока никто не зарегистрировался по вашим инвайтам
+        <TouchableOpacity
+          style={[styles.primaryShadow, creating && styles.disabled]}
+          onPress={handleCreateInvite}
+          disabled={creating}
+          activeOpacity={0.85}
+        >
+          <Glass
+            radius={18}
+            tintColor="rgba(105,183,141,0.92)"
+            borderColor="rgba(255,255,255,0.85)"
+          >
+            <View style={styles.buttonInner}>
+              <Text style={styles.primaryButtonText}>
+                {creating ? "Создание..." : "Создать инвайт"}
               </Text>
             </View>
+          </Glass>
+        </TouchableOpacity>
+
+        <Text style={styles.blockLabel}>
+          {activeTab === "created"
+            ? "СОЗДАННЫЕ, НО НЕ ПЕРЕДАННЫЕ"
+            : activeTab === "sent"
+              ? "ПЕРЕДАННЫЕ"
+              : "ПРИШЛИ ПО МОИМ ИНВАЙТАМ"}
+        </Text>
+
+        {activeTab === "created" &&
+          (createdInvites.length === 0 ? (
+            <Text style={styles.emptyText}>
+              Свободных инвайтов нет. Создайте новый кнопкой выше.
+            </Text>
           ) : (
-            <View style={styles.invitedListContainer}>
-              {invitedUsers.map((item) => (
-                <View key={item.invite_id} style={styles.invitedRow}>
-                  <Text style={styles.name}>{item.name}</Text>
-                </View>
-              ))}
-            </View>
-          )}
-        </>
-      )}
-    </ScrollView>
+            createdInvites.map((invite) => renderInviteCard(invite))
+          ))}
+
+        {activeTab === "sent" &&
+          (sentInvites.length === 0 ? (
+            <Text style={styles.emptyText}>Переданных инвайтов пока нет.</Text>
+          ) : (
+            sentInvites.map((invite) => renderInviteCard(invite))
+          ))}
+
+        {activeTab === "invited" &&
+          (invitedUsers.length === 0 ? (
+            <Text style={styles.emptyText}>
+              По вашим инвайтам пока никто не пришёл. Человек появится здесь
+              после того, как пройдёт регистрацию и модератор одобрит его
+              анкету.
+            </Text>
+          ) : (
+            invitedUsers.map((item) => (
+              <View key={item.invite_id} style={styles.invitedRow}>
+                <Text style={styles.invitedName}>{item.name}</Text>
+              </View>
+            ))
+          ))}
+      </ScrollView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    paddingHorizontal: 20,
-    paddingTop: 70,
-    paddingBottom: 40,
-    backgroundColor: '#fff',
-    flexGrow: 1,
+  screen: {
+    flex: 1,
+    backgroundColor: "#FFFFFF",
   },
+
   loader: {
     flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#fff',
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: "#FFFFFF",
   },
+
+  container: {
+    paddingHorizontal: 20,
+    paddingTop: 56,
+    paddingBottom: 40,
+    flexGrow: 1,
+  },
+
+  backLink: {
+    alignSelf: "flex-start",
+    marginBottom: 12,
+  },
+
+  backLinkText: {
+    fontSize: 15,
+    color: "#96AC9E",
+  },
+
   title: {
-    fontSize: 28,
-    fontWeight: '700',
-    marginBottom: 20,
-    color: '#111',
+    fontFamily: "Philosopher_700Bold",
+    fontSize: 34,
+    color: "#3F6B5B",
+    textAlign: "center",
   },
-  statsRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 14,
-  },
-  statCard: {
-    width: '31.5%',
-    backgroundColor: '#fafafa',
-    borderRadius: 14,
-    paddingVertical: 14,
-    paddingHorizontal: 8,
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#f0f0f0',
-  },
-  activeStatCard: {
-    backgroundColor: '#EDF7EE',
-    borderColor: '#2E7D32',
-  },
-  statNumber: {
-    fontSize: 22,
-    fontWeight: '700',
-    color: '#111',
-    marginBottom: 4,
-  },
-  activeStatNumber: {
-    color: '#2E7D32',
-  },
-  statLabel: {
-    fontSize: 13,
-    color: '#777',
-    textAlign: 'center',
-  },
-  activeStatLabel: {
-    color: '#2E7D32',
-    fontWeight: '700',
-  },
-  primaryButton: {
-    backgroundColor: '#2E7D32',
-    paddingVertical: 14,
-    borderRadius: 12,
-    marginTop: 2,
-    marginBottom: 6,
-  },
-  primaryButtonText: {
-    color: '#fff',
-    textAlign: 'center',
-    fontWeight: '700',
-    fontSize: 16,
-  },
-  sectionTitle: {
-    fontSize: 20,
-    fontWeight: '700',
-    marginTop: 24,
-    marginBottom: 12,
-    color: '#111',
-  },
-  listContainer: {
-    width: '100%',
-  },
-  card: {
-    backgroundColor: '#fafafa',
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 12,
-    borderWidth: 1,
-    borderColor: '#f0f0f0',
-  },
-  cardHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  code: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: '#111',
-    letterSpacing: 1,
-  },
-  badge: {
-    borderRadius: 999,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-  },
-  badgeActive: {
-    backgroundColor: '#EAF7EC',
-  },
-  badgeSent: {
-    backgroundColor: '#FFF4E5',
-  },
-  badgeText: {
-    fontSize: 12,
-    fontWeight: '700',
-  },
-  badgeActiveText: {
-    color: '#2E7D32',
-  },
-  badgeSentText: {
-    color: '#B26A00',
-  },
-  meta: {
-    fontSize: 13,
-    color: '#666',
+
+  subtitle: {
+    fontFamily: "Philosopher_400Regular",
+    fontSize: 13.5,
+    letterSpacing: 2.5,
+    color: "#719686",
+    textAlign: "center",
     marginTop: 8,
   },
-  actionsRow: {
-    flexDirection: 'row',
+
+  tekmet: {
+    alignSelf: "center",
+    marginTop: 14,
+    marginBottom: 20,
+  },
+
+  statsRow: {
+    flexDirection: "row",
+    gap: 10,
+    marginBottom: 18,
+  },
+
+  statCard: {
+    flex: 1,
+    backgroundColor: "#FFFFFF",
+    borderRadius: 18,
+    borderWidth: 0.75,
+    borderColor: "rgba(93,140,120,0.28)",
+    paddingVertical: 14,
+    alignItems: "center",
+  },
+
+  statCardActive: {
+    backgroundColor: "rgba(105,183,141,0.12)",
+    borderColor: "rgba(105,183,141,0.55)",
+  },
+
+  statNumber: {
+    fontFamily: "Philosopher_700Bold",
+    fontSize: 24,
+    color: "#3F6B5B",
+  },
+
+  statLabel: {
+    fontSize: 12,
+    color: "#7E988B",
+    marginTop: 2,
+  },
+
+  statTextActive: {
+    color: "#3F6B5B",
+  },
+
+  primaryShadow: {
+    borderRadius: 18,
+    marginBottom: 26,
+    shadowColor: "#69B78D",
+    shadowOpacity: 0.45,
+    shadowRadius: 14,
+    shadowOffset: { width: 0, height: 8 },
+    elevation: 6,
+  },
+
+  buttonInner: {
+    paddingVertical: 15,
+    paddingHorizontal: 16,
+    alignItems: "center",
+    justifyContent: "center",
+    minHeight: 52,
+  },
+
+  primaryButtonText: {
+    color: "#FFFFFF",
+    fontSize: 15.5,
+    fontWeight: "600",
+  },
+
+  blockLabel: {
+    fontSize: 11,
+    fontWeight: "600",
+    letterSpacing: 1.6,
+    color: "#719686",
+    marginBottom: 12,
+  },
+
+  card: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: 18,
+    borderWidth: 0.75,
+    borderColor: "rgba(93,140,120,0.28)",
+    padding: 16,
+    marginBottom: 10,
+  },
+
+  codeRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+
+  code: {
+    fontFamily: "Philosopher_700Bold",
+    fontSize: 22,
+    letterSpacing: 2,
+    color: "#3F6B5B",
+  },
+
+  badge: {
+    paddingHorizontal: 10,
+    paddingVertical: 3,
+    borderRadius: 999,
+    backgroundColor: "rgba(105,183,141,0.12)",
+    borderWidth: 1,
+    borderColor: "rgba(105,183,141,0.55)",
+  },
+
+  badgeText: {
+    fontSize: 10.5,
+    fontWeight: "600",
+    letterSpacing: 1.2,
+    color: "#3F6B5B",
+  },
+
+  meta: {
+    marginTop: 6,
+    fontSize: 12.5,
+    color: "#8FA79A",
+  },
+
+  cardActions: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
     marginTop: 14,
   },
-  actionButton: {
-    flex: 1,
-    minHeight: 40,
-    borderRadius: 10,
-    backgroundColor: '#fff',
-    borderWidth: 1,
-    borderColor: '#e7e7e7',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 8,
-    paddingHorizontal: 8,
-  },
-  actionButtonText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#333',
-  },
-  deleteButton: {
-    flex: 1,
-    minHeight: 40,
-    borderRadius: 10,
-    backgroundColor: '#fff5f5',
-    borderWidth: 1,
-    borderColor: '#f0d3d3',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 8,
-  },
-  deleteButtonText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#b23b3b',
-  },
-  invitedListContainer: {
-    width: '100%',
-  },
-  invitedRow: {
-    width: '100%',
-    backgroundColor: '#fafafa',
-    borderRadius: 14,
-    paddingVertical: 14,
+
+  smallButton: {
     paddingHorizontal: 14,
-    marginBottom: 10,
-    borderWidth: 1,
-    borderColor: '#f0f0f0',
+    paddingVertical: 9,
+    borderRadius: 999,
+    borderWidth: 0.75,
+    borderColor: "rgba(93,140,120,0.45)",
+    backgroundColor: "#FFFFFF",
   },
-  name: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: '#111',
+
+  smallButtonText: {
+    fontSize: 13.5,
+    fontWeight: "600",
+    color: "#3F6B5B",
   },
-  emptyCard: {
-    backgroundColor: '#fafafa',
-    borderRadius: 16,
-    paddingVertical: 22,
-    paddingHorizontal: 16,
-    borderWidth: 1,
-    borderColor: '#f0f0f0',
+
+  dangerButton: {
+    borderColor: "rgba(192,91,77,0.45)",
+    backgroundColor: "rgba(192,91,77,0.06)",
   },
-  emptyText: {
-    color: '#777',
+
+  dangerButtonText: {
+    color: "#C05B4D",
+  },
+
+  cancelLink: {
+    marginTop: 10,
     fontSize: 14,
-    lineHeight: 20,
+    color: "#96AC9E",
+    textDecorationLine: "underline",
   },
+
   disabled: {
-    opacity: 0.5,
+    opacity: 0.7,
+  },
+
+  invitedRow: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: 18,
+    borderWidth: 0.75,
+    borderColor: "rgba(93,140,120,0.28)",
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    marginBottom: 8,
+  },
+
+  invitedName: {
+    fontSize: 15,
+    color: "#2F4A3C",
+  },
+
+  emptyText: {
+    fontSize: 14.5,
+    lineHeight: 22,
+    color: "#7E988B",
+    textAlign: "center",
+    marginTop: 12,
   },
 });
