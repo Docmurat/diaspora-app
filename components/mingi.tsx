@@ -23,16 +23,37 @@ import Svg, {
 } from "react-native-svg";
 
 // В вебе браузер рисует чёрную рамку фокуса поверх полей, переключателей
-// и кнопок. Отключаем её один раз для всего приложения.
+// и кнопок, а панель вкладок собирается из списка — браузер добавляет ей
+// точки-маркеры. Отключаем и то, и другое один раз для всего приложения.
 if (Platform.OS === "web" && typeof document !== "undefined") {
-  const STYLE_ID = "mingi-web-focus-fix";
-  if (!document.getElementById(STYLE_ID)) {
-    const style = document.createElement("style");
+  // Метку меняем при каждом изменении правил, иначе старый стиль остаётся
+  // висеть на странице и новые правила не применяются.
+  const STYLE_ID = "mingi-web-css-v3";
+  let style = document.getElementById(STYLE_ID) as HTMLStyleElement | null;
+
+  if (!style) {
+    style = document.createElement("style");
     style.id = STYLE_ID;
-    style.textContent =
-      "*:focus, *:focus-visible { outline: none !important; }";
     document.head.appendChild(style);
   }
+
+  // 1) чёрная рамка фокуса у полей и кнопок;
+  // 2) точки-маркеры, которые браузер рисует у панели вкладок (она собрана
+  //    из списка).
+  style.textContent = [
+    "*:focus, *:focus-visible { outline: none !important; }",
+    "ul, ol, [role='list'], [role='tablist'] {",
+    "  list-style: none !important; list-style-type: none !important;",
+    "  padding-left: 0 !important; margin-left: 0 !important;",
+    "}",
+    "li, [role='listitem'], [role='tab'] {",
+    "  list-style: none !important; list-style-type: none !important;",
+    "}",
+    "li::marker, [role='listitem']::marker, [role='tab']::marker {",
+    "  content: '' !important; color: transparent !important;",
+    "  font-size: 0 !important;",
+    "}",
+  ].join("\n");
 }
 
 export function useDrift(duration: number, delay = 0) {

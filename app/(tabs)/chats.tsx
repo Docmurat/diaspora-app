@@ -1,18 +1,27 @@
-import { useCallback, useMemo, useState } from 'react';
 import {
-  View,
-  Text,
-  StyleSheet,
-  TouchableOpacity,
-  ScrollView,
+  Philosopher_400Regular,
+  Philosopher_700Bold,
+  useFonts,
+} from "@expo-google-fonts/philosopher";
+import { router, useFocusEffect } from "expo-router";
+import { StatusBar } from "expo-status-bar";
+import { useCallback, useMemo, useState } from "react";
+import {
   ActivityIndicator,
   Image,
-} from 'react-native';
-import { router, useFocusEffect } from 'expo-router';
-import { getMyChats, ChatListItem } from '../../services/chatService';
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from "react-native";
+
+import TopBar from "../../components/TopBar";
+import { Glass, Tekmet } from "../../components/mingi";
+import { ChatListItem, getMyChats } from "../../services/chatService";
 
 function formatChatTime(dateString?: string | null) {
-  if (!dateString) return '';
+  if (!dateString) return "";
 
   const date = new Date(dateString);
   const now = new Date();
@@ -23,9 +32,9 @@ function formatChatTime(dateString?: string | null) {
     date.getFullYear() === now.getFullYear();
 
   if (isToday) {
-    return date.toLocaleTimeString('ru-RU', {
-      hour: '2-digit',
-      minute: '2-digit',
+    return date.toLocaleTimeString("ru-RU", {
+      hour: "2-digit",
+      minute: "2-digit",
     });
   }
 
@@ -38,43 +47,48 @@ function formatChatTime(dateString?: string | null) {
     date.getFullYear() === yesterday.getFullYear();
 
   if (isYesterday) {
-    return 'Вчера';
+    return "Вчера";
   }
 
-  return date.toLocaleDateString('ru-RU', {
-    day: '2-digit',
-    month: '2-digit',
+  return date.toLocaleDateString("ru-RU", {
+    day: "2-digit",
+    month: "2-digit",
   });
 }
 
 function getFullName(chat: ChatListItem) {
-  const firstName = chat.otherUser?.first_name?.trim() || '';
-  const lastName = chat.otherUser?.last_name?.trim() || '';
+  const firstName = chat.otherUser?.first_name?.trim() || "";
+  const lastName = chat.otherUser?.last_name?.trim() || "";
   const fullName = `${firstName} ${lastName}`.trim();
 
-  return fullName || 'Пользователь';
+  return fullName || "Пользователь";
 }
 
 function getAvatarLetter(chat: ChatListItem) {
   const fullName = getFullName(chat);
-  return fullName[0]?.toUpperCase() || '?';
+  return fullName[0]?.toUpperCase() || "?";
 }
 
 export default function ChatsScreen() {
+  const [fontsLoaded] = useFonts({
+    Philosopher_400Regular,
+    Philosopher_700Bold,
+  });
+
   const [chats, setChats] = useState<ChatListItem[]>([]);
   const [loading, setLoading] = useState(true);
-  const [screenError, setScreenError] = useState('');
+  const [screenError, setScreenError] = useState("");
 
   const loadChats = async () => {
     try {
       setLoading(true);
-      setScreenError('');
+      setScreenError("");
 
       const data = await getMyChats();
       setChats(data);
     } catch (e) {
       const message =
-        e instanceof Error ? e.message : 'Не удалось загрузить список чатов';
+        e instanceof Error ? e.message : "Не удалось загрузить список чатов";
       setScreenError(message);
       setChats([]);
     } finally {
@@ -85,7 +99,7 @@ export default function ChatsScreen() {
   useFocusEffect(
     useCallback(() => {
       loadChats();
-    }, [])
+    }, []),
   );
 
   const preparedChats = useMemo(() => {
@@ -96,86 +110,112 @@ export default function ChatsScreen() {
         ...chat,
         fullName,
         avatarLetter: getAvatarLetter(chat),
-        timeLabel: formatChatTime(chat.lastMessageAt || chat.updatedAt || chat.createdAt),
-        previewText: chat.lastMessageText?.trim() || 'Сообщений пока нет',
+        timeLabel: formatChatTime(
+          chat.lastMessageAt || chat.updatedAt || chat.createdAt,
+        ),
+        previewText: chat.lastMessageText?.trim() || "Сообщений пока нет",
       };
     });
   }, [chats]);
 
+  if (!fontsLoaded) {
+    return <View style={styles.emptyBg} />;
+  }
+
   if (loading) {
     return (
       <View style={styles.loader}>
-        <ActivityIndicator size="large" color="#2E7D32" />
-      </View>
-    );
-  }
-
-  if (screenError) {
-    return (
-      <View style={styles.centerState}>
-        <Text style={styles.stateTitle}>Не удалось загрузить чаты</Text>
-        <Text style={styles.stateText}>{screenError}</Text>
-
-        <TouchableOpacity style={styles.retryButton} onPress={loadChats}>
-          <Text style={styles.retryButtonText}>Повторить</Text>
-        </TouchableOpacity>
+        <StatusBar style="dark" />
+        <ActivityIndicator size="large" color="#69B78D" />
       </View>
     );
   }
 
   return (
-    <View style={styles.container}>
+    <View style={styles.screen}>
+      <StatusBar style="dark" />
+      <TopBar />
+
       <View style={styles.header}>
         <Text style={styles.title}>Чаты</Text>
+        <Text style={styles.subtitle}>МИНГИ·ТАУ</Text>
+        <Tekmet style={styles.tekmet} />
       </View>
 
-      {preparedChats.length === 0 ? (
+      {screenError ? (
+        <View style={styles.centerState}>
+          <Text style={styles.stateTitle}>Не удалось загрузить чаты</Text>
+          <Text style={styles.stateText}>{screenError}</Text>
+
+          <TouchableOpacity
+            style={styles.primaryShadow}
+            onPress={loadChats}
+            activeOpacity={0.85}
+          >
+            <Glass
+              radius={18}
+              tintColor="rgba(105,183,141,0.92)"
+              borderColor="rgba(255,255,255,0.85)"
+            >
+              <View style={styles.buttonInner}>
+                <Text style={styles.primaryButtonText}>Повторить</Text>
+              </View>
+            </Glass>
+          </TouchableOpacity>
+        </View>
+      ) : preparedChats.length === 0 ? (
         <View style={styles.centerState}>
           <Text style={styles.stateTitle}>Пока нет чатов</Text>
           <Text style={styles.stateText}>
-            Когда вы начнёте диалог с пользователем, он появится здесь
+            Когда вы начнёте диалог с человеком из сообщества, он появится здесь.
           </Text>
         </View>
       ) : (
-        <ScrollView contentContainerStyle={styles.list} showsVerticalScrollIndicator={false}>
+        <ScrollView
+          contentContainerStyle={styles.list}
+          showsVerticalScrollIndicator={false}
+        >
           {preparedChats.map((chat) => (
             <TouchableOpacity
               key={chat.chatId}
-              style={styles.chatCard}
+              activeOpacity={0.85}
               onPress={() =>
                 router.push({
-                  pathname: '/chat',
+                  pathname: "/chat",
                   params: {
-                    userId: chat.otherUser?.id || '',
+                    userId: chat.otherUser?.id || "",
                     name: chat.fullName,
                   },
                 })
               }
-              activeOpacity={0.8}
             >
-              {chat.otherUser?.avatar_path ? (
-                <Image
-                  source={{ uri: chat.otherUser.avatar_path }}
-                  style={styles.avatarImage}
-                />
-              ) : (
-                <View style={styles.avatar}>
-                  <Text style={styles.avatarText}>{chat.avatarLetter}</Text>
+              <View style={styles.chatCard}>
+                <View style={styles.chatCardInner}>
+                  {chat.otherUser?.avatar_path ? (
+                    <Image
+                      source={{ uri: chat.otherUser.avatar_path }}
+                      style={styles.avatarImage}
+                    />
+                  ) : (
+                    <View style={styles.avatar}>
+                      <Text style={styles.avatarText}>{chat.avatarLetter}</Text>
+                    </View>
+                  )}
+
+                  <View style={styles.chatInfo}>
+                    <View style={styles.topRow}>
+                      <Text style={styles.name} numberOfLines={1}>
+                        {chat.fullName}
+                      </Text>
+
+                      <Text style={styles.time}>{chat.timeLabel}</Text>
+                    </View>
+
+                    <Text style={styles.lastMessage} numberOfLines={1}>
+                      {chat.previewText}
+                    </Text>
+                  </View>
                 </View>
-              )}
-
-              <View style={styles.chatInfo}>
-                <View style={styles.topRow}>
-                  <Text style={styles.name} numberOfLines={1}>
-                    {chat.fullName}
-                  </Text>
-
-                  <Text style={styles.time}>{chat.timeLabel}</Text>
-                </View>
-
-                <Text style={styles.lastMessage} numberOfLines={1}>
-                  {chat.previewText}
-                </Text>
               </View>
             </TouchableOpacity>
           ))}
@@ -186,92 +226,128 @@ export default function ChatsScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: {
+  emptyBg: {
     flex: 1,
-    backgroundColor: '#f7f7f7',
+    backgroundColor: "#FFFFFF",
+  },
+
+  screen: {
+    flex: 1,
+    backgroundColor: "#FFFFFF",
   },
 
   loader: {
     flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#fff',
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: "#FFFFFF",
+  },
+
+  header: {
+    paddingTop: 8,
+    paddingBottom: 4,
+    paddingHorizontal: 24,
+    alignItems: "center",
+  },
+
+  title: {
+    fontFamily: "Philosopher_700Bold",
+    fontSize: 34,
+    color: "#3F6B5B",
+    textAlign: "center",
+  },
+
+  subtitle: {
+    fontFamily: "Philosopher_400Regular",
+    fontSize: 13.5,
+    letterSpacing: 2.5,
+    color: "#719686",
+    textAlign: "center",
+    marginTop: 8,
+  },
+
+  tekmet: {
+    alignSelf: "center",
+    marginTop: 14,
+    marginBottom: 6,
   },
 
   centerState: {
     flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#f7f7f7',
-    paddingHorizontal: 24,
+    justifyContent: "center",
+    alignItems: "center",
+    paddingHorizontal: 28,
+    paddingBottom: 60,
   },
 
   stateTitle: {
+    fontFamily: "Philosopher_700Bold",
     fontSize: 22,
-    fontWeight: '700',
-    color: '#111',
-    marginBottom: 8,
-    textAlign: 'center',
+    color: "#3F6B5B",
+    marginBottom: 10,
+    textAlign: "center",
   },
 
   stateText: {
-    fontSize: 15,
-    color: '#666',
-    textAlign: 'center',
-    lineHeight: 22,
+    fontSize: 14.5,
+    color: "#7E988B",
+    textAlign: "center",
+    lineHeight: 21,
     maxWidth: 320,
   },
 
-  retryButton: {
-    marginTop: 18,
-    backgroundColor: '#2E7D32',
-    paddingHorizontal: 18,
-    paddingVertical: 12,
-    borderRadius: 14,
+  primaryShadow: {
+    marginTop: 20,
+    borderRadius: 18,
+    shadowColor: "#69B78D",
+    shadowOpacity: 0.45,
+    shadowRadius: 14,
+    shadowOffset: { width: 0, height: 8 },
+    elevation: 6,
   },
 
-  retryButtonText: {
-    color: '#fff',
-    fontSize: 15,
-    fontWeight: '600',
+  buttonInner: {
+    paddingVertical: 14,
+    paddingHorizontal: 28,
+    alignItems: "center",
+    justifyContent: "center",
+    minHeight: 50,
   },
 
-  header: {
-    paddingTop: 56,
-    paddingBottom: 16,
-    paddingHorizontal: 20,
-    backgroundColor: '#fff',
-    borderBottomWidth: 1,
-    borderBottomColor: '#eee',
-  },
-
-  title: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#111',
+  primaryButtonText: {
+    color: "#FFFFFF",
+    fontSize: 16,
+    fontWeight: "600",
   },
 
   list: {
-    padding: 12,
-    paddingBottom: 24,
+    paddingHorizontal: 20,
+    paddingTop: 6,
+    paddingBottom: 28,
   },
 
   chatCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#fff',
-    borderRadius: 14,
-    padding: 14,
     marginBottom: 10,
+    backgroundColor: "#FFFFFF",
+    borderRadius: 18,
+    borderWidth: 0.75,
+    borderColor: "rgba(93,140,120,0.28)",
+    overflow: "hidden",
+  },
+
+  chatCardInner: {
+    flexDirection: "row",
+    alignItems: "center",
+    padding: 14,
   },
 
   avatar: {
     width: 52,
     height: 52,
     borderRadius: 26,
-    backgroundColor: '#2E7D32',
-    justifyContent: 'center',
-    alignItems: 'center',
+    backgroundColor: "rgba(105,183,141,0.92)",
+    justifyContent: "center",
+    alignItems: "center",
     marginRight: 12,
   },
 
@@ -280,12 +356,13 @@ const styles = StyleSheet.create({
     height: 52,
     borderRadius: 26,
     marginRight: 12,
+    backgroundColor: "#EAF4EE",
   },
 
   avatarText: {
-    color: '#fff',
+    color: "#FFFFFF",
     fontSize: 20,
-    fontWeight: 'bold',
+    fontWeight: "700",
   },
 
   chatInfo: {
@@ -294,27 +371,27 @@ const styles = StyleSheet.create({
   },
 
   topRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
     marginBottom: 4,
   },
 
   name: {
     flex: 1,
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#111',
+    fontFamily: "Philosopher_700Bold",
+    fontSize: 17,
+    color: "#3F6B5B",
     marginRight: 10,
   },
 
   time: {
     fontSize: 12,
-    color: '#777',
+    color: "#8FA79A",
   },
 
   lastMessage: {
     fontSize: 14,
-    color: '#555',
+    color: "#4E7364",
   },
 });

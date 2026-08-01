@@ -1,73 +1,116 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
-  View,
+  Philosopher_400Regular,
+  Philosopher_700Bold,
+  useFonts,
+} from "@expo-google-fonts/philosopher";
+import { Feather, Ionicons } from "@expo/vector-icons";
+import { router, useFocusEffect } from "expo-router";
+import { ReactNode, useCallback, useEffect, useMemo, useState } from "react";
+import {
+  ActivityIndicator,
+  Alert,
+  Image,
+  Platform,
+  ScrollView,
+  Share,
+  StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
-  StyleSheet,
-  Image,
-  ScrollView,
-  ActivityIndicator,
-  Share,
-  Alert,
-} from 'react-native';
-import { router, useFocusEffect } from 'expo-router';
-import { getAgeFromBirthDate } from '../../store/user';
-import { createInvite, markInviteAsSent } from '../../services/inviteService';
-import {
-  getApprovedUsers,
-  DirectoryUser,
-} from '../../services/userDirectoryService';
-import { Ionicons, Feather } from '@expo/vector-icons';
+  View,
+} from "react-native";
+
+import TopBar from "../../components/TopBar";
+import { Glass, MingiBackground, Tekmet } from "../../components/mingi";
 import {
   addFavoriteToDb,
-  removeFavoriteFromDb,
   getMyFavorites,
-} from '../../services/favoritesService';
+  removeFavoriteFromDb,
+} from "../../services/favoritesService";
+import { createInvite, markInviteAsSent } from "../../services/inviteService";
+import {
+  DirectoryUser,
+  getApprovedUsers,
+} from "../../services/userDirectoryService";
+import { getAgeFromBirthDate } from "../../store/user";
+
+// Пирамида новых участников: ряды сверху вниз, широкое основание —
+// у строки поиска, вершина — к кнопкам внизу.
+const PYRAMID_ROWS = [4, 3];
+const NEW_MEMBERS_COUNT = PYRAMID_ROWS.reduce((sum, n) => sum + n, 0);
 
 type PreparedUser = DirectoryUser & {
   fullName: string;
 };
 
+const glassInputProps = {
+  radius: 16,
+  tintColor: "rgba(255,255,255,0.95)",
+  borderColor: "rgba(93,140,120,0.45)",
+  borderWidth: 0.75,
+} as const;
+
+// До поиска — живой фон с боке. Как только показан список, фон обычный белый,
+// чтобы карточки читались спокойно.
+function ScreenBackground({
+  alive,
+  children,
+}: {
+  alive: boolean;
+  children: ReactNode;
+}) {
+  if (alive) {
+    return <MingiBackground idPrefix="ppl">{children}</MingiBackground>;
+  }
+
+  return <View style={styles.whiteScreen}>{children}</View>;
+}
+
 export default function HomeScreen() {
-  const [query, setQuery] = useState('');
+  const [fontsLoaded] = useFonts({
+    Philosopher_400Regular,
+    Philosopher_700Bold,
+  });
+
+  const [query, setQuery] = useState("");
   const [users, setUsers] = useState<PreparedUser[]>([]);
   const [results, setResults] = useState<PreparedUser[]>([]);
   const [isSearching, setIsSearching] = useState(false);
   const [loading, setLoading] = useState(true);
   const [favoriteIds, setFavoriteIds] = useState<string[]>([]);
   const [creatingInvite, setCreatingInvite] = useState(false);
-  
 
-  const runSearch = useCallback((searchText: string, sourceUsers: PreparedUser[]) => {
-    const cleanQuery = searchText.trim().toLowerCase();
+  const runSearch = useCallback(
+    (searchText: string, sourceUsers: PreparedUser[]) => {
+      const cleanQuery = searchText.trim().toLowerCase();
 
-    if (!cleanQuery) {
-      setResults(sourceUsers);
-      return;
-    }
+      if (!cleanQuery) {
+        setResults(sourceUsers);
+        return;
+      }
 
-    const words = cleanQuery.split(/\s+/).filter(Boolean);
+      const words = cleanQuery.split(/\s+/).filter(Boolean);
 
-    const filtered = sourceUsers.filter((user) => {
-      const searchableText = [
-        user.fullName,
-        user.category || '',
-        user.profession || '',
-        user.city || '',
-        user.country || '',
-        user.bio || '',
-      ]
-        .join(' ')
-        .toLowerCase();
+      const filtered = sourceUsers.filter((user) => {
+        const searchableText = [
+          user.fullName,
+          user.category || "",
+          user.profession || "",
+          user.city || "",
+          user.country || "",
+          user.bio || "",
+        ]
+          .join(" ")
+          .toLowerCase();
 
-      return words.every((word) => searchableText.includes(word));
-    });
+        return words.every((word) => searchableText.includes(word));
+      });
 
-    setResults(filtered);
-  }, []);
+      setResults(filtered);
+    },
+    [],
+  );
 
-  // Загружаем данные только при входе/возврате на экран
   useFocusEffect(
     useCallback(() => {
       const loadUsers = async () => {
@@ -85,13 +128,13 @@ export default function HomeScreen() {
           }));
 
           const favoriteUserIds = (favoritesData || []).map(
-            (item: any) => item.favorite_user_id
+            (item: any) => item.favorite_user_id,
           );
 
           setUsers(prepared);
           setFavoriteIds(favoriteUserIds);
         } catch (e) {
-          console.log('Ошибка загрузки пользователей:', e);
+          console.log("Ошибка загрузки пользователей:", e);
           setUsers([]);
           setResults([]);
           setFavoriteIds([]);
@@ -101,10 +144,9 @@ export default function HomeScreen() {
       };
 
       loadUsers();
-    }, [])
+    }, []),
   );
 
-  // Реактивный поиск только после первого поиска
   useEffect(() => {
     if (!isSearching) return;
     runSearch(query, users);
@@ -114,27 +156,69 @@ export default function HomeScreen() {
     return isSearching ? results : [];
   }, [isSearching, results]);
 
-  const handleCreateInvite = async () => {
-  try {
-    setCreatingInvite(true);
+  // Список уже приходит из базы свежими вперёд.
+  // Разрезаем его на ряды пирамиды: 4, затем 3, затем 2, затем 1.
+  const newMemberRows = useMemo(() => {
+    const newest = users.slice(0, NEW_MEMBERS_COUNT);
+    const rows: PreparedUser[][] = [];
+    let cursor = 0;
 
-    const invite = await createInvite();
-
-    const result = await Share.share({
-      message: `Мой инвайт-код для Diaspora: ${invite.code}`,
-    });
-
-    if (result.action === Share.sharedAction) {
-      await markInviteAsSent(invite.id);
+    for (const size of PYRAMID_ROWS) {
+      if (cursor >= newest.length) break;
+      rows.push(newest.slice(cursor, cursor + size));
+      cursor += size;
     }
-  } catch (e) {
-    const message =
-      e instanceof Error ? e.message : 'Ошибка создания инвайта';
-    Alert.alert('Ошибка', message);
-  } finally {
-    setCreatingInvite(false);
-  }
-};
+
+    return rows;
+  }, [users]);
+
+  const openUser = (user: PreparedUser) => {
+    router.push({
+      pathname: "/user-profile",
+      params: {
+        id: user.id,
+        name: user.fullName,
+        category: user.category || "",
+        profession: user.profession || "",
+        city: user.city || "",
+        country: user.country || "",
+        birthDate: user.birth_date || "",
+        telegram: user.telegram || "",
+        bio: user.bio || "",
+        extraInfo: user.extra_info || "",
+        avatarUri: user.avatar_path || "",
+      },
+    });
+  };
+
+  const handleCreateInvite = async () => {
+    try {
+      setCreatingInvite(true);
+
+      const invite = await createInvite();
+
+      const result = await Share.share({
+        message: `Мой инвайт-код для «Минги-Тау»: ${invite.code}`,
+      });
+
+      if (result.action === Share.sharedAction) {
+        await markInviteAsSent(invite.id);
+      }
+    } catch (e) {
+      const message =
+        e instanceof Error ? e.message : "Ошибка создания инвайта";
+      Alert.alert("Ошибка", message);
+    } finally {
+      setCreatingInvite(false);
+    }
+  };
+
+  const handleSupport = () => {
+    Alert.alert(
+      "Скоро",
+      "Здесь появится страница о проекте и способ поддержать его.",
+    );
+  };
 
   const handleSearch = () => {
     setIsSearching(true);
@@ -142,7 +226,7 @@ export default function HomeScreen() {
   };
 
   const handleReset = () => {
-    setQuery('');
+    setQuery("");
     setResults([]);
     setIsSearching(false);
   };
@@ -159,295 +243,518 @@ export default function HomeScreen() {
         setFavoriteIds((prev) => [...prev, user.id]);
       }
     } catch (e) {
-      console.log('Ошибка изменения избранного:', e);
+      console.log("Ошибка изменения избранного:", e);
     }
   };
 
+  if (!fontsLoaded) {
+    return <View style={styles.whiteScreen} />;
+  }
+
   if (loading && !isSearching) {
     return (
-      <View style={styles.loader}>
-        <ActivityIndicator size="large" color="#2E7D32" />
-      </View>
+      <MingiBackground idPrefix="pplload">
+        <View style={styles.loader}>
+          <ActivityIndicator size="large" color="#69B78D" />
+        </View>
+      </MingiBackground>
     );
   }
 
-return (
-  <View style={styles.screen}>
-    <ScrollView
-      contentContainerStyle={[
-        styles.container,
-        isSearching && styles.containerTop,
-        styles.containerWithFab,
-      ]}
-      keyboardShouldPersistTaps="handled"
-      showsVerticalScrollIndicator={false}
-    >
+  return (
+    <ScreenBackground alive={!isSearching}>
+      <TopBar transparent />
+
       {!isSearching && (
-        <Image
-          source={require('../../assets/pattern.png')}
-          style={styles.heroImage}
-        />
+        <TouchableOpacity
+          onPress={handleSupport}
+          activeOpacity={0.85}
+          style={styles.supportButton}
+        >
+          <Glass
+            radius={18}
+            tintColor="rgba(255,255,255,0.9)"
+            borderColor="rgba(105,183,141,0.75)"
+            borderWidth={1}
+          >
+            <View style={styles.supportInner}>
+              <Ionicons name="heart-outline" size={19} color="#3F6B5B" />
+              <Text style={styles.supportText}>Поддержать проект</Text>
+            </View>
+          </Glass>
+        </TouchableOpacity>
       )}
 
-      <View style={styles.searchBlock}>
-        <View style={styles.searchRow}>
-          <TextInput
-            placeholder="Например: стоматолог Москва"
-            placeholderTextColor="#bbb"
-            style={[
-              styles.input,
-              {
-                outlineStyle: 'none',
-                outlineWidth: 0,
-              } as any,
-            ]}
-            value={query}
-            onChangeText={setQuery}
-            onSubmitEditing={handleSearch}
-            underlineColorAndroid="transparent"
-          />
+      {!isSearching && users.length > 0 && (
+        <View style={styles.counterRow}>
+          <Text style={styles.counterLabel}>Нас уже</Text>
+          <Text style={styles.counterValue}>{users.length}</Text>
+        </View>
+      )}
 
-          <TouchableOpacity style={styles.searchIcon} onPress={handleSearch}>
-            <Text style={styles.searchIconText}>→</Text>
-          </TouchableOpacity>
+      <ScrollView
+        stickyHeaderIndices={[1]}
+        contentContainerStyle={styles.container}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+      >
+        <View style={!isSearching && styles.halfTop}>
+          <Text style={styles.title}>Поиск</Text>
+          <Text style={styles.subtitle}>МИНГИ·ТАУ</Text>
+
+          <Tekmet style={styles.tekmet} />
         </View>
 
-        {isSearching && (
-          <TouchableOpacity style={styles.resetButton} onPress={handleReset}>
-            <Text style={styles.resetButtonText}>Сбросить поиск</Text>
-          </TouchableOpacity>
-        )}
-      </View>
+        <View style={[styles.stickyBar, isSearching && styles.stickyBarSolid]}>
+          <View style={styles.searchRow}>
+            <Glass {...glassInputProps} style={styles.inputWrap}>
+              <TextInput
+                placeholder="Например: стоматолог Москва"
+                placeholderTextColor="#8FA79A"
+                style={styles.input}
+                value={query}
+                onChangeText={setQuery}
+                onSubmitEditing={handleSearch}
+                underlineColorAndroid="transparent"
+                returnKeyType="search"
+              />
+            </Glass>
 
-      {isSearching &&
-        visibleResults.map((user) => {
-          const age = user.birth_date
-            ? getAgeFromBirthDate(user.birth_date)
-            : '';
+            <TouchableOpacity
+              style={styles.searchButtonShadow}
+              onPress={handleSearch}
+              activeOpacity={0.85}
+            >
+              <Glass
+                radius={16}
+                tintColor="rgba(105,183,141,0.92)"
+                borderColor="rgba(255,255,255,0.85)"
+              >
+                <View style={styles.searchButtonInner}>
+                  <Ionicons name="arrow-forward" size={20} color="#FFFFFF" />
+                </View>
+              </Glass>
+            </TouchableOpacity>
+          </View>
 
-          return (
-            <View key={user.id} style={styles.card}>
-              <View style={styles.cardContent}>
-                <TouchableOpacity
-                  style={styles.userMain}
-                  onPress={() =>
-                    router.push({
-                      pathname: '/user-profile',
-                      params: {
-                        id: user.id,
-                        name: user.fullName,
-                        category: user.category || '',
-                        profession: user.profession || '',
-                        city: user.city || '',
-                        country: user.country || '',
-                        birthDate: user.birth_date || '',
-                        telegram: user.telegram || '',
-                        bio: user.bio || '',
-                        extraInfo: user.extra_info || '',
-                        avatarUri: user.avatar_path || '',
-                      },
-                    })
-                  }
-                >
-                  <Image
-                    source={
-                      user.avatar_path
-                        ? { uri: user.avatar_path }
-                        : require('../../assets/default-avatar.png')
-                    }
-                    style={styles.avatar}
-                  />
+          {isSearching && (
+            <TouchableOpacity
+              style={styles.resetButton}
+              onPress={handleReset}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.resetButtonText}>Сбросить поиск</Text>
+            </TouchableOpacity>
+          )}
+        </View>
 
-                  <View style={styles.info}>
-                    <Text style={styles.name}>{user.fullName}</Text>
-                    {!!age && <Text style={styles.age}>{age} лет</Text>}
-                    <Text style={styles.profession}>{user.profession || '—'}</Text>
-                    <Text style={styles.location}>
-                      {user.city || '—'}, {user.country || '—'}
-                    </Text>
-                  </View>
-                </TouchableOpacity>
+        <View style={!isSearching && styles.halfBottom}>
+          {!isSearching && newMemberRows.length > 0 && (
+            <View style={styles.newBlock}>
+              <Text style={styles.blockLabel}>НОВЫЕ УЧАСТНИКИ</Text>
 
-                <TouchableOpacity
-                  style={styles.favoriteButton}
-                  onPress={() => toggleFavorite(user)}
-                  activeOpacity={0.7}
-                >
-                  <Ionicons
-                    name={
-                      favoriteIds.includes(user.id)
-                        ? 'bookmark'
-                        : 'bookmark-outline'
-                    }
-                    size={20}
-                    color="#2E7D32"
-                  />
-                </TouchableOpacity>
-              </View>
+              {newMemberRows.map((row, rowIndex) => (
+                <View key={rowIndex} style={styles.pyramidRow}>
+                  {row.map((user) => (
+                    <TouchableOpacity
+                      key={user.id}
+                      style={styles.newItem}
+                      activeOpacity={0.85}
+                      onPress={() => openUser(user)}
+                    >
+                      <Image
+                        source={
+                          user.avatar_path
+                            ? { uri: user.avatar_path }
+                            : require("../../assets/default-avatar.png")
+                        }
+                        style={styles.newAvatar}
+                      />
+                      <Text style={styles.newName} numberOfLines={1}>
+                        {user.first_name}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              ))}
             </View>
-          );
-        })}
+          )}
 
-      {isSearching && visibleResults.length === 0 && (
-        <Text style={styles.emptyText}>Ничего не найдено</Text>
+          {isSearching &&
+            visibleResults.map((user) => {
+              const age = user.birth_date
+                ? getAgeFromBirthDate(user.birth_date)
+                : "";
+
+              return (
+                <View key={user.id} style={styles.card}>
+                  <View style={styles.cardContent}>
+                    <TouchableOpacity
+                      style={styles.userMain}
+                      activeOpacity={0.85}
+                      onPress={() => openUser(user)}
+                    >
+                      <Image
+                        source={
+                          user.avatar_path
+                            ? { uri: user.avatar_path }
+                            : require("../../assets/default-avatar.png")
+                        }
+                        style={styles.avatar}
+                      />
+
+                      <View style={styles.info}>
+                        <Text style={styles.name} numberOfLines={2}>
+                          {user.fullName}
+                        </Text>
+                        {!!age && <Text style={styles.age}>{age} лет</Text>}
+                        <Text style={styles.profession}>
+                          {user.profession || "—"}
+                        </Text>
+                        <Text style={styles.location}>
+                          {user.city || "—"}
+                          {user.country ? `, ${user.country}` : ""}
+                        </Text>
+                      </View>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      style={styles.favoriteButton}
+                      onPress={() => toggleFavorite(user)}
+                      activeOpacity={0.7}
+                    >
+                      <Ionicons
+                        name={
+                          favoriteIds.includes(user.id)
+                            ? "bookmark"
+                            : "bookmark-outline"
+                        }
+                        size={20}
+                        color="#69B78D"
+                      />
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              );
+            })}
+
+          {isSearching && visibleResults.length === 0 && (
+            <Text style={styles.emptyText}>Ничего не найдено</Text>
+          )}
+        </View>
+      </ScrollView>
+
+      {!isSearching && (
+        <Text style={styles.founder}>Основатель проекта — Мурат Курджиев</Text>
       )}
-    </ScrollView>
 
-    <TouchableOpacity
-      style={[styles.addPersonFab, creatingInvite && styles.disabledFab]}
-      activeOpacity={0.85}
-      onPress={handleCreateInvite}
-      disabled={creatingInvite}
-    >
-      <Feather name="user-plus" size={24} color="#1F6BFF" />
-    </TouchableOpacity>
-  </View>
-);
+      {isSearching && (
+        <TouchableOpacity
+          style={[styles.fabShadow, creatingInvite && styles.disabled]}
+          activeOpacity={0.85}
+          onPress={handleCreateInvite}
+          disabled={creatingInvite}
+        >
+          <Glass
+            radius={31}
+            tintColor="rgba(105,183,141,0.92)"
+            borderColor="rgba(255,255,255,0.85)"
+          >
+            <View style={styles.fabInner}>
+              <Feather name="user-plus" size={24} color="#FFFFFF" />
+            </View>
+          </Glass>
+        </TouchableOpacity>
+      )}
+    </ScreenBackground>
+  );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    padding: 20,
-    justifyContent: 'center',
-    backgroundColor: '#fff',
-    flexGrow: 1,
+  whiteScreen: {
+    flex: 1,
+    backgroundColor: "#FFFFFF",
   },
-  disabledFab: {
-  opacity: 0.7,
-},
-  containerTop: {
-    justifyContent: 'flex-start',
-    paddingTop: 60,
-  },
+
   loader: {
     flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#fff',
+    justifyContent: "center",
+    alignItems: "center",
   },
-  heroImage: {
-    width: 140,
-    height: 140,
-    alignSelf: 'center',
-    marginBottom: 30,
-    resizeMode: 'contain',
-  },
-  screen: {
-  flex: 1,
-  backgroundColor: '#fff',
-},
 
-containerWithFab: {
-  paddingBottom: 110,
-},
-
-addPersonFab: {
-  position: 'absolute',
-  right: 20,
-  bottom: 26,
-  width: 62,
-  height: 62,
-  borderRadius: 31,
-  backgroundColor: '#F4F8FF',
-  borderWidth: 1.5,
-  borderColor: '#1F6BFF',
-  alignItems: 'center',
-  justifyContent: 'center',
-  zIndex: 30,
-  elevation: 6,
-},
-  searchBlock: {
-    width: '100%',
+  container: {
+    paddingHorizontal: 24,
+    paddingTop: 8,
+    paddingBottom: 40,
+    flexGrow: 1,
   },
+
+  title: {
+    fontFamily: "Philosopher_700Bold",
+    fontSize: 34,
+    color: "#3F6B5B",
+    textAlign: "center",
+  },
+
+  subtitle: {
+    fontFamily: "Philosopher_400Regular",
+    fontSize: 13.5,
+    letterSpacing: 2.5,
+    color: "#719686",
+    textAlign: "center",
+    marginTop: 8,
+  },
+
+  tekmet: {
+    alignSelf: "center",
+    marginTop: 14,
+    marginBottom: 16,
+  },
+
+  stickyBar: {
+    paddingBottom: 8,
+  },
+
+  stickyBarSolid: {
+    backgroundColor: "#FFFFFF",
+    paddingTop: 8,
+  },
+
   searchRow: {
-    flexDirection: 'row',
-  alignItems: 'center',
-  backgroundColor: '#fff',
-  borderRadius: 12,
-  padding: 4,
+    flexDirection: "row",
+    alignItems: "center",
   },
-  input: {
+
+  inputWrap: {
     flex: 1,
-  height: 50,
-  borderWidth: 1,
-  borderColor: '#eee',
-  borderRadius: 12,
-  paddingHorizontal: 15,
-  backgroundColor: '#fafafa',
   },
-  searchIcon: {
+
+  input: {
+    height: 52,
+    paddingHorizontal: 16,
+    fontSize: 15.5,
+    color: "#2F4A3C",
+    ...(Platform.OS === "web" ? ({ outlineStyle: "none" } as any) : {}),
+  },
+
+  searchButtonShadow: {
     marginLeft: 10,
-    backgroundColor: '#2E7D32',
-    width: 45,
-    height: 45,
-    borderRadius: 10,
-    justifyContent: 'center',
-    alignItems: 'center',
+    borderRadius: 16,
+    shadowColor: "#69B78D",
+    shadowOpacity: 0.45,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 5,
   },
-  searchIconText: {
-    color: '#fff',
-    fontSize: 18,
-    fontWeight: 'bold',
+
+  searchButtonInner: {
+    width: 52,
+    height: 52,
+    alignItems: "center",
+    justifyContent: "center",
   },
+
   resetButton: {
-    marginTop: 12,
-    alignSelf: 'flex-start',
-  },
-  resetButtonText: {
-    color: '#666',
-    fontSize: 14,
-  },
-  card: {
-    padding: 15,
-    borderWidth: 1,
-    borderColor: '#eee',
-    borderRadius: 12,
     marginTop: 10,
-    backgroundColor: '#fff',
+    alignSelf: "flex-start",
   },
+
+  resetButtonText: {
+    color: "#96AC9E",
+    fontSize: 14,
+    textDecorationLine: "underline",
+  },
+
+  newBlock: {
+    marginTop: 22,
+  },
+
+  blockLabel: {
+    fontSize: 11,
+    fontWeight: "600",
+    letterSpacing: 1.6,
+    color: "#719686",
+    marginBottom: 12,
+    textAlign: "center",
+  },
+
+  pyramidRow: {
+    flexDirection: "row",
+    justifyContent: "center",
+    marginBottom: 10,
+  },
+
+  newItem: {
+    width: 66,
+    alignItems: "center",
+    marginHorizontal: 6,
+  },
+
+  newAvatar: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: "#EAF4EE",
+    borderWidth: 1,
+    borderColor: "rgba(93,140,120,0.28)",
+  },
+
+  newName: {
+    marginTop: 6,
+    fontSize: 12.5,
+    color: "#4E7364",
+    textAlign: "center",
+  },
+
+  card: {
+    marginTop: 12,
+    backgroundColor: "#FFFFFF",
+    borderRadius: 18,
+    borderWidth: 0.75,
+    borderColor: "rgba(93,140,120,0.28)",
+    overflow: "hidden",
+  },
+
   cardContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
+    padding: 14,
   },
+
   userMain: {
     flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
   },
+
   avatar: {
-    width: 70,
-    height: 70,
-    borderRadius: 16,
-    marginRight: 17,
+    width: 66,
+    height: 66,
+    borderRadius: 20,
+    marginRight: 14,
+    backgroundColor: "#EAF4EE",
   },
+
   info: {
     flex: 1,
+    minWidth: 0,
   },
+
   name: {
-    fontWeight: 'bold',
-    fontSize: 16,
+    fontFamily: "Philosopher_700Bold",
+    fontSize: 17.5,
+    color: "#3F6B5B",
   },
+
   age: {
-    color: '#2E7D32',
+    color: "#69B78D",
     fontSize: 13,
     marginTop: 2,
-    fontWeight: '600',
+    fontWeight: "600",
   },
+
   profession: {
-    color: '#555',
+    color: "#4E7364",
+    fontSize: 14,
     marginTop: 2,
   },
+
   location: {
-    color: '#888',
-    fontSize: 12,
+    color: "#8FA79A",
+    fontSize: 12.5,
     marginTop: 2,
   },
+
   favoriteButton: {
     padding: 8,
+    marginLeft: 4,
   },
+
   emptyText: {
-    textAlign: 'center',
-    marginTop: 20,
-    color: '#666',
+    textAlign: "center",
+    marginTop: 24,
+    color: "#7E988B",
+    fontSize: 15,
+  },
+
+  supportButton: {
+    marginHorizontal: 24,
+    marginBottom: 6,
+  },
+
+  counterRow: {
+    flexDirection: "row",
+    alignItems: "baseline",
+    justifyContent: "center",
+    gap: 8,
+    marginTop: 10,
+  },
+
+  counterLabel: {
+    fontFamily: "Philosopher_400Regular",
+    fontSize: 16,
+    color: "#719686",
+  },
+
+  counterValue: {
+    fontFamily: "Philosopher_700Bold",
+    fontSize: 24,
+    color: "#3F6B5B",
+  },
+
+  halfTop: {
+    flex: 1,
+    justifyContent: "flex-end",
+  },
+
+  halfBottom: {
+    flex: 1,
+  },
+
+  supportInner: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    paddingVertical: 15,
+    minHeight: 52,
+  },
+
+  supportText: {
+    color: "#3F6B5B",
+    fontSize: 15.5,
+    fontWeight: "600",
+  },
+
+  founder: {
+    fontSize: 12.5,
+    color: "#8FA79A",
+    textAlign: "center",
+    paddingHorizontal: 24,
+    paddingBottom: 14,
+  },
+
+  fabShadow: {
+    position: "absolute",
+    right: 20,
+    bottom: 26,
+    borderRadius: 31,
+    shadowColor: "#69B78D",
+    shadowOpacity: 0.45,
+    shadowRadius: 14,
+    shadowOffset: { width: 0, height: 8 },
+    elevation: 6,
+    zIndex: 30,
+  },
+
+  fabInner: {
+    width: 62,
+    height: 62,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  disabled: {
+    opacity: 0.7,
   },
 });
