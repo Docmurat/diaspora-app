@@ -1953,8 +1953,8 @@ export default function ModerationScreen() {
                         appeal.author?.is_deleted ? (
                           <>
                             <Text style={styles.lockedText}>
-                              Участник удалён — ответ в приложении он не
-                              увидит. Свяжитесь по телефону из сообщения.
+                              Участник удалён — ответ в приложении он не увидит.
+                              Свяжитесь по телефону из сообщения.
                             </Text>
 
                             <View style={styles.actionRow}>
@@ -1999,9 +1999,7 @@ export default function ModerationScreen() {
                                   replyDisabled && styles.actionDisabled,
                                 ]}
                                 disabled={replyDisabled}
-                                onPress={() =>
-                                  handleSendAppealReply(appeal.id)
-                                }
+                                onPress={() => handleSendAppealReply(appeal.id)}
                               >
                                 <Text style={styles.actionButtonText}>
                                   {sendingReplyId === appeal.id
@@ -2965,6 +2963,8 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     color: "#3F6B5B",
   },
+
+  /*sdsdsd*/
 
   modalConfirmButton: {
     flex: 1,
