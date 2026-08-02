@@ -2964,7 +2964,8 @@ const styles = StyleSheet.create({
     color: "#3F6B5B",
   },
 
-  /*sdsdsd*/
+  /*sdsdsывывd*/
+  /*sdsdsывывd*/
 
   modalConfirmButton: {
     flex: 1,
