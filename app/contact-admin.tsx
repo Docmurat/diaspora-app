@@ -19,6 +19,7 @@ import {
 } from "react-native";
 import { Glass, Tekmet } from "../components/mingi";
 import { supabase } from "../lib/supabase";
+import { sendAppealMessage } from "../services/moderationService";
 import { getMyProfile } from "../services/profileService";
 
 const glassInputProps = {
@@ -58,6 +59,18 @@ export default function ContactAdminScreen() {
     loadProfile();
   }, []);
 
+  // Новичок, чья анкета ещё в очереди: его сообщение прикрепляется к
+  // заявке на вступление — модератор увидит его прямо в карточке.
+  // Все остальные (одобренные и т.д.) пишут через «Обращения»:
+  // у них карточки в очереди нет, и старый путь терял их сообщения.
+  const isPendingApplicant =
+    profile?.moderation_status === "pending" ||
+    profile?.moderation_status === "needs_revision";
+
+  // Удалённый не видит приложения (только экран «профиль удалён»),
+  // колокольчика и уведомлений у него нет — обещаем связь по телефону.
+  const isDeletedUser = !!profile?.is_deleted;
+
   const formValid = !!phone.trim() && !!message.trim();
 
   const handleSend = async () => {
@@ -75,39 +88,49 @@ export default function ContactAdminScreen() {
       setSending(true);
       setError("");
 
-      const finalMessage = [
-        "Сообщение от пользователя в режиме ожидания.",
-        `Телефон для связи: ${phone.trim()}`,
-        "",
-        message.trim(),
-      ].join("\n");
+      if (isPendingApplicant) {
+        const finalMessage = [
+          "Сообщение от пользователя в режиме ожидания.",
+          `Телефон для связи: ${phone.trim()}`,
+          "",
+          message.trim(),
+        ].join("\n");
 
-      const { error: insertError } = await supabase
-        .from("moderation_messages")
-        .insert({
-          request_type: "invite_request",
-          request_id: profile.id, // ВАЖНОЕ 1: временно используем userId вместо invite_requests.id
-          author_user_id: profile.id,
-          author_role: "user",
-          message: finalMessage,
-          read_by_user: true,
-          read_by_moderator: false,
-        });
+        const { error: insertError } = await supabase
+          .from("moderation_messages")
+          .insert({
+            request_type: "invite_request",
+            request_id: profile.id, // ВАЖНОЕ 1: временно используем userId вместо invite_requests.id
+            author_user_id: profile.id,
+            author_role: "user",
+            message: finalMessage,
+            read_by_user: true,
+            read_by_moderator: false,
+          });
 
-      if (insertError) {
-        throw new Error(insertError.message);
-      }
+        if (insertError) {
+          throw new Error(insertError.message);
+        }
 
-      const { error: updateError } = await supabase
-        .from("users")
-        .update({
-          moderator_has_unread_changes: true,
-          updated_at: new Date().toISOString(),
-        })
-        .eq("id", profile.id);
+        const { error: updateError } = await supabase
+          .from("users")
+          .update({
+            moderator_has_unread_changes: true,
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", profile.id);
 
-      if (updateError) {
-        throw new Error(updateError.message);
+        if (updateError) {
+          throw new Error(updateError.message);
+        }
+      } else {
+        const finalMessage = [
+          `Телефон для связи: ${phone.trim()}`,
+          "",
+          message.trim(),
+        ].join("\n");
+
+        await sendAppealMessage(profile.id, finalMessage);
       }
 
       setSuccess(true);
@@ -138,8 +161,11 @@ export default function ContactAdminScreen() {
           <Tekmet style={styles.tekmet} />
 
           <Text style={styles.text}>
-            Ваше сообщение передано администратору. Ожидайте ответа — оно
-            появится на экране ожидания.
+            {isPendingApplicant
+              ? "Ваше сообщение передано администратору. Ожидайте ответа — оно появится на экране ожидания."
+              : isDeletedUser
+                ? "Ваше обращение передано администрации. Модератор свяжется с вами по указанному телефону."
+                : "Ваше обращение передано администрации. Ответ придёт уведомлением — следите за колокольчиком вверху экрана."}
           </Text>
 
           <TouchableOpacity
@@ -181,8 +207,11 @@ export default function ContactAdminScreen() {
           <Tekmet style={styles.tekmet} />
 
           <Text style={styles.text}>
-            Напишите администратору — сообщение попадёт к модерации вместе с
-            вашей анкетой.
+            {isPendingApplicant
+              ? "Напишите администратору — сообщение попадёт к модерации вместе с вашей анкетой."
+              : isDeletedUser
+                ? "Напишите администрации — модератор свяжется с вами по указанному телефону."
+                : "Напишите администрации — обращение попадёт к модераторам, ответ придёт уведомлением."}
           </Text>
 
           <Glass {...glassInputProps} style={styles.inputWrap}>

@@ -20,6 +20,7 @@ import {
 } from "react-native";
 
 import TopBar from "../../components/TopBar";
+import { formatLocations } from "../../components/locations";
 import { Glass, MingiBackground, Tekmet } from "../../components/mingi";
 import {
   addFavoriteToDb,
@@ -424,8 +425,7 @@ export default function HomeScreen() {
                           {user.profession || "—"}
                         </Text>
                         <Text style={styles.location}>
-                          {user.city || "—"}
-                          {user.country ? `, ${user.country}` : ""}
+                          {formatLocations(user.country, user.city) || "—"}
                         </Text>
                       </View>
                     </TouchableOpacity>

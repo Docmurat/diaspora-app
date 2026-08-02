@@ -21,6 +21,7 @@ import {
   View,
 } from "react-native";
 
+import { firstCity, formatLocations } from "../components/locations";
 import { Glass, Tekmet } from "../components/mingi";
 import { supabase } from "../lib/supabase";
 import {
@@ -32,6 +33,7 @@ import {
   assignModerator,
   blockUser,
   removeModerator,
+  restoreUser,
   softDeleteUser,
 } from "../services/moderationService";
 import { getMyProfile } from "../services/profileService";
@@ -116,6 +118,7 @@ export default function UserProfileScreen() {
   // Удаление подтверждается вторым нажатием: всплывающие окна с «Да/Нет»
   // в браузере не работают, а случайное касание стирает человека.
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [restoring, setRestoring] = useState(false);
   const [blockState, setBlockState] = useState({
     iBlockedUser: false,
     userBlockedMe: false,
@@ -239,6 +242,7 @@ export default function UserProfileScreen() {
   const isAdmin = me?.role === "owner" || me?.role === "moderator";
   const isOwner = me?.role === "owner";
   const isOwnProfile = me?.id === user.id;
+  const isDeletedProfile = !!user.is_deleted;
 
   const invitedByName = user.invited_by
     ? `${user.invited_by.first_name || ""} ${user.invited_by.last_name || ""}`.trim()
@@ -340,6 +344,25 @@ export default function UserProfileScreen() {
         "Ошибка",
         e instanceof Error ? e.message : "Ошибка блокировки",
       );
+    }
+  };
+
+  // Восстановление удалённого профиля — только основатель.
+  const handleRestoreUser = async () => {
+    if (restoring) return;
+
+    try {
+      setRestoring(true);
+      await restoreUser(user.id);
+      await loadProfile();
+      Alert.alert("Готово", "Профиль восстановлен.");
+    } catch (e) {
+      Alert.alert(
+        "Ошибка",
+        e instanceof Error ? e.message : "Ошибка восстановления профиля",
+      );
+    } finally {
+      setRestoring(false);
     }
   };
 
@@ -503,6 +526,42 @@ export default function UserProfileScreen() {
   const renderMenu = () => {
     if (isOwnProfile || isModerationMode) return null;
 
+    // У удалённого профиля действия не нужны: в меню остаётся только
+    // справка (дата регистрации и кто пригласил), и видят её модераторы.
+    if (isDeletedProfile) {
+      if (!isAdmin) return null;
+
+      return (
+        <View style={styles.menuWrap}>
+          <TouchableOpacity
+            style={styles.menuButton}
+            onPress={() => setShowMenu((prev) => !prev)}
+            activeOpacity={0.8}
+          >
+            <Ionicons name="ellipsis-vertical" size={20} color="#4E7364" />
+          </TouchableOpacity>
+
+          {showMenu && (
+            <View style={styles.menuDropdown}>
+              <View style={styles.menuInfoBlock}>
+                <Text style={styles.menuInfoLabel}>ДАТА РЕГИСТРАЦИИ</Text>
+                <Text style={styles.menuInfoText}>
+                  {formatCreatedAt(user.created_at)}
+                </Text>
+              </View>
+
+              <View style={styles.menuInfoBlock}>
+                <Text style={styles.menuInfoLabel}>ПРИГЛАСИЛ</Text>
+                <Text style={styles.menuInfoText}>
+                  {invitedByName || user.invited_by?.email || "Не указано"}
+                </Text>
+              </View>
+            </View>
+          )}
+        </View>
+      );
+    }
+
     return (
       <View style={styles.menuWrap}>
         <TouchableOpacity
@@ -606,6 +665,39 @@ export default function UserProfileScreen() {
   };
 
   const renderActions = () => {
+    // Удалённый профиль: писать и добавлять в избранное нельзя.
+    // Основатель видит кнопку восстановления, остальные — ничего.
+    if (isDeletedProfile && !isOwnProfile) {
+      if (!isOwner) return null;
+
+      return (
+        <View style={styles.actionsRow}>
+          <TouchableOpacity
+            style={[
+              styles.actionFlex,
+              styles.primaryShadow,
+              restoring && styles.disabled,
+            ]}
+            activeOpacity={0.85}
+            disabled={restoring}
+            onPress={handleRestoreUser}
+          >
+            <Glass
+              radius={18}
+              tintColor="rgba(105,183,141,0.92)"
+              borderColor="rgba(255,255,255,0.85)"
+            >
+              <View style={styles.buttonInner}>
+                <Text style={styles.primaryButtonText}>
+                  {restoring ? "Восстановление..." : "Восстановить"}
+                </Text>
+              </View>
+            </Glass>
+          </TouchableOpacity>
+        </View>
+      );
+    }
+
     if (isModerationMode) {
       return (
         <View style={styles.actionsRow}>
@@ -782,7 +874,9 @@ export default function UserProfileScreen() {
           </Text>
 
           <Text style={styles.subInfo}>
-            {[user.category, user.city].filter(Boolean).join(", ") || "—"}
+            {[user.category, firstCity(user.city)]
+              .filter(Boolean)
+              .join(", ") || "—"}
           </Text>
 
           {!!age && <Text style={styles.age}>{age} лет</Text>}
@@ -790,6 +884,12 @@ export default function UserProfileScreen() {
           {isModerationMode && (
             <View style={styles.modeBadge}>
               <Text style={styles.modeBadgeText}>РЕЖИМ МОДЕРАЦИИ</Text>
+            </View>
+          )}
+
+          {isDeletedProfile && (
+            <View style={styles.deletedBadge}>
+              <Text style={styles.deletedBadgeText}>АККАУНТ УДАЛЁН</Text>
             </View>
           )}
 
@@ -828,7 +928,7 @@ export default function UserProfileScreen() {
             onLongPress={() =>
               handleCopyText(
                 "Локация",
-                [user.city, user.country].filter(Boolean).join(", "),
+                formatLocations(user.country, user.city),
               )
             }
             delayLongPress={300}
@@ -836,7 +936,7 @@ export default function UserProfileScreen() {
           >
             <Text style={styles.infoTitle}>ЛОКАЦИЯ</Text>
             <Text style={styles.infoText}>
-              {[user.city, user.country].filter(Boolean).join(", ") || "—"}
+              {formatLocations(user.country, user.city) || "—"}
             </Text>
           </TouchableOpacity>
 
@@ -1099,6 +1199,24 @@ const styles = StyleSheet.create({
 
   modeBadgeText: {
     color: "#3F6B5B",
+    fontSize: 11.5,
+    fontWeight: "600",
+    letterSpacing: 1.4,
+  },
+
+  deletedBadge: {
+    alignSelf: "center",
+    marginTop: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 3,
+    borderRadius: 999,
+    backgroundColor: "rgba(192,91,77,0.08)",
+    borderWidth: 1,
+    borderColor: "rgba(192,91,77,0.45)",
+  },
+
+  deletedBadgeText: {
+    color: "#C05B4D",
     fontSize: 11.5,
     fontWeight: "600",
     letterSpacing: 1.4,

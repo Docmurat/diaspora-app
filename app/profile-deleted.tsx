@@ -4,9 +4,12 @@ import {
   useFonts,
 } from "@expo-google-fonts/philosopher";
 import { router } from "expo-router";
+import { useEffect } from "react";
 import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
 
 import { Glass, MingiBackground, Tekmet } from "../components/mingi";
+import { subscribeToChanges } from "../services/liveService";
+import { getMyProfile } from "../services/profileService";
 import { signOutUser } from "../services/sessionService";
 
 export default function ProfileDeletedScreen() {
@@ -14,6 +17,40 @@ export default function ProfileDeletedScreen() {
     Philosopher_400Regular,
     Philosopher_700Bold,
   });
+
+  // Если основатель восстановил профиль, человек не должен сидеть в
+  // тупике до перезагрузки: слушаем живое обновление и на подстраховку
+  // тихо проверяем статус раз в 7 секунд — и сразу уводим в приложение.
+  useEffect(() => {
+    let cancelled = false;
+
+    const checkRestored = async () => {
+      try {
+        const profile = await getMyProfile();
+
+        if (!cancelled && profile && !profile.is_deleted) {
+          router.replace("/(tabs)");
+        }
+      } catch (e) {
+        console.log("Проверка восстановления профиля:", e);
+      }
+    };
+
+    const interval = setInterval(checkRestored, 7000);
+    const unsubscribe = subscribeToChanges(
+      "profile-deleted-screen",
+      [{ table: "users" }],
+      checkRestored,
+    );
+
+    checkRestored();
+
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+      unsubscribe();
+    };
+  }, []);
 
   if (!fontsLoaded) {
     return <View style={styles.emptyBg} />;
@@ -42,8 +79,8 @@ export default function ProfileDeletedScreen() {
         </Text>
 
         <Text style={styles.hint}>
-          Если вы считаете, что произошла ошибка, напишите администрации —
-          мы разберёмся.
+          Если вы считаете, что произошла ошибка, напишите администрации — мы
+          разберёмся.
         </Text>
 
         <TouchableOpacity

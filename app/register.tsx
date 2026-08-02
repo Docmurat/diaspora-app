@@ -21,6 +21,12 @@ import {
   View,
 } from "react-native";
 import AvatarCropModal, { prepareAvatarSource } from "../components/AvatarCrop";
+import {
+  joinLocations,
+  LocationFields,
+  LocationPair,
+  locationsValid,
+} from "../components/locations";
 import { Glass, Tekmet } from "../components/mingi";
 import { supabase } from "../lib/supabase";
 import { registerUser } from "../services/authService";
@@ -98,8 +104,9 @@ export default function RegisterScreen() {
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
   const [birthDateInput, setBirthDateInput] = useState("");
-  const [country, setCountry] = useState("");
-  const [city, setCity] = useState("");
+  const [locations, setLocations] = useState<LocationPair[]>([
+    { country: "", city: "" },
+  ]);
   const [category, setCategory] = useState("");
   const [profession, setProfession] = useState("");
   const [bio, setBio] = useState("");
@@ -144,8 +151,7 @@ export default function RegisterScreen() {
     !!firstName.trim() &&
     !!lastName.trim() &&
     !!birthDateInput.trim() &&
-    !!country.trim() &&
-    !!city.trim();
+    locationsValid(locations);
 
   const step2Valid = categoryValid && !!profession.trim() && !!bio.trim();
 
@@ -285,8 +291,7 @@ export default function RegisterScreen() {
       !firstName.trim() ||
       !lastName.trim() ||
       !birthDateInput.trim() ||
-      !country.trim() ||
-      !city.trim()
+      !locationsValid(locations)
     ) {
       setError("Заполните все обязательные поля");
       return;
@@ -360,8 +365,8 @@ export default function RegisterScreen() {
         firstName,
         lastName,
         birthDate: normalizedBirthDate,
-        country,
-        city,
+        country: joinLocations(locations).country,
+        city: joinLocations(locations).city,
         category: matchedCategory,
         profession,
         bio,
@@ -545,31 +550,13 @@ export default function RegisterScreen() {
                 />
               </Glass>
 
-              <Glass {...glassInputProps} style={styles.inputWrap}>
-                <TextInput
-                  placeholder="Страна *"
-                  placeholderTextColor="#8FA79A"
-                  style={styles.input}
-                  value={country}
-                  onChangeText={(text) => {
-                    setCountry(text);
-                    setError("");
-                  }}
-                />
-              </Glass>
-
-              <Glass {...glassInputProps} style={styles.inputWrap}>
-                <TextInput
-                  placeholder="Город *"
-                  placeholderTextColor="#8FA79A"
-                  style={styles.input}
-                  value={city}
-                  onChangeText={(text) => {
-                    setCity(text);
-                    setError("");
-                  }}
-                />
-              </Glass>
+              <LocationFields
+                pairs={locations}
+                onChange={(next) => {
+                  setLocations(next);
+                  setError("");
+                }}
+              />
 
               {!!error && <Text style={styles.error}>{error}</Text>}
 

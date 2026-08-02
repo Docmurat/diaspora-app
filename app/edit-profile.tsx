@@ -24,6 +24,13 @@ import {
 import AvatarCropModal, {
   prepareAvatarSource,
 } from "../components/AvatarCrop";
+import {
+  joinLocations,
+  LocationFields,
+  LocationPair,
+  locationsValid,
+  parseLocations,
+} from "../components/locations";
 import { Glass, Tekmet } from "../components/mingi";
 import { supabase } from "../lib/supabase";
 import {
@@ -83,8 +90,9 @@ export default function EditProfileScreen() {
   const [phone, setPhone] = useState("");
   const [phoneVisible, setPhoneVisible] = useState(true);
   const [birthDateInput, setBirthDateInput] = useState("");
-  const [country, setCountry] = useState("");
-  const [city, setCity] = useState("");
+  const [locations, setLocations] = useState<LocationPair[]>([
+    { country: "", city: "" },
+  ]);
   const [category, setCategory] = useState("");
   const [profession, setProfession] = useState("");
   const [bio, setBio] = useState("");
@@ -126,8 +134,7 @@ export default function EditProfileScreen() {
         setPhone(profile.phone || "");
         setPhoneVisible(profile.phone_visible ?? true);
         setBirthDateInput(formatBirthDateForInput(profile.birth_date || ""));
-        setCountry(profile.country || "");
-        setCity(profile.city || "");
+        setLocations(parseLocations(profile.country, profile.city));
         setCategory(profile.category || "");
         setProfession(profile.profession || "");
         setBio(profile.bio || "");
@@ -168,8 +175,7 @@ export default function EditProfileScreen() {
   const formValid =
     !!phone.trim() &&
     !!birthDateInput.trim() &&
-    !!country.trim() &&
-    !!city.trim() &&
+    locationsValid(locations) &&
     categoryValid &&
     !!profession.trim() &&
     !!bio.trim() &&
@@ -216,8 +222,7 @@ export default function EditProfileScreen() {
       !email.trim() ||
       !phone.trim() ||
       !birthDateInput.trim() ||
-      !country.trim() ||
-      !city.trim() ||
+      !locationsValid(locations) ||
       !category.trim() ||
       !profession.trim() ||
       !bio.trim()
@@ -281,8 +286,8 @@ export default function EditProfileScreen() {
           phone,
           phone_visible: phoneVisible,
           birth_date: normalizedBirthDate,
-          country,
-          city,
+          country: joinLocations(locations).country,
+          city: joinLocations(locations).city,
           category: matchedCategory,
           profession,
           bio,
@@ -548,31 +553,13 @@ export default function EditProfileScreen() {
             />
           </Glass>
 
-          <Glass {...glassInputProps} style={styles.inputWrap}>
-            <TextInput
-              placeholder="Страна *"
-              placeholderTextColor="#8FA79A"
-              style={styles.input}
-              value={country}
-              onChangeText={(text) => {
-                setCountry(text);
-                setError("");
-              }}
-            />
-          </Glass>
-
-          <Glass {...glassInputProps} style={styles.inputWrap}>
-            <TextInput
-              placeholder="Город *"
-              placeholderTextColor="#8FA79A"
-              style={styles.input}
-              value={city}
-              onChangeText={(text) => {
-                setCity(text);
-                setError("");
-              }}
-            />
-          </Glass>
+          <LocationFields
+            pairs={locations}
+            onChange={(next) => {
+              setLocations(next);
+              setError("");
+            }}
+          />
 
           <Glass {...glassInputProps} style={styles.inputWrap}>
             <TextInput

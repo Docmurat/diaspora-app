@@ -23,14 +23,20 @@ import { subscribeToChanges } from "../services/liveService";
 import {
   approveNameChangeRequest,
   approveUser,
+  closeAppeal,
+  getAppealMessages,
   getBlockedUsers,
+  getClosedAppeals,
+  getOpenAppeals,
   getPendingComplaints,
   getPendingNameChangeRequests,
   getPendingUsers,
   rejectComplaint,
   rejectNameChangeRequest,
   rejectUser,
+  replyToAppeal,
   resolveComplaint,
+  takeAppeal,
   takeComplaint,
   takeNameChangeRequest,
   takeUserModeration,
@@ -61,6 +67,7 @@ type UnifiedItem = {
     | "invite_request"
     | "name_change"
     | "complaint"
+    | "appeal"
     | "blocked";
   queue: QueueTab;
   createdAt?: string | null;
@@ -104,6 +111,13 @@ const KIND_CHIP: Record<string, { box: object; text: object }> = {
     },
     text: { color: "#C05B4D" },
   },
+  appeal: {
+    box: {
+      backgroundColor: "rgba(113,150,134,0.12)",
+      borderColor: "rgba(113,150,134,0.55)",
+    },
+    text: { color: "#4E7364" },
+  },
   blocked: {
     box: {
       backgroundColor: "rgba(47,74,60,0.10)",
@@ -120,6 +134,7 @@ const NEW_KINDS = [
   { key: "invite_request", label: "Заявки" },
   { key: "name_change", label: "Смена ФИО" },
   { key: "complaint", label: "Жалобы" },
+  { key: "appeal", label: "Обращения" },
 ];
 
 export default function ModerationScreen() {
@@ -149,6 +164,15 @@ export default function ModerationScreen() {
   const [nameRequests, setNameRequests] = useState<any[]>([]);
   const [blockedUsers, setBlockedUsers] = useState<any[]>([]);
   const [complaints, setComplaints] = useState<any[]>([]);
+
+  const [appeals, setAppeals] = useState<any[]>([]);
+  const [closedAppeals, setClosedAppeals] = useState<any[]>([]);
+  const [appealMessages, setAppealMessages] = useState<Record<string, any[]>>(
+    {},
+  );
+  const [replyDrafts, setReplyDrafts] = useState<Record<string, string>>({});
+  const [sendingReplyId, setSendingReplyId] = useState<string | null>(null);
+  const [closingAppealId, setClosingAppealId] = useState<string | null>(null);
 
   const [completedUsers, setCompletedUsers] = useState<any[]>([]);
   const [completedInviteRequests, setCompletedInviteRequests] = useState<any[]>(
@@ -180,6 +204,7 @@ export default function ModerationScreen() {
         { table: "invite_requests" },
         { table: "name_change_requests" },
         { table: "complaints" },
+        { table: "appeals" },
         { table: "moderation_messages" },
         // Запасной и самый надёжный путь: уведомление модератору приходит
         // всегда, а вот сами таблицы заявок при трансляции могут молчать
@@ -211,6 +236,7 @@ export default function ModerationScreen() {
         ...prev,
         [focusId]: true,
         [`registration-${focusId}`]: true,
+        [`appeal-${focusId}`]: true,
       }));
     }
   }, [focusId, focusTab]);
@@ -396,6 +422,8 @@ export default function ModerationScreen() {
         requests,
         blocked,
         complaintsData,
+        openAppeals,
+        finishedAppeals,
         finishedUsers,
         finishedInviteRequests,
         finishedNameRequests,
@@ -407,6 +435,8 @@ export default function ModerationScreen() {
         getPendingNameChangeRequests(),
         getBlockedUsers(),
         getPendingComplaints(),
+        getOpenAppeals(),
+        getClosedAppeals(),
         loadCompletedUsers(),
         loadCompletedInviteRequests(),
         loadCompletedNameRequests(),
@@ -423,12 +453,27 @@ export default function ModerationScreen() {
       setBlockedUsers(blocked);
       setComplaints(complaintsData);
 
+      setAppeals(openAppeals);
+      setClosedAppeals(finishedAppeals);
+
       setCompletedUsers(finishedUsers);
       setCompletedInviteRequests(finishedInviteRequests);
       setCompletedNameRequests(finishedNameRequests);
       setCompletedComplaints(finishedComplaints);
 
       await loadLatestInviteMessages(users);
+
+      try {
+        const appealIds = [
+          ...openAppeals.map((appeal: any) => appeal.id),
+          ...finishedAppeals.map((appeal: any) => appeal.id),
+        ].filter(Boolean);
+
+        setAppealMessages(await getAppealMessages(appealIds));
+      } catch (e) {
+        console.log("Ошибка загрузки переписки обращений:", e);
+        setAppealMessages({});
+      }
     } catch (e) {
       const message =
         e instanceof Error ? e.message : "Ошибка загрузки модерации";
@@ -823,6 +868,59 @@ export default function ModerationScreen() {
     }
   };
 
+  const handleTakeAppeal = async (appealId: string) => {
+    try {
+      await takeAppeal(appealId);
+      await loadData(true);
+    } catch {
+      Alert.alert(
+        "Нельзя взять обращение",
+        "Это обращение уже взял другой модератор.",
+      );
+
+      try {
+        await loadData(true);
+      } catch (refreshError) {
+        console.log("Ошибка обновления обращений:", refreshError);
+      }
+    }
+  };
+
+  const handleCloseAppeal = async (appealId: string) => {
+    if (closingAppealId) return;
+
+    try {
+      setClosingAppealId(appealId);
+      await closeAppeal(appealId);
+      await loadData(true);
+    } catch (e) {
+      const message =
+        e instanceof Error ? e.message : "Не удалось закрыть обращение";
+      Alert.alert("Ошибка", message);
+    } finally {
+      setClosingAppealId(null);
+    }
+  };
+
+  const handleSendAppealReply = async (appealId: string) => {
+    const text = (replyDrafts[appealId] || "").trim();
+
+    if (!text || sendingReplyId) return;
+
+    try {
+      setSendingReplyId(appealId);
+      await replyToAppeal(appealId, text);
+      setReplyDrafts((prev) => ({ ...prev, [appealId]: "" }));
+      await loadData(true);
+    } catch (e) {
+      const message =
+        e instanceof Error ? e.message : "Не удалось отправить ответ";
+      Alert.alert("Ошибка", message);
+    } finally {
+      setSendingReplyId(null);
+    }
+  };
+
   const handleApproveUser = async (user: any) => {
     try {
       await approveUser(user.id);
@@ -1023,6 +1121,28 @@ export default function ModerationScreen() {
     );
   };
 
+  const renderAppealMessages = (appealId: string) => {
+    const messages = appealMessages[String(appealId)] || [];
+    if (messages.length === 0) return null;
+
+    return (
+      <View style={styles.messageBox}>
+        <Text style={styles.messageLabel}>Переписка</Text>
+
+        {messages.map((msg) => (
+          <View key={msg.id} style={styles.messageItem}>
+            <Text style={styles.messageMeta}>
+              {msg.author_role === "user" ? "Участник" : "Модератор"}
+              {"  •  "}
+              {formatShortDate(msg.created_at)}
+            </Text>
+            <Text style={styles.messageText}>{msg.message}</Text>
+          </View>
+        ))}
+      </View>
+    );
+  };
+
   const allItems = useMemo<UnifiedItem[]>(() => {
     const items: UnifiedItem[] = [];
 
@@ -1094,6 +1214,26 @@ export default function ModerationScreen() {
         subtitle:
           `От: ${complaint.reporter?.first_name || ""} ${complaint.reporter?.last_name || ""}`.trim(),
         raw: complaint,
+      });
+    });
+
+    appeals.forEach((appeal) => {
+      const authorName =
+        `${appeal.author?.first_name || ""} ${appeal.author?.last_name || ""}`.trim() ||
+        "Без имени";
+
+      items.push({
+        id: `appeal-${appeal.id}`,
+        kind: "appeal",
+        queue: appeal.assigned_to ? "in_progress" : "new",
+        createdAt: appeal.created_at,
+        assignedTo: appeal.assigned_to,
+        assignedName: appeal.assigned_name,
+        takenAt: appeal.taken_at,
+        badge: "Обращение",
+        title: authorName,
+        subtitle: appeal.author?.email || undefined,
+        raw: appeal,
       });
     });
 
@@ -1218,6 +1358,34 @@ export default function ModerationScreen() {
       });
     });
 
+    closedAppeals.forEach((appeal) => {
+      const authorName =
+        `${appeal.author?.first_name || ""} ${appeal.author?.last_name || ""}`.trim() ||
+        "Без имени";
+
+      items.push({
+        id: `done-appeal-${appeal.id}`,
+        kind: "appeal",
+        queue: "done",
+        createdAt: appeal.created_at,
+        badge: "Обращение",
+        title: authorName,
+        subtitle: appeal.review_note || undefined,
+        raw: {
+          entityId: appeal.id,
+          type: "appeal",
+          title: authorName,
+          subtitle: appeal.review_note || undefined,
+          statusLabel: "Закрыто",
+          moderatorName: appeal.closed_by_name || undefined,
+          completedById: appeal.closed_by || undefined,
+          createdAt: appeal.created_at,
+          startedAt: appeal.taken_at,
+          completedAt: appeal.closed_at,
+        },
+      });
+    });
+
     return items;
   }, [
     me?.id,
@@ -1225,6 +1393,8 @@ export default function ModerationScreen() {
     inviteRequests,
     nameRequests,
     complaints,
+    appeals,
+    closedAppeals,
     blockedUsers,
     completedUsers,
     completedInviteRequests,
@@ -1422,20 +1592,24 @@ export default function ModerationScreen() {
                 </Text>
               )}
 
-              <TouchableOpacity
-                style={styles.secondaryActionFull}
-                onPress={() =>
-                  router.push({
-                    pathname: "/moderation-case-details",
-                    params: {
-                      kind: archiveItem.type,
-                      entityId: archiveItem.entityId,
-                    },
-                  })
-                }
-              >
-                <Text style={styles.secondaryActionFullText}>Изучить</Text>
-              </TouchableOpacity>
+              {archiveItem.type === "appeal" ? (
+                renderAppealMessages(archiveItem.entityId)
+              ) : (
+                <TouchableOpacity
+                  style={styles.secondaryActionFull}
+                  onPress={() =>
+                    router.push({
+                      pathname: "/moderation-case-details",
+                      params: {
+                        kind: archiveItem.type,
+                        entityId: archiveItem.entityId,
+                      },
+                    })
+                  }
+                >
+                  <Text style={styles.secondaryActionFullText}>Изучить</Text>
+                </TouchableOpacity>
+              )}
             </>
           )}
         </TouchableOpacity>
@@ -1739,6 +1913,124 @@ export default function ModerationScreen() {
                       ) : (
                         <Text style={styles.lockedText}>
                           Жалоба уже взята в работу другим модератором
+                        </Text>
+                      )}
+                    </View>
+                  </>
+                );
+              })()}
+
+            {item.kind === "appeal" &&
+              (() => {
+                const appeal = item.raw;
+                const draft = replyDrafts[appeal.id] || "";
+                const replyDisabled =
+                  !draft.trim() || sendingReplyId === appeal.id;
+
+                return (
+                  <>
+                    {renderPersonRow("АВТОР ОБРАЩЕНИЯ", appeal.author, false)}
+
+                    {appeal.author?.is_deleted && (
+                      <Text style={styles.mutedText}>
+                        Участник удалён — возможно, просит восстановления
+                      </Text>
+                    )}
+
+                    {renderAppealMessages(appeal.id)}
+
+                    <View style={styles.assignmentBlock}>
+                      {!appeal.assigned_to ? (
+                        <TouchableOpacity
+                          style={styles.takeAction}
+                          onPress={() => handleTakeAppeal(appeal.id)}
+                        >
+                          <Text style={styles.actionButtonText}>
+                            Взять в работу
+                          </Text>
+                        </TouchableOpacity>
+                      ) : canManageAssignedTask(appeal.assigned_to) ? (
+                        appeal.author?.is_deleted ? (
+                          <>
+                            <Text style={styles.lockedText}>
+                              Участник удалён — ответ в приложении он не
+                              увидит. Свяжитесь по телефону из сообщения.
+                            </Text>
+
+                            <View style={styles.actionRow}>
+                              <TouchableOpacity
+                                style={[
+                                  styles.dangerAction,
+                                  closingAppealId === appeal.id &&
+                                    styles.actionDisabled,
+                                ]}
+                                disabled={closingAppealId === appeal.id}
+                                onPress={() => handleCloseAppeal(appeal.id)}
+                              >
+                                <Text style={styles.actionButtonText}>
+                                  {closingAppealId === appeal.id
+                                    ? "Закрытие..."
+                                    : "Закрыть"}
+                                </Text>
+                              </TouchableOpacity>
+                            </View>
+                          </>
+                        ) : (
+                          <>
+                            <TextInput
+                              style={styles.replyInput}
+                              value={draft}
+                              onChangeText={(text) =>
+                                setReplyDrafts((prev) => ({
+                                  ...prev,
+                                  [appeal.id]: text,
+                                }))
+                              }
+                              placeholder="Написать ответ участнику..."
+                              placeholderTextColor="#8FA79A"
+                              multiline
+                              textAlignVertical="top"
+                            />
+
+                            <View style={styles.actionRow}>
+                              <TouchableOpacity
+                                style={[
+                                  styles.primaryAction,
+                                  replyDisabled && styles.actionDisabled,
+                                ]}
+                                disabled={replyDisabled}
+                                onPress={() =>
+                                  handleSendAppealReply(appeal.id)
+                                }
+                              >
+                                <Text style={styles.actionButtonText}>
+                                  {sendingReplyId === appeal.id
+                                    ? "Отправка..."
+                                    : "Ответить"}
+                                </Text>
+                              </TouchableOpacity>
+
+                              <TouchableOpacity
+                                style={[
+                                  styles.dangerAction,
+                                  closingAppealId === appeal.id &&
+                                    styles.actionDisabled,
+                                ]}
+                                disabled={closingAppealId === appeal.id}
+                                onPress={() => handleCloseAppeal(appeal.id)}
+                              >
+                                <Text style={styles.actionButtonText}>
+                                  {closingAppealId === appeal.id
+                                    ? "Закрытие..."
+                                    : "Закрыть"}
+                                </Text>
+                              </TouchableOpacity>
+                            </View>
+                          </>
+                        )
+                      ) : (
+                        <Text style={styles.lockedText}>
+                          Обращение уже взято в работу другим модератором
                         </Text>
                       )}
                     </View>
@@ -2600,6 +2892,22 @@ const styles = StyleSheet.create({
     fontSize: 13,
     lineHeight: 19,
     color: "#8FA79A",
+  },
+
+  replyInput: {
+    minHeight: 84,
+    borderWidth: 0.75,
+    borderColor: "rgba(93,140,120,0.45)",
+    borderRadius: 16,
+    padding: 12,
+    backgroundColor: "#FFFFFF",
+    fontSize: 14.5,
+    color: "#2F4A3C",
+    textAlignVertical: "top",
+  },
+
+  actionDisabled: {
+    opacity: 0.6,
   },
 
   modalOverlay: {

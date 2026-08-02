@@ -494,7 +494,6 @@ export async function takeUserModeration(userId: string) {
         moderation_completed_at: null,
         moderation_completed_by_name: null,
       moderation_completed_by: null,
-        moderation_completed_by: null,
         updated_at: now,
       })
       .eq("id", userId);
@@ -630,6 +629,37 @@ export async function getModerationTaskCount(): Promise<number> {
     }
   };
 
+  const countAppeals = async (
+    scope: "free" | "mine",
+  ): Promise<number> => {
+    try {
+      let query = supabase
+        .from("appeals")
+        .select("id, author:user_id!inner(is_deleted)", {
+          count: "exact",
+          head: true,
+        })
+        .eq("status", "open");
+
+      // Обращения удалённых считаются только у основателя
+      if (me.role !== "owner") {
+        query = query.eq("author.is_deleted", false);
+      }
+
+      query =
+        scope === "free"
+          ? query.is("assigned_to", null)
+          : query.eq("assigned_to", me.id);
+
+      const { count, error } = await query;
+
+      if (error) return 0;
+      return count || 0;
+    } catch (e) {
+      return 0;
+    }
+  };
+
   const results = await Promise.all([
     // Новое: никем не взятые
     countOf("users", (q: any) =>
@@ -647,6 +677,7 @@ export async function getModerationTaskCount(): Promise<number> {
     countOf("complaints", (q: any) =>
       q.eq("status", "pending").is("assigned_to", null),
     ),
+    countAppeals("free"),
 
     // Мои: в работе
     countOf("users", (q: any) =>
@@ -664,6 +695,7 @@ export async function getModerationTaskCount(): Promise<number> {
     countOf("complaints", (q: any) =>
       q.eq("status", "pending").eq("assigned_to", me.id),
     ),
+    countAppeals("mine"),
 
     // Мои: на доработке
     countOf("users", (q: any) =>
@@ -675,4 +707,279 @@ export async function getModerationTaskCount(): Promise<number> {
   ]);
 
   return results.reduce((sum, value) => sum + value, 0);
+}
+
+// ================== ОБРАЩЕНИЯ К АДМИНИСТРАЦИИ ==================
+// Обращение — переписка участника с модерацией, не привязанная к заявке
+// на вступление. Сообщения живут в moderation_messages с типом "appeal",
+// request_id = id обращения из таблицы appeals.
+
+export async function getOpenAppeals() {
+  const me = await checkAccess();
+
+  let query = supabase
+    .from("appeals")
+    .select(
+      `
+      *,
+      author:user_id!inner (
+        id,
+        first_name,
+        last_name,
+        email,
+        phone,
+        avatar_path,
+        is_deleted
+      ),
+      assigned_moderator:assigned_to (
+        id,
+        first_name,
+        last_name,
+        email
+      )
+    `,
+    )
+    .eq("status", "open");
+
+  // Обращения удалённых участников видит только основатель:
+  // решение о восстановлении принимает он.
+  if (me.role !== "owner") {
+    query = query.eq("author.is_deleted", false);
+  }
+
+  const { data, error } = await query.order("created_at", {
+    ascending: true,
+  });
+
+  if (error) throw new Error(error.message);
+  return data || [];
+}
+
+export async function getClosedAppeals() {
+  const me = await checkAccess();
+
+  let query = supabase
+    .from("appeals")
+    .select(
+      `
+      *,
+      author:user_id!inner (
+        id,
+        first_name,
+        last_name,
+        email,
+        avatar_path,
+        is_deleted
+      )
+    `,
+    )
+    .eq("status", "closed")
+    .not("closed_at", "is", null);
+
+  if (me.role !== "owner") {
+    query = query.eq("author.is_deleted", false);
+  }
+
+  const { data, error } = await query.order("closed_at", {
+    ascending: false,
+  });
+
+  if (error) throw new Error(error.message);
+  return data || [];
+}
+
+export async function takeAppeal(appealId: string) {
+  const me = await checkAccess();
+  const moderatorName =
+    `${me.first_name || ""} ${me.last_name || ""}`.trim() ||
+    "Неизвестный модератор";
+
+  if (me.role === "owner") {
+    const { error } = await supabase
+      .from("appeals")
+      .update({
+        assigned_to: me.id,
+        assigned_name: moderatorName,
+        taken_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", appealId);
+
+    if (error) throw new Error(error.message);
+    return;
+  }
+
+  const { data, error } = await supabase
+    .from("appeals")
+    .update({
+      assigned_to: me.id,
+      assigned_name: moderatorName,
+      taken_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", appealId)
+    .is("assigned_to", null)
+    .select("id")
+    .maybeSingle();
+
+  if (error) throw new Error(error.message);
+
+  if (!data) {
+    throw new Error("Обращение уже взято другим модератором");
+  }
+}
+
+export async function closeAppeal(appealId: string, comment?: string) {
+  const me = await checkAccess();
+  const moderatorName =
+    `${me.first_name || ""} ${me.last_name || ""}`.trim() ||
+    "Неизвестный модератор";
+  const now = new Date().toISOString();
+
+  const { data, error } = await supabase
+    .from("appeals")
+    .update({
+      status: "closed",
+      review_note: comment?.trim() || null,
+      closed_by: me.id,
+      closed_by_name: moderatorName,
+      closed_at: now,
+      assigned_to: null,
+      assigned_name: null,
+      taken_at: null,
+      updated_at: now,
+    })
+    .eq("id", appealId)
+    .select("id")
+    .maybeSingle();
+
+  if (error) throw new Error(error.message);
+
+  if (!data) {
+    throw new Error(
+      "Не удалось закрыть обращение: база не приняла изменение (нет прав или запись не найдена)",
+    );
+  }
+}
+
+export async function replyToAppeal(appealId: string, message: string) {
+  const me = await checkAccess();
+  const text = message.trim();
+
+  if (!text) throw new Error("Введите текст ответа");
+
+  const { error } = await supabase.from("moderation_messages").insert({
+    request_type: "appeal",
+    request_id: appealId,
+    author_user_id: me.id,
+    author_role: "moderator",
+    message: text,
+    read_by_user: false,
+    read_by_moderator: true,
+  });
+
+  if (error) throw new Error(error.message);
+}
+
+export async function getAppealMessages(
+  appealIds: string[],
+): Promise<Record<string, any[]>> {
+  await checkAccess();
+
+  if (appealIds.length === 0) return {};
+
+  const { data, error } = await supabase
+    .from("moderation_messages")
+    .select("*")
+    .eq("request_type", "appeal")
+    .in("request_id", appealIds)
+    .order("created_at", { ascending: true });
+
+  if (error) throw new Error(error.message);
+
+  const map: Record<string, any[]> = {};
+
+  for (const item of data || []) {
+    const key = String(item.request_id);
+    if (!map[key]) map[key] = [];
+    map[key].push(item);
+  }
+
+  return map;
+}
+
+// Отправка обращения самим участником (из contact-admin).
+// Доступ модератора НЕ требуется: пишет обычный человек.
+// Если у него уже есть открытое обращение — сообщение добавляется
+// в него, чтобы переписка не рассыпалась на несколько карточек.
+export async function sendAppealMessage(userId: string, message: string) {
+  const text = message.trim();
+
+  if (!text) throw new Error("Введите текст сообщения");
+
+  const { data: existing, error: findError } = await supabase
+    .from("appeals")
+    .select("id")
+    .eq("user_id", userId)
+    .eq("status", "open")
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (findError) throw new Error(findError.message);
+
+  let appealId: string | undefined = existing?.id;
+
+  if (!appealId) {
+    const { data: created, error: createError } = await supabase
+      .from("appeals")
+      .insert({ user_id: userId })
+      .select("id")
+      .single();
+
+    if (createError) throw new Error(createError.message);
+    appealId = created.id;
+  }
+
+  const { error: msgError } = await supabase
+    .from("moderation_messages")
+    .insert({
+      request_type: "appeal",
+      request_id: appealId,
+      author_user_id: userId,
+      author_role: "user",
+      message: text,
+      read_by_user: true,
+      read_by_moderator: false,
+    });
+
+  if (msgError) throw new Error(msgError.message);
+}
+
+// Восстановление удалённого профиля. Только основатель: он же
+// единственный, кто может удалять, и единственный, кто видит
+// обращения удалённых участников.
+export async function restoreUser(userId: string) {
+  await checkOwnerAccess();
+  const now = new Date().toISOString();
+
+  const { data, error } = await supabase
+    .from("users")
+    .update({
+      is_deleted: false,
+      deleted_by: null,
+      deleted_at: null,
+      updated_at: now,
+    })
+    .eq("id", userId)
+    .select("id")
+    .maybeSingle();
+
+  if (error) throw new Error(error.message);
+
+  if (!data) {
+    throw new Error(
+      "Не удалось восстановить профиль: база не приняла изменение (нет прав или запись не найдена)",
+    );
+  }
 }

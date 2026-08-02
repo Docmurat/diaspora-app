@@ -1,106 +1,135 @@
-import { useEffect, useState } from 'react';
 import {
+  Philosopher_400Regular,
+  Philosopher_700Bold,
+  useFonts,
+} from "@expo-google-fonts/philosopher";
+import * as ImagePicker from "expo-image-picker";
+import { router, useLocalSearchParams } from "expo-router";
+import { StatusBar } from "expo-status-bar";
+import { useEffect, useState } from "react";
+import {
+  ActivityIndicator,
+  Alert,
+  Image,
+  KeyboardAvoidingView,
+  Platform,
   ScrollView,
+  StyleSheet,
+  Switch,
   Text,
   TextInput,
   TouchableOpacity,
-  StyleSheet,
   View,
-  Image,
-  ActivityIndicator,
-  Alert,
-  KeyboardAvoidingView,
-  Platform,
-  Switch,
-} from 'react-native';
-import { router, useLocalSearchParams } from 'expo-router';
-import * as ImagePicker from 'expo-image-picker';
+} from "react-native";
+
+import AvatarCropModal, {
+  prepareAvatarSource,
+} from "../components/AvatarCrop";
 import {
-  formatBirthDateForInput,
-  normalizeBirthDate,
-} from '../store/user';
-import { supabase } from '../lib/supabase';
+  joinLocations,
+  LocationFields,
+  LocationPair,
+  locationsValid,
+  parseLocations,
+} from "../components/locations";
+import { Tekmet } from "../components/mingi";
+import { supabase } from "../lib/supabase";
 import {
-  uploadAvatar,
   isRemoteAvatar,
   removeAllUserAvatars,
-} from '../services/storageService';
+  uploadAvatar,
+} from "../services/storageService";
+import { formatBirthDateForInput, normalizeBirthDate } from "../store/user";
 
 const categories = [
-  'Медицина',
-  'Юриспруденция',
-  'Образование',
-  'IT и технологии',
-  'Бизнес и финансы',
-  'Строительство и недвижимость',
-  'Логистика и транспорт',
-  'Услуги и сервис',
-  'Маркетинг и медиа',
-  'Дизайн и творчество',
-  'Государственная служба',
-  'Наука и исследования',
-  'Спорт и здоровье',
-  'Дом и быт',
-  'Другое',
+  "Медицина",
+  "Юриспруденция",
+  "Образование",
+  "IT и технологии",
+  "Бизнес и финансы",
+  "Строительство и недвижимость",
+  "Логистика и транспорт",
+  "Услуги и сервис",
+  "Маркетинг и медиа",
+  "Дизайн и творчество",
+  "Государственная служба",
+  "Наука и исследования",
+  "Спорт и здоровье",
+  "Дом и быт",
+  "Другое",
 ];
 
+const webNoOutline =
+  Platform.OS === "web" ? ({ outlineStyle: "none" } as any) : {};
+
 export default function ModerationEditProfileScreen() {
+  const [fontsLoaded] = useFonts({
+    Philosopher_400Regular,
+    Philosopher_700Bold,
+  });
+
   const params = useLocalSearchParams();
-  const userId = String(params.userId || '');
+  const userId = String(params.userId || "");
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState('');
+  const [error, setError] = useState("");
   const [showCategoryOptions, setShowCategoryOptions] = useState(false);
 
-  const [firstName, setFirstName] = useState('');
-  const [lastName, setLastName] = useState('');
-  const [phone, setPhone] = useState('');
+  const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("");
+  const [phone, setPhone] = useState("");
   const [phoneVisible, setPhoneVisible] = useState(true);
-  const [birthDateInput, setBirthDateInput] = useState('');
-  const [country, setCountry] = useState('');
-  const [city, setCity] = useState('');
-  const [category, setCategory] = useState('');
-  const [profession, setProfession] = useState('');
-  const [bio, setBio] = useState('');
-  const [telegram, setTelegram] = useState('');
-  const [extraInfo, setExtraInfo] = useState('');
-  const [avatarUri, setAvatarUri] = useState('');
+  const [birthDateInput, setBirthDateInput] = useState("");
+  const [locations, setLocations] = useState<LocationPair[]>([
+    { country: "", city: "" },
+  ]);
+  const [category, setCategory] = useState("");
+  const [profession, setProfession] = useState("");
+  const [bio, setBio] = useState("");
+  const [telegram, setTelegram] = useState("");
+  const [extraInfo, setExtraInfo] = useState("");
+  const [avatarUri, setAvatarUri] = useState("");
   const [avatarMarkedForRemoval, setAvatarMarkedForRemoval] = useState(false);
+  const [cropSource, setCropSource] = useState<{
+    uri: string;
+    width: number;
+    height: number;
+  } | null>(null);
+  const [cropVisible, setCropVisible] = useState(false);
 
   const loadProfile = async () => {
     try {
       setLoading(true);
-      setError('');
+      setError("");
 
       const { data, error } = await supabase
-        .from('users')
-        .select('*')
-        .eq('id', userId)
+        .from("users")
+        .select("*")
+        .eq("id", userId)
         .single();
 
       if (error) {
-        throw new Error(error.message || 'Не удалось загрузить профиль');
+        throw new Error(error.message || "Не удалось загрузить профиль");
       }
 
-      setFirstName(data.first_name || '');
-      setLastName(data.last_name || '');
-      setPhone(data.phone || '');
+      setFirstName(data.first_name || "");
+      setLastName(data.last_name || "");
+      setPhone(data.phone || "");
       setPhoneVisible(data.phone_visible ?? true);
-      setBirthDateInput(formatBirthDateForInput(data.birth_date || ''));
-      setCountry(data.country || '');
-      setCity(data.city || '');
-      setCategory(data.category || '');
-      setProfession(data.profession || '');
-      setBio(data.bio || '');
-      setTelegram(data.telegram || '');
-      setExtraInfo(data.extra_info || '');
-      setAvatarUri(data.avatar_path || '');
+      setBirthDateInput(formatBirthDateForInput(data.birth_date || ""));
+      setLocations(parseLocations(data.country, data.city));
+      setCategory(data.category || "");
+      setProfession(data.profession || "");
+      setBio(data.bio || "");
+      setTelegram(data.telegram || "");
+      setExtraInfo(data.extra_info || "");
+      setAvatarUri(data.avatar_path || "");
       setAvatarMarkedForRemoval(false);
     } catch (e) {
       const message =
-        e instanceof Error ? e.message : 'Не удалось загрузить профиль';
-      Alert.alert('Ошибка', message);
+        e instanceof Error ? e.message : "Не удалось загрузить профиль";
+      Alert.alert("Ошибка", message);
       router.back();
     } finally {
       setLoading(false);
@@ -112,66 +141,71 @@ export default function ModerationEditProfileScreen() {
       loadProfile();
     } else {
       setLoading(false);
-      Alert.alert('Ошибка', 'Не передан userId');
+      Alert.alert("Ошибка", "Не передан userId");
       router.back();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userId]);
 
   const handlePickImage = async () => {
     const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
 
     if (!permission.granted) {
-      setError('Нужно разрешение на доступ к галерее.');
+      setError("Нужно разрешение на доступ к галерее.");
       return;
     }
 
     const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ['images'],
-      allowsEditing: true,
-      aspect: [1, 1],
-      quality: 0.8,
+      mediaTypes: ["images"],
+      allowsEditing: false,
+      quality: 0.9,
     });
 
     if (!result.canceled && result.assets?.length > 0) {
-      setAvatarUri(result.assets[0].uri);
-      setAvatarMarkedForRemoval(false);
-      setError('');
+      const asset = result.assets[0];
+
+      // Сразу уменьшаем фото, чтобы не держать в памяти тяжёлый оригинал
+      const prepared = await prepareAvatarSource(
+        asset.uri,
+        asset.width || 0,
+        asset.height || 0,
+      );
+
+      setCropSource(prepared);
+      setCropVisible(true);
     }
   };
 
   const handleRemoveAvatar = () => {
     setAvatarMarkedForRemoval(true);
-    setError('');
+    setError("");
   };
 
-  const handleSave = async () => {
-    if (
-      !phone.trim() ||
-      !birthDateInput.trim() ||
-      !country.trim() ||
-      !city.trim() ||
-      !category.trim() ||
-      !profession.trim() ||
-      !bio.trim()
-    ) {
-      setError('Заполните все обязательные поля');
-      return;
-    }
+  const formValid =
+    !!firstName.trim() &&
+    !!lastName.trim() &&
+    !!phone.trim() &&
+    !!birthDateInput.trim() &&
+    locationsValid(locations) &&
+    !!category.trim() &&
+    !!profession.trim() &&
+    !!bio.trim();
 
-    if (!firstName.trim() || !lastName.trim()) {
-      setError('Имя и фамилия не могут быть пустыми');
+  const handleSave = async () => {
+    if (!formValid) {
+      setError("Заполните все обязательные поля");
       return;
     }
 
     const normalizedBirthDate = normalizeBirthDate(birthDateInput);
     if (!normalizedBirthDate) {
-      setError('Дата рождения должна быть в формате ДД.ММ.ГГГГ');
+      setError("Дата рождения должна быть в формате ДД.ММ.ГГГГ");
       return;
     }
 
     try {
       setSaving(true);
-      setError('');
+      setError("");
 
       let avatarToSave: string | null = avatarMarkedForRemoval
         ? null
@@ -181,21 +215,21 @@ export default function ModerationEditProfileScreen() {
         await removeAllUserAvatars(userId).catch(() => {});
         avatarToSave = null;
       } else if (avatarUri && !isRemoteAvatar(avatarUri)) {
-  await removeAllUserAvatars(userId);
-  const uploaded = await uploadAvatar(userId, avatarUri);
-  avatarToSave = uploaded.publicUrl;
-}
+        await removeAllUserAvatars(userId);
+        const uploaded = await uploadAvatar(userId, avatarUri);
+        avatarToSave = uploaded.publicUrl;
+      }
 
       const { error: updateError } = await supabase
-        .from('users')
+        .from("users")
         .update({
           first_name: firstName.trim(),
           last_name: lastName.trim(),
           phone: phone.trim(),
           phone_visible: phoneVisible,
           birth_date: normalizedBirthDate,
-          country: country.trim(),
-          city: city.trim(),
+          country: joinLocations(locations).country,
+          city: joinLocations(locations).city,
           category: category.trim(),
           profession: profession.trim(),
           bio: bio.trim(),
@@ -204,17 +238,17 @@ export default function ModerationEditProfileScreen() {
           avatar_path: avatarToSave,
           updated_at: new Date().toISOString(),
         })
-        .eq('id', userId);
+        .eq("id", userId);
 
       if (updateError) {
-        throw new Error(updateError.message || 'Не удалось сохранить профиль');
+        throw new Error(updateError.message || "Не удалось сохранить профиль");
       }
 
-      Alert.alert('Готово', 'Профиль обновлён');
+      Alert.alert("Готово", "Профиль обновлён");
       router.back();
     } catch (e) {
       const message =
-        e instanceof Error ? e.message : 'Не удалось сохранить профиль';
+        e instanceof Error ? e.message : "Не удалось сохранить профиль";
       setError(message);
     } finally {
       setSaving(false);
@@ -223,459 +257,561 @@ export default function ModerationEditProfileScreen() {
 
   const displayedAvatarSource =
     avatarMarkedForRemoval || !avatarUri
-      ? require('../assets/default-avatar.png')
+      ? require("../assets/default-avatar.png")
       : { uri: avatarUri };
 
   const showRemoveButton = !!avatarUri && !avatarMarkedForRemoval;
 
+  if (!fontsLoaded) {
+    return <View style={styles.screen} />;
+  }
+
   if (loading) {
     return (
       <View style={styles.loader}>
-        <ActivityIndicator size="large" color="#2E7D32" />
+        <StatusBar style="dark" />
+        <ActivityIndicator size="large" color="#69B78D" />
       </View>
     );
   }
 
   return (
-    <KeyboardAvoidingView
-      style={styles.keyboardWrap}
-      behavior={Platform.OS === 'ios' ? 'padding' : 'padding'}
-      keyboardVerticalOffset={Platform.OS === 'ios' ? 20 : 0}
-    >
-      <ScrollView
-        contentContainerStyle={styles.container}
-        keyboardShouldPersistTaps="always"
-        keyboardDismissMode="on-drag"
-        showsVerticalScrollIndicator={false}
+    <View style={styles.screen}>
+      <StatusBar style="dark" />
+
+      <KeyboardAvoidingView
+        style={styles.keyboardWrap}
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
       >
-        <Text style={styles.title}>Редактировать профиль</Text>
+        <ScrollView
+          contentContainerStyle={styles.container}
+          keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="on-drag"
+          showsVerticalScrollIndicator={false}
+        >
+          <Text style={styles.title}>Редактирование</Text>
+          <Text style={styles.subtitle}>РЕЖИМ МОДЕРАЦИИ</Text>
 
-        <View style={styles.avatarWrapper}>
-          <TouchableOpacity
-            style={styles.avatarPicker}
-            onPress={handlePickImage}
-            activeOpacity={0.85}
-          >
-            <Image source={displayedAvatarSource} style={styles.avatarImage} />
-          </TouchableOpacity>
+          <Tekmet style={styles.tekmet} />
 
-          {showRemoveButton && (
+          <Text style={styles.requiredNote}>
+            Поля со звёздочкой (*) обязательны
+          </Text>
+
+          <View style={styles.avatarWrapper}>
             <TouchableOpacity
-              style={styles.removeAvatarButton}
-              onPress={handleRemoveAvatar}
-              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+              style={styles.avatarPicker}
+              onPress={handlePickImage}
+              activeOpacity={0.85}
             >
-              <Text style={styles.removeAvatarText}>✕</Text>
+              <Image
+                source={displayedAvatarSource}
+                style={styles.avatarImage}
+              />
             </TouchableOpacity>
-          )}
-        </View>
 
-        <Text style={styles.avatarHint}>
-          Нажмите, чтобы изменить фото профиля
-        </Text>
+            {showRemoveButton && (
+              <TouchableOpacity
+                style={styles.removeAvatarButton}
+                onPress={handleRemoveAvatar}
+                hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+              >
+                <Text style={styles.removeAvatarText}>✕</Text>
+              </TouchableOpacity>
+            )}
+          </View>
 
-        <TextInput
-          placeholder="Имя"
-          style={styles.input}
-          value={firstName}
-          onChangeText={(text) => {
-            setFirstName(text);
-            setError('');
-          }}
-        />
+          <Text style={styles.avatarHint}>
+            Нажмите, чтобы изменить фото профиля
+          </Text>
 
-        <TextInput
-          placeholder="Фамилия"
-          style={styles.input}
-          value={lastName}
-          onChangeText={(text) => {
-            setLastName(text);
-            setError('');
-          }}
-        />
+          <TextInput
+            placeholder="Имя *"
+            placeholderTextColor="#8FA79A"
+            style={styles.input}
+            value={firstName}
+            onChangeText={(text) => {
+              setFirstName(text);
+              setError("");
+            }}
+          />
 
-        <TextInput
-          placeholder="Электронная почта"
-          style={[styles.input, styles.disabledInput]}
-          value="Недоступно для редактирования модератором"
-          editable={false}
-        />
+          <TextInput
+            placeholder="Фамилия *"
+            placeholderTextColor="#8FA79A"
+            style={styles.input}
+            value={lastName}
+            onChangeText={(text) => {
+              setLastName(text);
+              setError("");
+            }}
+          />
 
-        <Text style={styles.hint}>
-          Email нельзя изменять в режиме модерации.
-        </Text>
-
-        <TextInput
-          placeholder="Номер телефона"
-          style={styles.input}
-          value={phone}
-          onChangeText={(text) => {
-            setPhone(text);
-            setError('');
-          }}
-          keyboardType="phone-pad"
-        />
-
-        <View style={styles.switchRow}>
-          <View style={styles.switchTextWrap}>
-            <Text style={styles.switchTitle}>Показывать номер в профиле</Text>
-            <Text style={styles.switchHint}>
-              Выключите, чтобы номер был доступен только администрации
+          <View style={[styles.input, styles.disabledInput]}>
+            <Text style={styles.disabledInputText}>
+              Почта недоступна для редактирования
             </Text>
           </View>
-          <Switch
-            value={phoneVisible}
-            onValueChange={setPhoneVisible}
-            trackColor={{ false: '#d9d9d9', true: '#81C784' }}
-            thumbColor={phoneVisible ? '#2E7D32' : '#f4f4f4'}
+
+          <Text style={styles.hint}>
+            Почту в режиме модерации изменять нельзя.
+          </Text>
+
+          <TextInput
+            placeholder="Номер телефона *"
+            placeholderTextColor="#8FA79A"
+            style={styles.input}
+            value={phone}
+            onChangeText={(text) => {
+              setPhone(text);
+              setError("");
+            }}
+            keyboardType="phone-pad"
           />
-        </View>
 
-        <TextInput
-          placeholder="Дата рождения (ДД.ММ.ГГГГ)"
-          style={styles.input}
-          value={birthDateInput}
-          onChangeText={(text) => {
-            setBirthDateInput(text);
-            setError('');
-          }}
-        />
+          <View style={styles.switchRow}>
+            <View style={styles.switchTextWrap}>
+              <Text style={styles.switchTitle}>
+                Показывать номер в профиле
+              </Text>
+              <Text style={styles.switchHint}>
+                Выключите, чтобы номер был доступен только администрации
+              </Text>
+            </View>
+            <Switch
+              value={phoneVisible}
+              onValueChange={setPhoneVisible}
+              trackColor={{ false: "#DCE7E0", true: "#A8D8C0" }}
+              thumbColor={phoneVisible ? "#69B78D" : "#F4FAF4"}
+            />
+          </View>
 
-        <TextInput
-          placeholder="Страна"
-          style={styles.input}
-          value={country}
-          onChangeText={(text) => {
-            setCountry(text);
-            setError('');
-          }}
-        />
+          <TextInput
+            placeholder="Дата рождения (ДД.ММ.ГГГГ) *"
+            placeholderTextColor="#8FA79A"
+            style={styles.input}
+            value={birthDateInput}
+            onChangeText={(text) => {
+              setBirthDateInput(text);
+              setError("");
+            }}
+          />
 
-        <TextInput
-          placeholder="Город"
-          style={styles.input}
-          value={city}
-          onChangeText={(text) => {
-            setCity(text);
-            setError('');
-          }}
-        />
+          <LocationFields
+            pairs={locations}
+            onChange={(next) => {
+              setLocations(next);
+              setError("");
+            }}
+          />
 
-        <Text style={styles.label}>Сфера деятельности</Text>
+          <TouchableOpacity
+            style={styles.selectField}
+            activeOpacity={0.85}
+            onPress={() => setShowCategoryOptions((prev) => !prev)}
+          >
+            <Text
+              style={[
+                styles.selectFieldText,
+                !category && styles.selectPlaceholderText,
+              ]}
+            >
+              {category || "Сфера деятельности *"}
+            </Text>
+            <Text style={styles.selectArrow}>
+              {showCategoryOptions ? "▲" : "▼"}
+            </Text>
+          </TouchableOpacity>
 
-        <TouchableOpacity
-          style={styles.selectField}
-          onPress={() => setShowCategoryOptions((prev) => !prev)}
-        >
-          <Text
+          {showCategoryOptions && (
+            <View style={styles.optionsBox}>
+              {categories.map((item) => (
+                <TouchableOpacity
+                  key={item}
+                  style={styles.optionItem}
+                  onPress={() => {
+                    setCategory(item);
+                    setShowCategoryOptions(false);
+                    setError("");
+                  }}
+                >
+                  <Text style={styles.optionText}>{item}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          )}
+
+          <TextInput
+            placeholder="Профессия *"
+            placeholderTextColor="#8FA79A"
+            style={styles.input}
+            value={profession}
+            onChangeText={(text) => {
+              setProfession(text);
+              setError("");
+            }}
+          />
+
+          <TextInput
+            placeholder="Чем могу быть полезен *"
+            placeholderTextColor="#8FA79A"
+            style={[styles.input, styles.textArea]}
+            value={bio}
+            onChangeText={(text) => {
+              setBio(text);
+              setError("");
+            }}
+            multiline
+            textAlignVertical="top"
+          />
+
+          <TextInput
+            placeholder="Telegram"
+            placeholderTextColor="#8FA79A"
+            style={styles.input}
+            value={telegram}
+            onChangeText={(text) => {
+              setTelegram(text);
+              setError("");
+            }}
+          />
+
+          <TextInput
+            placeholder="Дополнительные сведения (портфолио, отзывы, ссылки)"
+            placeholderTextColor="#8FA79A"
+            style={[styles.input, styles.textArea]}
+            value={extraInfo}
+            onChangeText={(text) => {
+              setExtraInfo(text);
+              setError("");
+            }}
+            multiline
+            textAlignVertical="top"
+          />
+
+          {!!error && <Text style={styles.error}>{error}</Text>}
+
+          <TouchableOpacity
+            activeOpacity={0.85}
+            onPress={handleSave}
+            disabled={saving || !formValid}
             style={[
-              styles.selectFieldText,
-              !category && styles.selectPlaceholderText,
+              styles.primaryButton,
+              styles.primaryShadow,
+              (saving || !formValid) && styles.disabled,
             ]}
           >
-            {category || 'Выберите сферу деятельности'}
-          </Text>
-          <Text style={styles.selectArrow}>
-            {showCategoryOptions ? '▲' : '▼'}
-          </Text>
-        </TouchableOpacity>
+            <Text style={styles.primaryButtonText}>
+              {saving ? "Сохранение..." : "Сохранить"}
+            </Text>
+          </TouchableOpacity>
 
-        {showCategoryOptions && (
-          <View style={styles.optionsBox}>
-            {categories.map((item) => (
-              <TouchableOpacity
-                key={item}
-                style={styles.optionItem}
-                onPress={() => {
-                  setCategory(item);
-                  setShowCategoryOptions(false);
-                  setError('');
-                }}
-              >
-                <Text style={styles.optionText}>{item}</Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-        )}
-
-        <TextInput
-          placeholder="Профессия"
-          style={styles.input}
-          value={profession}
-          onChangeText={(text) => {
-            setProfession(text);
-            setError('');
-          }}
-        />
-
-        <TextInput
-          placeholder="Чем могу быть полезен"
-          style={[styles.input, styles.textArea]}
-          value={bio}
-          onChangeText={(text) => {
-            setBio(text);
-            setError('');
-          }}
-          multiline
-        />
-
-        <TextInput
-          placeholder="Telegram"
-          style={styles.input}
-          value={telegram}
-          onChangeText={(text) => {
-            setTelegram(text);
-            setError('');
-          }}
-        />
-
-        <TextInput
-          placeholder="Дополнительные сведения (портфолио, отзывы, ссылки)"
-          style={[styles.input, styles.textArea]}
-          value={extraInfo}
-          onChangeText={(text) => {
-            setExtraInfo(text);
-            setError('');
-          }}
-          multiline
-        />
-
-        {!!error && <Text style={styles.error}>{error}</Text>}
-
-        <View style={styles.buttonsRow}>
           <TouchableOpacity
-            style={styles.secondaryButton}
+            activeOpacity={0.85}
             onPress={() =>
               router.replace({
-                pathname: '/user-profile',
+                pathname: "/user-profile",
                 params: {
                   userId,
-                  mode: 'moderation',
+                  mode: "moderation",
                 },
               })
             }
+            style={styles.secondaryButton}
           >
             <Text style={styles.secondaryButtonText}>Отмена</Text>
           </TouchableOpacity>
+        </ScrollView>
+      </KeyboardAvoidingView>
 
-          <TouchableOpacity
-            style={[styles.primaryButton, saving && styles.primaryButtonDisabled]}
-            onPress={handleSave}
-            disabled={saving}
-          >
-            <Text style={styles.primaryButtonText}>
-              {saving ? 'Сохранение...' : 'Сохранить'}
-            </Text>
-          </TouchableOpacity>
-        </View>
-      </ScrollView>
-    </KeyboardAvoidingView>
+      {cropSource && (
+        <AvatarCropModal
+          visible={cropVisible}
+          uri={cropSource.uri}
+          imageWidth={cropSource.width}
+          imageHeight={cropSource.height}
+          onCancel={() => setCropVisible(false)}
+          onDone={(croppedUri) => {
+            setAvatarUri(croppedUri);
+            setAvatarMarkedForRemoval(false);
+            setCropVisible(false);
+            setError("");
+          }}
+        />
+      )}
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
+  screen: {
+    flex: 1,
+    backgroundColor: "#FFFFFF",
+  },
+
   keyboardWrap: {
     flex: 1,
-    backgroundColor: '#fff',
   },
-  container: {
-    padding: 20,
-    paddingTop: 70,
-    paddingBottom: 80,
-    backgroundColor: '#fff',
-  },
+
   loader: {
     flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#fff',
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: "#FFFFFF",
   },
-  avatarWrapper: {
-    alignItems: 'center',
-    justifyContent: 'center',
+
+  container: {
+    paddingHorizontal: 28,
+    paddingTop: 56,
+    paddingBottom: 48,
+  },
+
+  title: {
+    fontFamily: "Philosopher_700Bold",
+    fontSize: 34,
+    color: "#3F6B5B",
+    textAlign: "center",
+  },
+
+  subtitle: {
+    fontFamily: "Philosopher_400Regular",
+    fontSize: 13.5,
+    letterSpacing: 2.5,
+    color: "#719686",
+    textAlign: "center",
+    marginTop: 8,
+  },
+
+  tekmet: {
+    alignSelf: "center",
+    marginTop: 14,
     marginBottom: 10,
-    position: 'relative',
   },
+
+  requiredNote: {
+    fontSize: 12.5,
+    color: "#96AC9E",
+    textAlign: "center",
+    marginBottom: 18,
+  },
+
+  avatarWrapper: {
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 10,
+    position: "relative",
+  },
+
   avatarPicker: {
-    alignSelf: 'center',
+    alignSelf: "center",
   },
+
   avatarImage: {
     width: 110,
     height: 110,
     borderRadius: 55,
+    backgroundColor: "#EAF4EE",
   },
+
   removeAvatarButton: {
-    position: 'absolute',
-    right: 130,
-    top: 40,
-    width: 34,
-    height: 34,
-    borderRadius: 17,
-    backgroundColor: '#f5f5f5',
-    borderWidth: 1,
-    borderColor: '#ddd',
-    alignItems: 'center',
-    justifyContent: 'center',
+    position: "absolute",
+    right: "50%",
+    marginRight: -72,
+    top: 0,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: "#FFFFFF",
+    borderWidth: 0.75,
+    borderColor: "rgba(93,140,120,0.45)",
+    alignItems: "center",
+    justifyContent: "center",
   },
+
   removeAvatarText: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: '#666',
+    fontSize: 16,
+    fontWeight: "600",
+    color: "#7E988B",
   },
-  title: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    marginBottom: 24,
-  },
+
   avatarHint: {
-    textAlign: 'center',
-    color: '#666',
-    fontSize: 13,
+    textAlign: "center",
+    color: "#96AC9E",
+    fontSize: 12.5,
     marginBottom: 18,
   },
-  label: {
-    fontSize: 14,
-    color: '#444',
-    marginBottom: 8,
-    fontWeight: '600',
-  },
+
   input: {
     minHeight: 52,
-    borderWidth: 1,
-    borderColor: '#ddd',
-    borderRadius: 12,
-    paddingHorizontal: 15,
-    marginBottom: 14,
-    backgroundColor: '#fff',
-    fontSize: 15,
-    color: '#111',
+    borderWidth: 0.75,
+    borderColor: "rgba(93,140,120,0.45)",
+    borderRadius: 16,
+    paddingHorizontal: 16,
+    marginBottom: 12,
+    backgroundColor: "rgba(255,255,255,0.95)",
+    fontSize: 15.5,
+    color: "#2F4A3C",
+    ...(Platform.OS === "web" ? ({ outlineStyle: "none" } as any) : {}),
   },
+
   disabledInput: {
-    backgroundColor: '#f4f4f4',
-    color: '#777',
+    backgroundColor: "rgba(93,140,120,0.06)",
+    justifyContent: "center",
   },
+
+  disabledInputText: {
+    fontSize: 15.5,
+    color: "#8FA79A",
+  },
+
   switchRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    borderWidth: 1,
-    borderColor: '#ddd',
-    borderRadius: 12,
-    paddingHorizontal: 15,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    borderWidth: 0.75,
+    borderColor: "rgba(93,140,120,0.45)",
+    borderRadius: 16,
+    paddingHorizontal: 16,
     paddingVertical: 12,
-    backgroundColor: '#fff',
-    marginBottom: 14,
+    backgroundColor: "rgba(255,255,255,0.95)",
+    marginBottom: 12,
   },
+
   switchTextWrap: {
     flex: 1,
     paddingRight: 12,
   },
+
   switchTitle: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#222',
+    fontSize: 14.5,
+    fontWeight: "600",
+    color: "#2F4A3C",
     marginBottom: 4,
   },
+
   switchHint: {
-    fontSize: 12,
-    color: '#666',
+    fontSize: 12.5,
+    color: "#8FA79A",
     lineHeight: 17,
   },
+
   selectField: {
     minHeight: 52,
-    borderWidth: 1,
-    borderColor: '#ddd',
-    borderRadius: 12,
-    paddingHorizontal: 15,
-    marginBottom: 14,
-    backgroundColor: '#fff',
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    borderWidth: 0.75,
+    borderColor: "rgba(93,140,120,0.45)",
+    borderRadius: 16,
+    paddingHorizontal: 16,
+    marginBottom: 12,
+    backgroundColor: "rgba(255,255,255,0.95)",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
   },
+
   selectFieldText: {
     flex: 1,
-    fontSize: 15,
-    color: '#111',
+    fontSize: 15.5,
+    color: "#2F4A3C",
   },
+
   selectPlaceholderText: {
-    color: '#999',
+    color: "#8FA79A",
   },
+
   selectArrow: {
     fontSize: 12,
-    color: '#666',
+    color: "#719686",
     marginLeft: 10,
   },
+
   optionsBox: {
-    borderWidth: 1,
-    borderColor: '#e5e5e5',
-    borderRadius: 12,
-    backgroundColor: '#fff',
-    marginTop: -6,
-    marginBottom: 14,
-    overflow: 'hidden',
+    borderWidth: 0.75,
+    borderColor: "rgba(93,140,120,0.28)",
+    borderRadius: 16,
+    backgroundColor: "#FFFFFF",
+    marginTop: -4,
+    marginBottom: 12,
+    overflow: "hidden",
   },
+
   optionItem: {
     paddingVertical: 12,
-    paddingHorizontal: 15,
-    borderBottomWidth: 1,
-    borderBottomColor: '#f0f0f0',
+    paddingHorizontal: 16,
+    borderBottomWidth: 0.75,
+    borderBottomColor: "rgba(93,140,120,0.14)",
   },
+
   optionText: {
     fontSize: 15,
-    color: '#333',
+    color: "#4E7364",
   },
+
   textArea: {
     height: 110,
     paddingTop: 14,
-    textAlignVertical: 'top',
+    paddingBottom: 14,
+    textAlignVertical: "top",
   },
+
   hint: {
-    fontSize: 13,
-    color: '#666',
+    fontSize: 12.5,
+    color: "#96AC9E",
     marginTop: -4,
-    marginBottom: 14,
-    lineHeight: 18,
+    marginBottom: 12,
+    marginLeft: 4,
+    lineHeight: 17,
   },
+
   error: {
-    color: '#c62828',
+    color: "#C05B4D",
     marginBottom: 12,
     fontSize: 14,
+    textAlign: "center",
   },
-  buttonsRow: {
-    flexDirection: 'row',
-    marginTop: 10,
-    marginBottom: 30,
-  },
-  secondaryButton: {
-    flex: 1,
-    borderWidth: 1.5,
-    borderColor: '#2E7D32',
-    padding: 16,
-    borderRadius: 12,
-    marginRight: 8,
-    backgroundColor: '#fff',
-  },
-  secondaryButtonText: {
-    color: '#2E7D32',
-    textAlign: 'center',
-    fontWeight: 'bold',
-    fontSize: 16,
-  },
+
   primaryButton: {
-    flex: 1,
-    backgroundColor: '#2E7D32',
-    padding: 16,
-    borderRadius: 12,
-    marginLeft: 8,
+    backgroundColor: "rgba(105,183,141,0.92)",
+    paddingVertical: 16,
+    borderRadius: 18,
+    alignItems: "center",
+    justifyContent: "center",
+    minHeight: 52,
+    marginTop: 8,
   },
-  primaryButtonDisabled: {
-    opacity: 0.7,
+
+  primaryShadow: {
+    shadowColor: "#69B78D",
+    shadowOpacity: 0.45,
+    shadowRadius: 14,
+    shadowOffset: { width: 0, height: 8 },
+    elevation: 6,
   },
+
   primaryButtonText: {
-    color: '#fff',
-    textAlign: 'center',
-    fontWeight: 'bold',
+    color: "#FFFFFF",
     fontSize: 16,
+    fontWeight: "600",
+  },
+
+  secondaryButton: {
+    backgroundColor: "#FFFFFF",
+    borderWidth: 0.75,
+    borderColor: "rgba(93,140,120,0.45)",
+    paddingVertical: 16,
+    borderRadius: 18,
+    alignItems: "center",
+    justifyContent: "center",
+    minHeight: 52,
+    marginTop: 12,
+  },
+
+  secondaryButtonText: {
+    color: "#3F6B5B",
+    fontSize: 16,
+    fontWeight: "600",
+  },
+
+  disabled: {
+    opacity: 0.7,
   },
 });
