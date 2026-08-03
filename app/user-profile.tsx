@@ -20,6 +20,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { firstCity, formatLocations } from "../components/locations";
 import { Glass, Tekmet } from "../components/mingi";
@@ -95,6 +96,7 @@ function buildOpenableLink(value: string) {
 }
 
 export default function UserProfileScreen() {
+  const insets = useSafeAreaInsets();
   const [fontsLoaded] = useFonts({
     Philosopher_400Regular,
     Philosopher_700Bold,
@@ -276,18 +278,15 @@ export default function UserProfileScreen() {
 
   const showTelegram = isModerationMode
     ? !!user.telegram
-    : !!user.telegram &&
-      (!restrictedByTargetUser || canBypassBlock);
+    : !!user.telegram && (!restrictedByTargetUser || canBypassBlock);
 
   const showEmail = isModerationMode
     ? !!user.email
-    : !!user.email &&
-      (!restrictedByTargetUser || canBypassBlock);
+    : !!user.email && (!restrictedByTargetUser || canBypassBlock);
 
   const showAdditional = isModerationMode
     ? !!user.extra_info
-    : !!user.extra_info &&
-      (!restrictedByTargetUser || canBypassBlock);
+    : !!user.extra_info && (!restrictedByTargetUser || canBypassBlock);
 
   const handleCopyText = async (label: string, value?: string | null) => {
     const text = value?.trim();
@@ -644,7 +643,10 @@ export default function UserProfileScreen() {
 
             {!isAdmin && (
               <>
-                <TouchableOpacity style={styles.menuItem} onPress={handleReport}>
+                <TouchableOpacity
+                  style={styles.menuItem}
+                  onPress={handleReport}
+                >
                   <Text style={styles.menuItemText}>Пожаловаться</Text>
                 </TouchableOpacity>
 
@@ -818,7 +820,7 @@ export default function UserProfileScreen() {
         >
           <Ionicons
             name={isFavorite ? "bookmark" : "bookmark-outline"}
-            size={22}
+            size={19}
             color="#69B78D"
           />
         </TouchableOpacity>
@@ -832,7 +834,10 @@ export default function UserProfileScreen() {
         <StatusBar style="dark" />
 
         <ScrollView
-          contentContainerStyle={styles.container}
+          contentContainerStyle={[
+            styles.container,
+            { paddingTop: insets.top + 10 },
+          ]}
           showsVerticalScrollIndicator={false}
         >
           <View style={styles.topRow}>
@@ -848,9 +853,9 @@ export default function UserProfileScreen() {
               style={styles.menuOverlay}
               activeOpacity={1}
               onPress={() => {
-            setShowMenu(false);
-            setConfirmDelete(false);
-          }}
+                setShowMenu(false);
+                setConfirmDelete(false);
+              }}
             />
           )}
 
@@ -874,9 +879,8 @@ export default function UserProfileScreen() {
           </Text>
 
           <Text style={styles.subInfo}>
-            {[user.category, firstCity(user.city)]
-              .filter(Boolean)
-              .join(", ") || "—"}
+            {[user.category, firstCity(user.city)].filter(Boolean).join(", ") ||
+              "—"}
           </Text>
 
           {!!age && <Text style={styles.age}>{age} лет</Text>}
@@ -981,7 +985,9 @@ export default function UserProfileScreen() {
           {showAdditional && (
             <TouchableOpacity
               style={styles.infoBlock}
-              onLongPress={() => handleCopyText("Дополнительно", user.extra_info)}
+              onLongPress={() =>
+                handleCopyText("Дополнительно", user.extra_info)
+              }
               delayLongPress={300}
               activeOpacity={1}
             >
@@ -1051,7 +1057,6 @@ const styles = StyleSheet.create({
 
   container: {
     paddingHorizontal: 20,
-    paddingTop: 56,
     paddingBottom: 40,
     flexGrow: 1,
   },
@@ -1060,7 +1065,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    marginBottom: 8,
+    marginBottom: 6,
     zIndex: 20,
   },
 
@@ -1155,9 +1160,9 @@ const styles = StyleSheet.create({
   },
 
   avatar: {
-    width: 128,
-    height: 128,
-    borderRadius: 64,
+    width: 96,
+    height: 96,
+    borderRadius: 48,
     backgroundColor: "#EAF4EE",
     borderWidth: 1,
     borderColor: "rgba(93,140,120,0.28)",
@@ -1165,10 +1170,10 @@ const styles = StyleSheet.create({
 
   name: {
     fontFamily: "Philosopher_700Bold",
-    fontSize: 26,
+    fontSize: 21,
     color: "#3F6B5B",
     textAlign: "center",
-    marginTop: 14,
+    marginTop: 10,
   },
 
   subInfo: {
@@ -1266,22 +1271,22 @@ const styles = StyleSheet.create({
   },
 
   buttonInner: {
-    paddingVertical: 14,
+    paddingVertical: 10,
     paddingHorizontal: 12,
     alignItems: "center",
     justifyContent: "center",
-    minHeight: 50,
+    minHeight: 42,
   },
 
   primaryButtonText: {
     color: "#FFFFFF",
-    fontSize: 15.5,
+    fontSize: 14.5,
     fontWeight: "600",
   },
 
   secondaryButtonText: {
     color: "#3F6B5B",
-    fontSize: 15.5,
+    fontSize: 14.5,
     fontWeight: "600",
   },
 
@@ -1290,9 +1295,9 @@ const styles = StyleSheet.create({
   },
 
   bookmarkButton: {
-    width: 52,
-    height: 52,
-    borderRadius: 18,
+    width: 42,
+    height: 42,
+    borderRadius: 14,
     borderWidth: 0.75,
     borderColor: "rgba(93,140,120,0.45)",
     backgroundColor: "#FFFFFF",

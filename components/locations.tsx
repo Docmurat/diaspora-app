@@ -6,7 +6,14 @@
 // продолжает находить и по городу, и по стране. Порядок гарантирует
 // интерфейс ввода (LocationFields) — руками эти поля никто не редактирует.
 
-import { Platform, StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
+import {
+  Platform,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+} from "react-native";
 
 export type LocationPair = { country: string; city: string };
 
@@ -160,9 +167,7 @@ export function LocationFields({
         activeOpacity={0.8}
         style={s.addButton}
       >
-        <Text style={s.addButtonText}>
-          ＋ Живу ещё в одной стране / городе
-        </Text>
+        <Text style={s.addButtonText}>＋ Живу ещё в одной стране / городе</Text>
       </TouchableOpacity>
     </View>
   );

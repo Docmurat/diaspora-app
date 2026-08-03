@@ -239,12 +239,21 @@ export function MingiBackground({
   const y3 = useDrift(8800, 100);
 
   // На вебе клавиатура телефона сжимает страницу, и фон «подъезжал» вверх.
-  // Запоминаем высоту экрана В ПИКСЕЛЯХ при загрузке и держим слой пятен
-  // этой высоты. Сжатие от клавиатуры (высота уменьшилась, ширина та же)
-  // игнорируем; поворот экрана (ширина изменилась) — принимаем честно.
+  // Замораживаем размеры слоя пятен В ПИКСЕЛЯХ при загрузке. Высоту берём
+  // с запасом — полную высоту экрана устройства (браузер на телефоне то
+  // прячет, то показывает адресную строку, и окно «дышит»; экран — нет).
+  // Пересчитываем только при повороте экрана (изменилась ширина).
+  const measureWeb = () => ({
+    w: window.innerWidth,
+    h: Math.max(
+      window.innerHeight,
+      (typeof window.screen !== "undefined" && window.screen.height) || 0,
+    ),
+  });
+
   const [webSize, setWebSize] = useState(() =>
     Platform.OS === "web" && typeof window !== "undefined"
-      ? { w: window.innerWidth, h: window.innerHeight }
+      ? measureWeb()
       : null,
   );
 
@@ -253,10 +262,9 @@ export function MingiBackground({
 
     const onResize = () => {
       setWebSize((prev) => {
-        const w = window.innerWidth;
-        const h = window.innerHeight;
-        if (!prev) return { w, h };
-        if (w !== prev.w) return { w, h }; // поворот экрана
+        const next = measureWeb();
+        if (!prev) return next;
+        if (next.w !== prev.w) return next; // поворот экрана
         // Любые изменения одной лишь высоты (клавиатура, адресная
         // строка браузера) игнорируем — фон стоит как вкопанный.
         return prev;

@@ -571,7 +571,7 @@ const styles = StyleSheet.create({
   listHeader: {
     paddingHorizontal: 24,
     paddingTop: 4,
-    paddingBottom: 2,
+    paddingBottom: 10,
   },
 
   footerTekmet: {
@@ -658,18 +658,14 @@ const styles = StyleSheet.create({
   },
 
   card: {
-    marginTop: 12,
-    backgroundColor: "#FFFFFF",
-    borderRadius: 18,
-    borderWidth: 0.75,
-    borderColor: "rgba(93,140,120,0.28)",
-    overflow: "hidden",
+    borderBottomWidth: 0.75,
+    borderBottomColor: "rgba(93,140,120,0.18)",
   },
 
   cardContent: {
     flexDirection: "row",
     alignItems: "center",
-    padding: 14,
+    paddingVertical: 16,
   },
 
   userMain: {
@@ -692,8 +688,8 @@ const styles = StyleSheet.create({
   },
 
   name: {
-    fontFamily: "Philosopher_700Bold",
-    fontSize: 17.5,
+    fontSize: 16.5,
+    fontWeight: "600",
     color: "#3F6B5B",
   },
 
