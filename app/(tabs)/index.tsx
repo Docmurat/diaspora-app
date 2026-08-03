@@ -5,10 +5,19 @@ import {
 } from "@expo-google-fonts/philosopher";
 import { Feather, Ionicons } from "@expo/vector-icons";
 import { router, useFocusEffect, useNavigation } from "expo-router";
-import { ReactNode, useCallback, useEffect, useMemo, useState } from "react";
+import {
+  ReactNode,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import {
   ActivityIndicator,
   Alert,
+  Animated,
+  Easing,
   Image,
   Platform,
   ScrollView,
@@ -18,6 +27,8 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import TopBar from "../../components/TopBar";
 import { formatLocations } from "../../components/locations";
@@ -32,11 +43,6 @@ import {
   getApprovedUsers,
 } from "../../services/userDirectoryService";
 import { getAgeFromBirthDate } from "../../store/user";
-
-// Пирамида новых участников: ряды сверху вниз, широкое основание —
-// у строки поиска, вершина — к кнопкам внизу.
-const PYRAMID_ROWS = [4, 3];
-const NEW_MEMBERS_COUNT = PYRAMID_ROWS.reduce((sum, n) => sum + n, 0);
 
 type PreparedUser = DirectoryUser & {
   fullName: string;
@@ -66,6 +72,7 @@ function ScreenBackground({
 }
 
 export default function HomeScreen() {
+  const insets = useSafeAreaInsets();
   const [fontsLoaded] = useFonts({
     Philosopher_400Regular,
     Philosopher_700Bold,
@@ -159,22 +166,6 @@ export default function HomeScreen() {
   // Список виден при поиске и всегда в режиме «Мои»
   const showList = isSearching || mode === "saved";
 
-  // Список уже приходит из базы свежими вперёд.
-  // Разрезаем его на ряды пирамиды: 4, затем 3, затем 2, затем 1.
-  const newMemberRows = useMemo(() => {
-    const newest = users.slice(0, NEW_MEMBERS_COUNT);
-    const rows: PreparedUser[][] = [];
-    let cursor = 0;
-
-    for (const size of PYRAMID_ROWS) {
-      if (cursor >= newest.length) break;
-      rows.push(newest.slice(cursor, cursor + size));
-      cursor += size;
-    }
-
-    return rows;
-  }, [users]);
-
   const openUser = (user: PreparedUser) => {
     router.push({
       pathname: "/user-profile",
@@ -205,26 +196,59 @@ export default function HomeScreen() {
     setIsSearching(true);
   };
 
-  const handleReset = () => {
-    setQuery("");
-    setIsSearching(false);
-  };
-
   const toggleFavorite = async (user: PreparedUser) => {
-    try {
-      const isFav = favoriteIds.includes(user.id);
+    const isFav = favoriteIds.includes(user.id);
 
+    // Сначала мгновенно меняем закладку на экране, потом сообщаем серверу.
+    // Если сервер откажет — возвращаем как было.
+    if (isFav) {
+      setFavoriteIds((prev) => prev.filter((id) => id !== user.id));
+    } else {
+      setFavoriteIds((prev) => [...prev, user.id]);
+    }
+
+    try {
       if (isFav) {
         await removeFavoriteFromDb(user.id);
-        setFavoriteIds((prev) => prev.filter((id) => id !== user.id));
       } else {
         await addFavoriteToDb(user.id);
-        setFavoriteIds((prev) => [...prev, user.id]);
       }
     } catch (e) {
       console.log("Ошибка изменения избранного:", e);
+      if (isFav) {
+        setFavoriteIds((prev) => [...prev, user.id]);
+      } else {
+        setFavoriteIds((prev) => prev.filter((id) => id !== user.id));
+      }
     }
   };
+
+  // Скользящий штрих под вкладками «Все / Избранные»: замеряем ширину
+  // полосы вкладок и плавно перевозим штрих под активное слово.
+  // ВАЖНО: блок стоит ДО ранних выходов (fontsLoaded / loading) —
+  // таково правило React для подобных блоков.
+  const [tabsWidth, setTabsWidth] = useState(0);
+  const underlineX = useRef(new Animated.Value(0)).current;
+  const underlineReady = useRef(false);
+
+  useEffect(() => {
+    if (!tabsWidth) return;
+    const half = tabsWidth / 2;
+    const target = (mode === "saved" ? half : 0) + half / 2 - 40;
+
+    if (!underlineReady.current) {
+      underlineReady.current = true;
+      underlineX.setValue(target);
+      return;
+    }
+
+    Animated.timing(underlineX, {
+      toValue: target,
+      duration: 220,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: true,
+    }).start();
+  }, [mode, tabsWidth, underlineX]);
 
   if (!fontsLoaded) {
     return <View style={styles.whiteScreen} />;
@@ -240,156 +264,161 @@ export default function HomeScreen() {
     );
   }
 
+  // Строка поиска с фильтрами. На главной живёт внутри страницы,
+  // в режиме списка — прибита сверху и не зависит от прокрутки.
+  const searchBar = (
+    <>
+      <View style={styles.searchRow}>
+        <Glass {...glassInputProps} style={styles.inputWrap}>
+          <View style={styles.inputInner}>
+            <TextInput
+              placeholder="Например: стоматолог Москва"
+              placeholderTextColor="#8FA79A"
+              style={styles.input}
+              value={query}
+              onChangeText={setQuery}
+              onSubmitEditing={handleSearch}
+              underlineColorAndroid="transparent"
+              returnKeyType="search"
+            />
+
+            {showList && query.length > 0 && (
+              <TouchableOpacity
+                onPress={() => setQuery("")}
+                activeOpacity={0.7}
+                style={styles.clearButton}
+                hitSlop={{ top: 12, bottom: 12, left: 8, right: 8 }}
+              >
+                <Ionicons name="close" size={18} color="#8FA79A" />
+              </TouchableOpacity>
+            )}
+          </View>
+        </Glass>
+
+        {!showList && (
+          <TouchableOpacity
+            style={styles.searchButtonShadow}
+            onPress={handleSearch}
+            activeOpacity={0.85}
+          >
+            <Glass
+              radius={16}
+              tintColor="rgba(105,183,141,0.92)"
+              borderColor="rgba(255,255,255,0.85)"
+            >
+              <View style={styles.searchButtonInner}>
+                <Ionicons name="arrow-forward" size={18} color="#FFFFFF" />
+              </View>
+            </Glass>
+          </TouchableOpacity>
+        )}
+      </View>
+
+      {showList && (
+        <View
+          style={styles.modeRow}
+          onLayout={(e) => setTabsWidth(e.nativeEvent.layout.width)}
+        >
+          <TouchableOpacity
+            activeOpacity={0.7}
+            onPress={() => {
+              setQuery("");
+              setMode("all");
+            }}
+            style={styles.modeTab}
+            hitSlop={{ top: 8, bottom: 8 }}
+          >
+            <Text
+              style={[
+                styles.modeTabText,
+                mode === "all" && styles.modeTabTextActive,
+              ]}
+            >
+              Все
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            activeOpacity={0.7}
+            onPress={() => {
+              setQuery("");
+              setMode("saved");
+            }}
+            style={styles.modeTab}
+            hitSlop={{ top: 8, bottom: 8 }}
+          >
+            <Text
+              style={[
+                styles.modeTabText,
+                mode === "saved" && styles.modeTabTextActive,
+              ]}
+            >
+              Избранные
+            </Text>
+          </TouchableOpacity>
+
+          <Animated.View
+            style={[
+              styles.modeUnderline,
+              tabsWidth === 0 && { opacity: 0 },
+              { transform: [{ translateX: underlineX }] },
+            ]}
+          />
+        </View>
+      )}
+    </>
+  );
+
   return (
     <ScreenBackground alive={!showList}>
-      <TopBar transparent />
+      {showList && <TopBar transparent />}
 
       {!showList && (
         <TouchableOpacity
           onPress={handleSupport}
           activeOpacity={0.85}
-          style={styles.supportButton}
+          style={[styles.supportButton, { marginTop: insets.top + 16 }]}
         >
           <Glass
-            radius={18}
-            tintColor="rgba(255,255,255,0.9)"
-            borderColor="rgba(105,183,141,0.75)"
+            radius={999}
+            tintColor="rgba(247,205,216,0.55)"
+            borderColor="rgba(219,143,163,0.65)"
             borderWidth={1}
           >
             <View style={styles.supportInner}>
-              <Ionicons name="heart-outline" size={19} color="#3F6B5B" />
+              <Ionicons name="heart-outline" size={16} color="#A85A72" />
               <Text style={styles.supportText}>Поддержать проект</Text>
             </View>
           </Glass>
         </TouchableOpacity>
       )}
 
-      {!showList && users.length > 0 && (
-        <View style={styles.counterRow}>
-          <Text style={styles.counterLabel}>Нас уже</Text>
-          <Text style={styles.counterValue}>{users.length}</Text>
-        </View>
-      )}
+      {showList && <View style={styles.listHeader}>{searchBar}</View>}
 
       <ScrollView
-        stickyHeaderIndices={[1]}
-        contentContainerStyle={styles.container}
+        contentContainerStyle={[
+          styles.container,
+          showList && styles.containerList,
+        ]}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
-        <View style={!showList && styles.halfTop}>
-          <Text style={styles.title}>Поиск</Text>
-          <Text style={styles.subtitle}>МИНГИ·ТАУ</Text>
+        {!showList && (
+          <View style={styles.halfTop}>
+            <Text style={styles.title}>Поиск</Text>
+            <Text style={styles.subtitle}>МИНГИ·ТАУ</Text>
 
-          <Tekmet style={styles.tekmet} />
-        </View>
-
-        <View style={[styles.stickyBar, showList && styles.stickyBarSolid]}>
-          <View style={styles.searchRow}>
-            <Glass {...glassInputProps} style={styles.inputWrap}>
-              <TextInput
-                placeholder="Например: стоматолог Москва"
-                placeholderTextColor="#8FA79A"
-                style={styles.input}
-                value={query}
-                onChangeText={setQuery}
-                onSubmitEditing={handleSearch}
-                underlineColorAndroid="transparent"
-                returnKeyType="search"
-              />
-            </Glass>
-
-            <TouchableOpacity
-              style={styles.searchButtonShadow}
-              onPress={handleSearch}
-              activeOpacity={0.85}
-            >
-              <Glass
-                radius={16}
-                tintColor="rgba(105,183,141,0.92)"
-                borderColor="rgba(255,255,255,0.85)"
-              >
-                <View style={styles.searchButtonInner}>
-                  <Ionicons name="arrow-forward" size={20} color="#FFFFFF" />
-                </View>
-              </Glass>
-            </TouchableOpacity>
+            <Tekmet style={styles.tekmet} />
           </View>
+        )}
 
-          {showList && (
-            <View style={styles.modeRow}>
-              <TouchableOpacity
-                activeOpacity={0.85}
-                onPress={() => setMode("all")}
-                style={[styles.pill, mode === "all" && styles.pillActive]}
-              >
-                <Text
-                  style={[
-                    styles.pillText,
-                    mode === "all" && styles.pillTextActive,
-                  ]}
-                >
-                  Все
-                </Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                activeOpacity={0.85}
-                onPress={() => setMode("saved")}
-                style={[styles.pill, mode === "saved" && styles.pillActive]}
-              >
-                <Text
-                  style={[
-                    styles.pillText,
-                    mode === "saved" && styles.pillTextActive,
-                  ]}
-                >
-                  Избранные
-                </Text>
-              </TouchableOpacity>
-
-              {isSearching && (
-                <TouchableOpacity
-                  style={styles.resetButton}
-                  onPress={handleReset}
-                  activeOpacity={0.8}
-                >
-                  <Text style={styles.resetButtonText}>Сбросить поиск</Text>
-                </TouchableOpacity>
-              )}
-            </View>
-          )}
-        </View>
+        {!showList && <View style={styles.stickyBar}>{searchBar}</View>}
 
         <View style={!showList && styles.halfBottom}>
-          {!showList && newMemberRows.length > 0 && (
-            <View style={styles.newBlock}>
-              <Text style={styles.blockLabel}>НОВЫЕ УЧАСТНИКИ</Text>
-
-              {newMemberRows.map((row, rowIndex) => (
-                <View key={rowIndex} style={styles.pyramidRow}>
-                  {row.map((user) => (
-                    <TouchableOpacity
-                      key={user.id}
-                      style={styles.newItem}
-                      activeOpacity={0.85}
-                      onPress={() => openUser(user)}
-                    >
-                      <Image
-                        source={
-                          user.avatar_path
-                            ? { uri: user.avatar_path }
-                            : require("../../assets/default-avatar.png")
-                        }
-                        style={styles.newAvatar}
-                      />
-                      <Text style={styles.newName} numberOfLines={1}>
-                        {user.first_name}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-              ))}
+          {!showList && users.length > 0 && (
+            <View style={styles.counterRow}>
+              <Text style={styles.counterLabel}>Нас уже</Text>
+              <Text style={styles.counterValue}>{users.length}</Text>
             </View>
           )}
 
@@ -434,6 +463,7 @@ export default function HomeScreen() {
                       style={styles.favoriteButton}
                       onPress={() => toggleFavorite(user)}
                       activeOpacity={0.7}
+                      hitSlop={{ top: 14, bottom: 14, left: 14, right: 14 }}
                     >
                       <Ionicons
                         name={
@@ -457,12 +487,16 @@ export default function HomeScreen() {
                 : "Ничего не найдено"}
             </Text>
           )}
+
+          {showList && <Tekmet style={styles.footerTekmet} />}
+
+          {!showList && (
+            <Text style={styles.founder}>
+              Основатель проекта — Мурат Курджиев
+            </Text>
+          )}
         </View>
       </ScrollView>
-
-      {!showList && (
-        <Text style={styles.founder}>Основатель проекта — Мурат Курджиев</Text>
-      )}
 
       {showList && (
         <TouchableOpacity
@@ -471,12 +505,12 @@ export default function HomeScreen() {
           onPress={() => router.push("/invites" as any)}
         >
           <Glass
-            radius={31}
+            radius={22}
             tintColor="rgba(105,183,141,0.92)"
             borderColor="rgba(255,255,255,0.85)"
           >
             <View style={styles.fabInner}>
-              <Feather name="user-plus" size={24} color="#FFFFFF" />
+              <Feather name="user-plus" size={18} color="#FFFFFF" />
             </View>
           </Glass>
         </TouchableOpacity>
@@ -502,6 +536,10 @@ const styles = StyleSheet.create({
     paddingTop: 8,
     paddingBottom: 40,
     flexGrow: 1,
+  },
+
+  containerList: {
+    paddingTop: 0,
   },
 
   title: {
@@ -530,9 +568,16 @@ const styles = StyleSheet.create({
     paddingBottom: 8,
   },
 
-  stickyBarSolid: {
-    backgroundColor: "#FFFFFF",
-    paddingTop: 8,
+  listHeader: {
+    paddingHorizontal: 24,
+    paddingTop: 4,
+    paddingBottom: 2,
+  },
+
+  footerTekmet: {
+    alignSelf: "center",
+    marginTop: 26,
+    marginBottom: 6,
   },
 
   searchRow: {
@@ -544,12 +589,25 @@ const styles = StyleSheet.create({
     flex: 1,
   },
 
+  inputInner: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+
   input: {
-    height: 52,
-    paddingHorizontal: 16,
-    fontSize: 15.5,
+    flex: 1,
+    height: 44,
+    paddingHorizontal: 14,
+    fontSize: 14.5,
     color: "#2F4A3C",
     ...(Platform.OS === "web" ? ({ outlineStyle: "none" } as any) : {}),
+  },
+
+  clearButton: {
+    paddingHorizontal: 12,
+    height: 44,
+    alignItems: "center",
+    justifyContent: "center",
   },
 
   searchButtonShadow: {
@@ -563,92 +621,40 @@ const styles = StyleSheet.create({
   },
 
   searchButtonInner: {
-    width: 52,
-    height: 52,
+    width: 44,
+    height: 44,
     alignItems: "center",
     justifyContent: "center",
   },
 
   modeRow: {
     flexDirection: "row",
-    alignItems: "center",
     marginTop: 10,
-    gap: 8,
+    paddingBottom: 7,
   },
 
-  pill: {
-    paddingHorizontal: 16,
-    paddingVertical: 7,
-    borderRadius: 999,
-    borderWidth: 0.75,
-    borderColor: "rgba(93,140,120,0.45)",
-    backgroundColor: "#FFFFFF",
+  modeTab: {
+    flex: 1,
+    alignItems: "center",
   },
 
-  pillActive: {
-    backgroundColor: "rgba(105,183,141,0.92)",
-    borderColor: "rgba(255,255,255,0.85)",
-  },
-
-  pillText: {
+  modeTabText: {
     fontSize: 14,
-    fontWeight: "600",
+    color: "#96AC9E",
+  },
+
+  modeTabTextActive: {
     color: "#3F6B5B",
   },
 
-  pillTextActive: {
-    color: "#FFFFFF",
-  },
-
-  resetButton: {
-    marginLeft: "auto",
-  },
-
-  resetButtonText: {
-    color: "#96AC9E",
-    fontSize: 14,
-    textDecorationLine: "underline",
-  },
-
-  newBlock: {
-    marginTop: 22,
-  },
-
-  blockLabel: {
-    fontSize: 11,
-    fontWeight: "600",
-    letterSpacing: 1.6,
-    color: "#719686",
-    marginBottom: 12,
-    textAlign: "center",
-  },
-
-  pyramidRow: {
-    flexDirection: "row",
-    justifyContent: "center",
-    marginBottom: 10,
-  },
-
-  newItem: {
-    width: 66,
-    alignItems: "center",
-    marginHorizontal: 6,
-  },
-
-  newAvatar: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: "#EAF4EE",
-    borderWidth: 1,
-    borderColor: "rgba(93,140,120,0.28)",
-  },
-
-  newName: {
-    marginTop: 6,
-    fontSize: 12.5,
-    color: "#4E7364",
-    textAlign: "center",
+  modeUnderline: {
+    position: "absolute",
+    left: 0,
+    bottom: 0,
+    width: 80,
+    height: 2,
+    borderRadius: 1,
+    backgroundColor: "rgba(105,183,141,0.9)",
   },
 
   card: {
@@ -711,8 +717,8 @@ const styles = StyleSheet.create({
   },
 
   favoriteButton: {
-    padding: 8,
-    marginLeft: 4,
+    padding: 12,
+    marginLeft: 2,
   },
 
   emptyText: {
@@ -723,7 +729,7 @@ const styles = StyleSheet.create({
   },
 
   supportButton: {
-    marginHorizontal: 24,
+    alignSelf: "center",
     marginBottom: 6,
   },
 
@@ -732,7 +738,7 @@ const styles = StyleSheet.create({
     alignItems: "baseline",
     justifyContent: "center",
     gap: 8,
-    marginTop: 10,
+    marginTop: 18,
   },
 
   counterLabel: {
@@ -760,41 +766,43 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    gap: 8,
-    paddingVertical: 15,
-    minHeight: 52,
+    gap: 7,
+    paddingVertical: 9,
+    paddingHorizontal: 18,
   },
 
   supportText: {
-    color: "#3F6B5B",
-    fontSize: 15.5,
+    color: "#A85A72",
+    fontSize: 14,
     fontWeight: "600",
   },
 
   founder: {
+    marginTop: "auto",
+    paddingTop: 18,
+    marginBottom: -24,
     fontSize: 12.5,
     color: "#8FA79A",
     textAlign: "center",
     paddingHorizontal: 24,
-    paddingBottom: 14,
   },
 
   fabShadow: {
     position: "absolute",
     right: 20,
     bottom: 26,
-    borderRadius: 31,
+    borderRadius: 22,
     shadowColor: "#69B78D",
     shadowOpacity: 0.45,
-    shadowRadius: 14,
-    shadowOffset: { width: 0, height: 8 },
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 6 },
     elevation: 6,
     zIndex: 30,
   },
 
   fabInner: {
-    width: 62,
-    height: 62,
+    width: 44,
+    height: 44,
     alignItems: "center",
     justifyContent: "center",
   },

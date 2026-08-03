@@ -4,7 +4,7 @@
 
 import { BlurView } from "expo-blur";
 import { StatusBar } from "expo-status-bar";
-import { ReactNode, useEffect, useRef } from "react";
+import { ReactNode, useEffect, useRef, useState } from "react";
 import {
   Animated,
   Easing,
@@ -28,7 +28,7 @@ import Svg, {
 if (Platform.OS === "web" && typeof document !== "undefined") {
   // Метку меняем при каждом изменении правил, иначе старый стиль остаётся
   // висеть на странице и новые правила не применяются.
-  const STYLE_ID = "mingi-web-css-v5";
+  const STYLE_ID = "mingi-web-css-v7";
   let style = document.getElementById(STYLE_ID) as HTMLStyleElement | null;
 
   if (!style) {
@@ -39,7 +39,9 @@ if (Platform.OS === "web" && typeof document !== "undefined") {
 
   // 1) чёрная рамка фокуса у полей и кнопок;
   // 2) точки-маркеры, которые браузер рисует у панели вкладок (она собрана
-  //    из списка).
+  //    из списка);
+  // 3) слой пятен фона прибит к физическому экрану: клавиатура телефона
+  //    сжимает страницу, но не должна двигать фон.
   style.textContent = [
     "*:focus, *:focus-visible { outline: none !important; }",
     "ul, ol, [role='list'], [role='tablist'] {",
@@ -54,6 +56,17 @@ if (Platform.OS === "web" && typeof document !== "undefined") {
     "  font-size: 0 !important;",
     "}",
   ].join("\n");
+
+  // Просим мобильный браузер класть клавиатуру ПОВЕРХ страницы, а не
+  // сжимать страницу под неё (иначе фон и раскладка «подъезжают» вверх).
+  const viewportMeta = document.querySelector('meta[name="viewport"]');
+  if (viewportMeta) {
+    viewportMeta.setAttribute(
+      "content",
+      "width=device-width, initial-scale=1, shrink-to-fit=no, " +
+        "interactive-widget=resizes-visual",
+    );
+  }
 }
 
 export function useDrift(duration: number, delay = 0) {
@@ -216,7 +229,7 @@ export function MingiBackground({
   children: ReactNode;
   idPrefix: string;
 }) {
-  const { width, height } = useWindowDimensions();
+  const { width: liveWidth, height: liveHeight } = useWindowDimensions();
 
   const x1 = useDrift(11200);
   const y1 = useDrift(8200, 300);
@@ -225,43 +238,95 @@ export function MingiBackground({
   const x3 = useDrift(12200, 700);
   const y3 = useDrift(8800, 100);
 
+  // На вебе клавиатура телефона сжимает страницу, и фон «подъезжал» вверх.
+  // Запоминаем высоту экрана В ПИКСЕЛЯХ при загрузке и держим слой пятен
+  // этой высоты. Сжатие от клавиатуры (высота уменьшилась, ширина та же)
+  // игнорируем; поворот экрана (ширина изменилась) — принимаем честно.
+  const [webSize, setWebSize] = useState(() =>
+    Platform.OS === "web" && typeof window !== "undefined"
+      ? { w: window.innerWidth, h: window.innerHeight }
+      : null,
+  );
+
+  useEffect(() => {
+    if (Platform.OS !== "web" || typeof window === "undefined") return;
+
+    const onResize = () => {
+      setWebSize((prev) => {
+        const w = window.innerWidth;
+        const h = window.innerHeight;
+        if (!prev) return { w, h };
+        if (w !== prev.w) return { w, h }; // поворот экрана
+        // Любые изменения одной лишь высоты (клавиатура, адресная
+        // строка браузера) игнорируем — фон стоит как вкопанный.
+        return prev;
+      });
+    };
+
+    window.addEventListener("resize", onResize);
+    window.addEventListener("orientationchange", onResize);
+    return () => {
+      window.removeEventListener("resize", onResize);
+      window.removeEventListener("orientationchange", onResize);
+    };
+  }, []);
+
+  const blobLayerStyle =
+    Platform.OS === "web" && webSize
+      ? ({
+          position: "fixed",
+          top: 0,
+          left: 0,
+          width: webSize.w,
+          height: webSize.h,
+          overflow: "hidden",
+        } as any)
+      : [StyleSheet.absoluteFillObject, { overflow: "hidden" as const }];
+
+  // Размах движения пятен: на вебе — от замороженных размеров (иначе
+  // клавиатура дёргала бы траектории), на телефонах — от живых.
+  const width = webSize ? webSize.w : liveWidth;
+  const height = webSize ? webSize.h : liveHeight;
+
   return (
     <View style={bgStyles.container}>
       <StatusBar style="dark" />
 
-      <Blob
-        id={`${idPrefix}1`}
-        size={760}
-        color="#A8D8C0"
-        style={{ top: -300, left: -310 }}
-        driftX={x1}
-        driftY={y1}
-        rangeX={width * 0.85}
-        rangeY={height * 0.6}
-        scaleTo={1.18}
-      />
-      <Blob
-        id={`${idPrefix}2`}
-        size={840}
-        color="#C2E3CF"
-        style={{ top: -90, right: -360 }}
-        driftX={x2}
-        driftY={y2}
-        rangeX={-width * 0.9}
-        rangeY={height * 0.5}
-        scaleTo={0.9}
-      />
-      <Blob
-        id={`${idPrefix}3`}
-        size={800}
-        color="#DFEFE3"
-        style={{ bottom: -330, left: -300 }}
-        driftX={x3}
-        driftY={y3}
-        rangeX={width * 0.8}
-        rangeY={-height * 0.65}
-        scaleTo={1.16}
-      />
+      <View pointerEvents="none" style={blobLayerStyle}>
+        <Blob
+          id={`${idPrefix}1`}
+          size={380}
+          color="#A8D8C0"
+          style={{ top: -150, left: -155 }}
+          driftX={x1}
+          driftY={y1}
+          rangeX={width * 0.85}
+          rangeY={height * 0.6}
+          scaleTo={1.18}
+        />
+        <Blob
+          id={`${idPrefix}2`}
+          size={420}
+          color="#C2E3CF"
+          style={{ top: -45, right: -180 }}
+          driftX={x2}
+          driftY={y2}
+          rangeX={-width * 0.9}
+          rangeY={height * 0.5}
+          scaleTo={0.9}
+        />
+        <Blob
+          id={`${idPrefix}3`}
+          size={400}
+          color="#DFEFE3"
+          style={{ bottom: -165, left: -150 }}
+          driftX={x3}
+          driftY={y3}
+          rangeX={width * 0.8}
+          rangeY={-height * 0.65}
+          scaleTo={1.16}
+        />
+      </View>
 
       {children}
     </View>
