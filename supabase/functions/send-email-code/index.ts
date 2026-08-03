@@ -26,7 +26,7 @@ function json(body: unknown, status = 200) {
     headers: { ...corsHeaders, "Content-Type": "application/json" },
   });
 }
-
+//вывы
 function buildHtml(code: string) {
   return `<!DOCTYPE html>
 <html lang="ru">
