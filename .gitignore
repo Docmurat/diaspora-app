@@ -30,7 +30,8 @@ yarn-error.*
 .DS_Store
 *.pem
 
-# local env files
+# local env files — секреты, НЕ попадают в репозиторий
+.env
 .env*.local
 
 # typescript

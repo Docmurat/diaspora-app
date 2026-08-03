@@ -1,8 +1,17 @@
 import 'react-native-url-polyfill/auto';
 import { createClient } from '@supabase/supabase-js';
 
-const supabaseUrl = 'https://insyuvpahjmclpxbvxjp.supabase.co';
-const supabaseAnonKey = 'sb_publishable_-KrFp8fJFvcVsXOHiOu5kw_Mu6YKr18';
+// Адрес сервера и публичный ключ берутся из файла .env в корне проекта
+// (файла нет в репозитории — см. .env.example). После правки .env
+// перезапускать так: npx expo start -c
+const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL ?? '';
+const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY ?? '';
+
+if (!supabaseUrl || !supabaseAnonKey) {
+  throw new Error(
+    'Не задан адрес сервера: создайте файл .env в корне проекта по образцу .env.example и перезапустите приложение командой npx expo start -c',
+  );
+}
 
 const isSSR = typeof window === 'undefined';
 

@@ -11,6 +11,12 @@ import { supabase } from "../lib/supabase";
 import { getUnreadCount } from "../services/notificationService";
 import { getMyProfile } from "../services/profileService";
 
+// Каждому экземпляру TopBar — свой номер, чтобы имена realtime-каналов
+// не совпадали: TopBar стоит на каждой вкладке, и при одинаковом имени
+// второй экран получает УЖЕ запущенный канал первого и падает с ошибкой
+// «cannot add postgres_changes callbacks after subscribe()».
+let topBarInstanceCounter = 0;
+
 export default function TopBar({
   transparent = false,
   centerContent,
@@ -72,8 +78,11 @@ export default function TopBar({
 
       if (!user || !alive) return;
 
+      topBarInstanceCounter += 1;
+      const channelName = `user-live-${user.id}-${topBarInstanceCounter}`;
+
       channel = supabase
-        .channel(`user-live-${user.id}`)
+        .channel(channelName)
         .on(
           "postgres_changes",
           {
