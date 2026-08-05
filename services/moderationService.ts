@@ -175,8 +175,7 @@ export async function rejectUser(
   await createNotification({
     userId,
     type: "moderation",
-    title:
-      mode === "revision" ? "Анкету нужно исправить" : "Заявка отклонена",
+    title: mode === "revision" ? "Анкету нужно исправить" : "Заявка отклонена",
     body: message,
     link: "/pending-approval",
   });
@@ -325,15 +324,22 @@ export async function removeModerator(userId: string) {
 export async function blockUser(userId: string) {
   await checkAccess();
 
-  const { error } = await supabase
+  const { data: updatedRow, error } = await supabase
     .from("users")
     .update({
       is_blocked: true,
       updated_at: new Date().toISOString(),
     })
-    .eq("id", userId);
+    .eq("id", userId)
+    .select("id")
+    .maybeSingle();
 
   if (error) throw new Error(error.message);
+  if (!updatedRow) {
+    throw new Error(
+      "Не удалось заблокировать: база не приняла изменение (нет прав или запись не найдена)",
+    );
+  }
 }
 
 export async function getBlockedUsers() {
@@ -353,15 +359,22 @@ export async function getBlockedUsers() {
 export async function unblockUser(userId: string) {
   await checkAccess();
 
-  const { error } = await supabase
+  const { data: updatedRow, error } = await supabase
     .from("users")
     .update({
       is_blocked: false,
       updated_at: new Date().toISOString(),
     })
-    .eq("id", userId);
+    .eq("id", userId)
+    .select("id")
+    .maybeSingle();
 
   if (error) throw new Error(error.message);
+  if (!updatedRow) {
+    throw new Error(
+      "Не удалось снять блокировку: база не приняла изменение (нет прав или запись не найдена)",
+    );
+  }
 }
 
 export async function getPendingComplaints() {
@@ -493,7 +506,7 @@ export async function takeUserModeration(userId: string) {
         moderation_taken_at: now,
         moderation_completed_at: null,
         moderation_completed_by_name: null,
-      moderation_completed_by: null,
+        moderation_completed_by: null,
         updated_at: now,
       })
       .eq("id", userId);
@@ -629,9 +642,7 @@ export async function getModerationTaskCount(): Promise<number> {
     }
   };
 
-  const countAppeals = async (
-    scope: "free" | "mine",
-  ): Promise<number> => {
+  const countAppeals = async (scope: "free" | "mine"): Promise<number> => {
     try {
       let query = supabase
         .from("appeals")
@@ -729,7 +740,8 @@ export async function getOpenAppeals() {
         email,
         phone,
         avatar_path,
-        is_deleted
+        is_deleted,
+        is_blocked
       ),
       assigned_moderator:assigned_to (
         id,
@@ -769,7 +781,8 @@ export async function getClosedAppeals() {
         last_name,
         email,
         avatar_path,
-        is_deleted
+        is_deleted,
+        is_blocked
       )
     `,
     )

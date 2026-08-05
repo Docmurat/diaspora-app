@@ -1264,6 +1264,8 @@ export default function ModerationScreen() {
         raw: {
           entityId: user.id,
           type: "registration",
+          person: user,
+          personLabel: "УЧАСТНИК",
           title:
             `${user.first_name || ""} ${user.last_name || ""}`.trim() ||
             "Без имени",
@@ -1317,6 +1319,14 @@ export default function ModerationScreen() {
         raw: {
           entityId: request.id,
           type: "name_change",
+          person: request.user_id
+            ? {
+                id: request.user_id,
+                first_name: request.requested_first_name,
+                last_name: request.requested_last_name,
+              }
+            : undefined,
+          personLabel: "УЧАСТНИК",
           title: `${request.current_first_name} ${request.current_last_name}`,
           subtitle:
             request.review_note ||
@@ -1344,6 +1354,8 @@ export default function ModerationScreen() {
         raw: {
           entityId: complaint.id,
           type: "complaint",
+          personTarget: complaint.target,
+          personReporter: complaint.reporter,
           title:
             `Жалоба на ${complaint.target?.first_name || ""} ${complaint.target?.last_name || ""}`.trim(),
           subtitle: complaint.review_note || complaint.reason || undefined,
@@ -1374,6 +1386,8 @@ export default function ModerationScreen() {
         raw: {
           entityId: appeal.id,
           type: "appeal",
+          person: appeal.author,
+          personLabel: "АВТОР ОБРАЩЕНИЯ",
           title: authorName,
           subtitle: appeal.review_note || undefined,
           statusLabel: "Закрыто",
@@ -1551,26 +1565,26 @@ export default function ModerationScreen() {
       const isExpanded = !!expandedCards[item.id];
 
       return (
-        <TouchableOpacity
-          key={item.id}
-          style={styles.card}
-          activeOpacity={0.9}
-          onPress={() => toggleCard(item.id)}
-        >
-          <View style={styles.cardHeader}>
-            <View style={styles.cardHeaderMain}>
-              <Text style={styles.name}>{archiveItem.title}</Text>
-              <Text style={styles.cardCollapsedHint}>
-                {formatShortDate(archiveItem.completedAt)}
-              </Text>
-            </View>
+        <View key={item.id} style={styles.card}>
+          <TouchableOpacity
+            activeOpacity={0.9}
+            onPress={() => toggleCard(item.id)}
+          >
+            <View style={styles.cardHeader}>
+              <View style={styles.cardHeaderMain}>
+                <Text style={styles.name}>{archiveItem.title}</Text>
+                <Text style={styles.cardCollapsedHint}>
+                  {formatShortDate(archiveItem.completedAt)}
+                </Text>
+              </View>
 
-            <View style={[styles.archiveChip, statusStyle.container]}>
-              <Text style={[styles.archiveChipText, statusStyle.text]}>
-                {archiveItem.statusLabel}
-              </Text>
+              <View style={[styles.archiveChip, statusStyle.container]}>
+                <Text style={[styles.archiveChipText, statusStyle.text]}>
+                  {archiveItem.statusLabel}
+                </Text>
+              </View>
             </View>
-          </View>
+          </TouchableOpacity>
 
           {isExpanded && (
             <>
@@ -1592,6 +1606,27 @@ export default function ModerationScreen() {
                 </Text>
               )}
 
+              {!!archiveItem.person &&
+                renderPersonRow(
+                  archiveItem.personLabel || "УЧАСТНИК",
+                  archiveItem.person,
+                  false,
+                )}
+
+              {!!archiveItem.personTarget &&
+                renderPersonRow(
+                  "НА КОГО ЖАЛОВАЛИСЬ",
+                  archiveItem.personTarget,
+                  true,
+                )}
+
+              {!!archiveItem.personReporter &&
+                renderPersonRow(
+                  "КТО ПОЖАЛОВАЛСЯ",
+                  archiveItem.personReporter,
+                  false,
+                )}
+
               {archiveItem.type === "appeal" ? (
                 renderAppealMessages(archiveItem.entityId)
               ) : (
@@ -1612,62 +1647,62 @@ export default function ModerationScreen() {
               )}
             </>
           )}
-        </TouchableOpacity>
+        </View>
       );
     }
 
     return (
-      <TouchableOpacity
-        key={item.id}
-        style={styles.card}
-        activeOpacity={0.9}
-        onPress={() => {
-          if (item.kind === "registration") {
-            handleRegistrationCardPress(item.raw.id);
-          } else {
-            toggleCard(item.id);
-          }
-        }}
-      >
-        <View
-          style={[
-            styles.statusLine,
-            getTaskAgeLevel(item.takenAt) === "critical"
-              ? styles.statusLineCritical
-              : getTaskAgeLevel(item.takenAt) === "warning"
-                ? styles.statusLineWarning
-                : styles.statusLineNormal,
-          ]}
+      <View key={item.id} style={styles.card}>
+        <TouchableOpacity
+          activeOpacity={0.9}
+          onPress={() => {
+            if (item.kind === "registration") {
+              handleRegistrationCardPress(item.raw.id);
+            } else {
+              toggleCard(item.id);
+            }
+          }}
         >
-          <Text style={styles.statusLineText}>
-            {item.kind === "blocked"
-              ? "Заблокирован"
-              : getTaskStatusText(item.assignedName, item.takenAt)}
-          </Text>
-        </View>
+          <View
+            style={[
+              styles.statusLine,
+              getTaskAgeLevel(item.takenAt) === "critical"
+                ? styles.statusLineCritical
+                : getTaskAgeLevel(item.takenAt) === "warning"
+                  ? styles.statusLineWarning
+                  : styles.statusLineNormal,
+            ]}
+          >
+            <Text style={styles.statusLineText}>
+              {item.kind === "blocked"
+                ? "Заблокирован"
+                : getTaskStatusText(item.assignedName, item.takenAt)}
+            </Text>
+          </View>
 
-        <View style={styles.cardHeader}>
-          <View style={styles.cardHeaderMain}>
-            {item.kind === "registration" ? (
-              <View style={styles.nameRow}>
+          <View style={styles.cardHeader}>
+            <View style={styles.cardHeaderMain}>
+              {item.kind === "registration" ? (
+                <View style={styles.nameRow}>
+                  <Text style={styles.name}>{item.title}</Text>
+                  {item.raw?.moderator_has_unread_changes && (
+                    <View style={styles.unreadDot} />
+                  )}
+                </View>
+              ) : (
                 <Text style={styles.name}>{item.title}</Text>
-                {item.raw?.moderator_has_unread_changes && (
-                  <View style={styles.unreadDot} />
-                )}
-              </View>
-            ) : (
-              <Text style={styles.name}>{item.title}</Text>
-            )}
-            <Text style={styles.cardCollapsedHint}>
-              Нажмите, чтобы раскрыть
-            </Text>
+              )}
+              <Text style={styles.cardCollapsedHint}>
+                Нажмите, чтобы раскрыть
+              </Text>
+            </View>
+            <View style={[styles.statusChip, KIND_CHIP[item.kind]?.box]}>
+              <Text style={[styles.statusChipText, KIND_CHIP[item.kind]?.text]}>
+                {item.badge}
+              </Text>
+            </View>
           </View>
-          <View style={[styles.statusChip, KIND_CHIP[item.kind]?.box]}>
-            <Text style={[styles.statusChipText, KIND_CHIP[item.kind]?.text]}>
-              {item.badge}
-            </Text>
-          </View>
-        </View>
+        </TouchableOpacity>
 
         {expandedCards[item.id] && (
           <>
@@ -1937,6 +1972,14 @@ export default function ModerationScreen() {
                       </Text>
                     )}
 
+                    {!appeal.author?.is_deleted &&
+                      appeal.author?.is_blocked && (
+                        <Text style={styles.mutedText}>
+                          Участник заблокирован — возможно, просит снять
+                          блокировку
+                        </Text>
+                      )}
+
                     {renderAppealMessages(appeal.id)}
 
                     <View style={styles.assignmentBlock}>
@@ -1950,11 +1993,13 @@ export default function ModerationScreen() {
                           </Text>
                         </TouchableOpacity>
                       ) : canManageAssignedTask(appeal.assigned_to) ? (
-                        appeal.author?.is_deleted ? (
+                        appeal.author?.is_deleted ||
+                        appeal.author?.is_blocked ? (
                           <>
                             <Text style={styles.lockedText}>
-                              Участник удалён — ответ в приложении он не увидит.
-                              Свяжитесь по телефону из сообщения.
+                              {appeal.author?.is_deleted
+                                ? "Участник удалён — ответ в приложении он не увидит. Свяжитесь по телефону из сообщения."
+                                : "Участник заблокирован — поле ответа скрыто. Решение принимается в его карточке: снять блокировку или оставить."}
                             </Text>
 
                             <View style={styles.actionRow}>
@@ -2061,7 +2106,7 @@ export default function ModerationScreen() {
               })()}
           </>
         )}
-      </TouchableOpacity>
+      </View>
     );
   };
 

@@ -36,6 +36,7 @@ import {
   removeModerator,
   restoreUser,
   softDeleteUser,
+  unblockUser,
 } from "../services/moderationService";
 import { getMyProfile } from "../services/profileService";
 import {
@@ -245,6 +246,7 @@ export default function UserProfileScreen() {
   const isOwner = me?.role === "owner";
   const isOwnProfile = me?.id === user.id;
   const isDeletedProfile = !!user.is_deleted;
+  const isBlockedProfile = !!user.is_blocked;
 
   const invitedByName = user.invited_by
     ? `${user.invited_by.first_name || ""} ${user.invited_by.last_name || ""}`.trim()
@@ -342,6 +344,20 @@ export default function UserProfileScreen() {
       Alert.alert(
         "Ошибка",
         e instanceof Error ? e.message : "Ошибка блокировки",
+      );
+    }
+  };
+
+  const handleUnblockUserAdmin = async () => {
+    try {
+      await unblockUser(user.id);
+      setShowMenu(false);
+      await loadProfile();
+      Alert.alert("Готово", "Блокировка снята.");
+    } catch (e) {
+      Alert.alert(
+        "Ошибка",
+        e instanceof Error ? e.message : "Ошибка снятия блокировки",
       );
     }
   };
@@ -633,10 +649,21 @@ export default function UserProfileScreen() {
             {isAdmin && (
               <TouchableOpacity
                 style={styles.menuItem}
-                onPress={handleBlockUserAdmin}
+                onPress={
+                  isBlockedProfile
+                    ? handleUnblockUserAdmin
+                    : handleBlockUserAdmin
+                }
               >
-                <Text style={[styles.menuItemText, styles.dangerText]}>
-                  Заблокировать участника
+                <Text
+                  style={[
+                    styles.menuItemText,
+                    !isBlockedProfile && styles.dangerText,
+                  ]}
+                >
+                  {isBlockedProfile
+                    ? "Снять блокировку участника"
+                    : "Заблокировать участника"}
                 </Text>
               </TouchableOpacity>
             )}
@@ -894,6 +921,12 @@ export default function UserProfileScreen() {
           {isDeletedProfile && (
             <View style={styles.deletedBadge}>
               <Text style={styles.deletedBadgeText}>АККАУНТ УДАЛЁН</Text>
+            </View>
+          )}
+
+          {isAdmin && isBlockedProfile && !isDeletedProfile && (
+            <View style={styles.deletedBadge}>
+              <Text style={styles.deletedBadgeText}>ЗАБЛОКИРОВАН</Text>
             </View>
           )}
 

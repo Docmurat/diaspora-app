@@ -21,9 +21,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import AvatarCropModal, {
-  prepareAvatarSource,
-} from "../components/AvatarCrop";
+import AvatarCropModal, { prepareAvatarSource } from "../components/AvatarCrop";
 import {
   joinLocations,
   LocationFields,
@@ -36,7 +34,6 @@ import { supabase } from "../lib/supabase";
 import {
   DbUserProfile,
   getMyProfile,
-  softDeleteMyAccount,
   syncMyEmailFromAuth,
 } from "../services/profileService";
 import {
@@ -102,8 +99,6 @@ export default function EditProfileScreen() {
   const [avatarMarkedForRemoval, setAvatarMarkedForRemoval] = useState(false);
   const [error, setError] = useState("");
   const [showCategoryOptions, setShowCategoryOptions] = useState(false);
-  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
-  const [accountDeleting, setAccountDeleting] = useState(false);
   const [saving, setSaving] = useState(false);
 
   const [cropVisible, setCropVisible] = useState(false);
@@ -114,8 +109,7 @@ export default function EditProfileScreen() {
   } | null>(null);
 
   // Анкета возвращена модератором на доработку
-  const needsRevision =
-    (user as any)?.moderation_status === "needs_revision";
+  const needsRevision = (user as any)?.moderation_status === "needs_revision";
 
   const canEditNameDirectly =
     user?.role === "moderator" || user?.role === "owner" || needsRevision;
@@ -376,10 +370,7 @@ export default function EditProfileScreen() {
           </Text>
 
           <View style={styles.avatarWrapper}>
-            <TouchableOpacity
-              onPress={handlePickImage}
-              activeOpacity={0.85}
-            >
+            <TouchableOpacity onPress={handlePickImage} activeOpacity={0.85}>
               <Image
                 source={displayedAvatarSource}
                 style={styles.avatarImage}
@@ -696,85 +687,6 @@ export default function EditProfileScreen() {
               </Glass>
             </TouchableOpacity>
           </View>
-
-          <TouchableOpacity
-            onPress={() => setShowDeleteConfirm(true)}
-            disabled={accountDeleting}
-            activeOpacity={0.8}
-          >
-            <Text style={styles.deleteAccountLink}>Удалить аккаунт</Text>
-          </TouchableOpacity>
-
-          {showDeleteConfirm && (
-            <Glass
-              radius={18}
-              tintColor="rgba(255,255,255,0.95)"
-              borderColor="rgba(192,91,77,0.5)"
-              borderWidth={0.75}
-              style={styles.deleteConfirmBox}
-            >
-              <View style={styles.deleteConfirmInner}>
-                <Text style={styles.deleteConfirmTitle}>
-                  Удалить аккаунт?
-                </Text>
-
-                <Text style={styles.deleteConfirmText}>
-                  Аккаунт будет удалён без возможности восстановления.
-                </Text>
-
-                <View style={styles.buttonsRow}>
-                  <TouchableOpacity
-                    activeOpacity={0.85}
-                    onPress={() => setShowDeleteConfirm(false)}
-                    disabled={accountDeleting}
-                    style={styles.secondaryWrap}
-                  >
-                    <Glass
-                      radius={16}
-                      tintColor="rgba(255,255,255,0.5)"
-                      borderColor="rgba(93,140,120,0.45)"
-                      borderWidth={0.75}
-                    >
-                      <View style={styles.smallButtonInner}>
-                        <Text style={styles.smallButtonText}>Отмена</Text>
-                      </View>
-                    </Glass>
-                  </TouchableOpacity>
-
-                  <TouchableOpacity
-                    activeOpacity={0.85}
-                    disabled={accountDeleting}
-                    style={[
-                      styles.primaryHalf,
-                      accountDeleting && styles.disabled,
-                    ]}
-                    onPress={async () => {
-                      try {
-                        setAccountDeleting(true);
-                        setError("");
-
-                        await softDeleteMyAccount();
-                        await supabase.auth.signOut();
-
-                        router.replace("/welcome");
-                      } catch (e) {
-                        console.log("Ошибка удаления аккаунта:", e);
-                        setError("Не удалось удалить аккаунт");
-                      } finally {
-                        setAccountDeleting(false);
-                      }
-                    }}
-                  >
-                    <View style={styles.deleteConfirmButton}>
-                      <Text style={styles.deleteConfirmButtonText}>
-                        {accountDeleting ? "Удаление..." : "Удалить навсегда"}
-                      </Text>
-                    </View>
-                  </TouchableOpacity>
-                </View>
-              </View>
-            </Glass>
-          )}
         </ScrollView>
       </KeyboardAvoidingView>
 
@@ -1047,53 +959,6 @@ const styles = StyleSheet.create({
   secondaryButtonText: {
     color: "#3F6B5B",
     fontSize: 16,
-    fontWeight: "600",
-  },
-
-  deleteAccountLink: {
-    color: "#C05B4D",
-    textAlign: "center",
-    fontSize: 14,
-    marginTop: 24,
-    textDecorationLine: "underline",
-  },
-
-  deleteConfirmBox: {
-    marginTop: 16,
-  },
-
-  deleteConfirmInner: {
-    paddingHorizontal: 16,
-    paddingVertical: 16,
-  },
-
-  deleteConfirmTitle: {
-    fontFamily: "Philosopher_700Bold",
-    fontSize: 20,
-    color: "#C05B4D",
-    textAlign: "center",
-  },
-
-  deleteConfirmText: {
-    fontSize: 14,
-    lineHeight: 21,
-    color: "#7E988B",
-    textAlign: "center",
-    marginTop: 8,
-    marginBottom: 8,
-  },
-
-  deleteConfirmButton: {
-    backgroundColor: "#C05B4D",
-    borderRadius: 16,
-    paddingVertical: 12,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-
-  deleteConfirmButtonText: {
-    color: "#FFFFFF",
-    fontSize: 14,
     fontWeight: "600",
   },
 

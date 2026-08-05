@@ -25,6 +25,7 @@ import {
 import { Glass, Tekmet } from "../../components/mingi";
 import { getModerationTaskCount } from "../../services/moderationService";
 import { DbUserProfile, getMyProfile } from "../../services/profileService";
+import { signOutUser } from "../../services/sessionService";
 import { getAgeFromBirthDate } from "../../store/user";
 
 type RowProps = {
@@ -33,18 +34,26 @@ type RowProps = {
   badge?: number;
   onPress: () => void;
   last?: boolean;
+  danger?: boolean;
 };
 
-function SectionRow({ icon, label, badge, onPress, last }: RowProps) {
+function SectionRow({ icon, label, badge, onPress, last, danger }: RowProps) {
   return (
     <TouchableOpacity
       activeOpacity={0.85}
       onPress={onPress}
       style={[styles.row, last && styles.rowLast]}
     >
-      <Ionicons name={icon} size={20} color="#69B78D" style={styles.rowIcon} />
+      <Ionicons
+        name={icon}
+        size={20}
+        color={danger ? "#C05B4D" : "#69B78D"}
+        style={styles.rowIcon}
+      />
 
-      <Text style={styles.rowLabel}>{label}</Text>
+      <Text style={[styles.rowLabel, danger && styles.rowLabelDanger]}>
+        {label}
+      </Text>
 
       {!!badge && badge > 0 && (
         <View style={styles.rowBadge}>
@@ -67,12 +76,15 @@ export default function ProfileScreen() {
   const [loading, setLoading] = useState(true);
   const [avatarModalVisible, setAvatarModalVisible] = useState(false);
   const [moderationCount, setModerationCount] = useState(0);
+  const [confirmLogout, setConfirmLogout] = useState(false);
+  const [loggingOut, setLoggingOut] = useState(false);
 
   useFocusEffect(
     useCallback(() => {
       const refresh = async () => {
         try {
           setLoading(true);
+          setConfirmLogout(false);
           const profile = await getMyProfile();
           setUser(profile);
 
@@ -100,6 +112,26 @@ export default function ProfileScreen() {
       refresh();
     }, []),
   );
+
+  // Выход из аккаунта — вторым нажатием, чтобы не выйти случайно
+  // (модальные подтверждения в вебе работают плохо).
+  const handleLogout = async () => {
+    if (loggingOut) return;
+
+    if (!confirmLogout) {
+      setConfirmLogout(true);
+      return;
+    }
+
+    try {
+      setLoggingOut(true);
+      await signOutUser();
+    } catch (e) {
+      console.log("Не удалось выйти:", e);
+    }
+
+    router.replace("/welcome");
+  };
 
   const handleCopyText = async (label: string, value?: string | null) => {
     const text = value?.trim();
@@ -364,6 +396,19 @@ export default function ProfileScreen() {
               icon="lock-closed-outline"
               label="Политика конфиденциальности"
               onPress={() => router.push("/privacy")}
+            />
+
+            <SectionRow
+              icon="log-out-outline"
+              label={
+                loggingOut
+                  ? "Выходим..."
+                  : confirmLogout
+                    ? "Нажмите ещё раз, чтобы выйти"
+                    : "Выйти из аккаунта"
+              }
+              danger
+              onPress={handleLogout}
               last
             />
           </View>
@@ -680,6 +725,10 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 15,
     color: "#2F4A3C",
+  },
+
+  rowLabelDanger: {
+    color: "#C05B4D",
   },
 
   rowBadge: {

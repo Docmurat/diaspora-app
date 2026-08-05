@@ -18,7 +18,6 @@ import {
 
 import { Tekmet } from "../components/mingi";
 import { softDeleteMyAccount } from "../services/profileService";
-import { signOutUser } from "../services/sessionService";
 
 type RowProps = {
   icon: keyof typeof Ionicons.glyphMap;
@@ -29,14 +28,7 @@ type RowProps = {
   last?: boolean;
 };
 
-function SettingsRow({
-  icon,
-  label,
-  hint,
-  danger,
-  onPress,
-  last,
-}: RowProps) {
+function SettingsRow({ icon, label, hint, danger, onPress, last }: RowProps) {
   return (
     <TouchableOpacity
       activeOpacity={0.85}
@@ -72,15 +64,6 @@ export default function SettingsScreen() {
   // одинаково и в браузере, и на телефоне.
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [busy, setBusy] = useState(false);
-
-  const handleLogout = async () => {
-    try {
-      await signOutUser();
-      router.replace("/welcome");
-    } catch (e) {
-      Alert.alert("Ошибка", "Не удалось выйти");
-    }
-  };
 
   const handleDelete = async () => {
     if (!confirmDelete) {
@@ -168,16 +151,11 @@ export default function SettingsScreen() {
 
         <View style={styles.sectionCard}>
           <SettingsRow
-            icon="log-out-outline"
-            label="Выйти из аккаунта"
-            danger
-            onPress={handleLogout}
-          />
-
-          <SettingsRow
             icon="trash-outline"
             label={
-              confirmDelete ? "Нажмите ещё раз, чтобы удалить" : "Удалить профиль"
+              confirmDelete
+                ? "Нажмите ещё раз, чтобы удалить"
+                : "Удалить профиль"
             }
             hint={
               confirmDelete

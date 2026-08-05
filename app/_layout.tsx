@@ -4,6 +4,8 @@ import { StatusBar } from "expo-status-bar";
 import { Platform, StyleSheet, View } from "react-native";
 import "react-native-reanimated";
 
+import AccountGuard from "../components/AccountGuard";
+
 export const unstable_settings = {
   initialRouteName: "index",
 };
@@ -24,6 +26,7 @@ function AppFrame({ children }: { children: React.ReactNode }) {
 export default function RootLayout() {
   return (
     <ThemeProvider value={DefaultTheme}>
+      <AccountGuard />
       <AppFrame>
         <Stack screenOptions={{ headerShown: false }}>
           <Stack.Screen name="index" />

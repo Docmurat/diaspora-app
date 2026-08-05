@@ -95,30 +95,10 @@ export default function TopBar({
             refresh();
           },
         )
-        .on(
-          "postgres_changes",
-          {
-            event: "UPDATE",
-            schema: "public",
-            table: "users",
-            filter: `id=eq.${user.id}`,
-          },
-          (payload) => {
-            const me = payload.new as any;
-
-            // Профиль удалили или заблокировали, пока человек в приложении —
-            // уводим сразу, не дожидаясь перезагрузки страницы.
-            if (me?.is_deleted) {
-              router.replace("/profile-deleted");
-              return;
-            }
-
-            if (me?.is_blocked) {
-              router.replace("/access-restricted");
-            }
-          },
-        )
         .subscribe();
+      // Выбрасыванием при удалении/блокировке теперь занимается
+      // глобальный часовой components/AccountGuard.tsx (в корне приложения) —
+      // он работает на всех экранах, а не только там, где есть TopBar.
     };
 
     subscribe();
