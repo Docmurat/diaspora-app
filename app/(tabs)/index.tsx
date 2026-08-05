@@ -48,13 +48,6 @@ type PreparedUser = DirectoryUser & {
   fullName: string;
 };
 
-const glassInputProps = {
-  radius: 16,
-  tintColor: "rgba(255,255,255,0.95)",
-  borderColor: "rgba(93,140,120,0.45)",
-  borderWidth: 0.75,
-} as const;
-
 // До поиска — живой фон с боке. Как только показан список, фон обычный белый,
 // чтобы карточки читались спокойно.
 function ScreenBackground({
@@ -269,7 +262,7 @@ export default function HomeScreen() {
   const searchBar = (
     <>
       <View style={styles.searchRow}>
-        <Glass {...glassInputProps} style={styles.inputWrap}>
+        <View style={[styles.inputPlain, styles.inputWrap]}>
           <View style={styles.inputInner}>
             <TextInput
               placeholder="Например: стоматолог Москва"
@@ -293,7 +286,7 @@ export default function HomeScreen() {
               </TouchableOpacity>
             )}
           </View>
-        </Glass>
+        </View>
 
         {!showList && (
           <TouchableOpacity
@@ -301,15 +294,11 @@ export default function HomeScreen() {
             onPress={handleSearch}
             activeOpacity={0.85}
           >
-            <Glass
-              radius={16}
-              tintColor="rgba(105,183,141,0.92)"
-              borderColor="rgba(255,255,255,0.85)"
-            >
+            <View style={styles.searchButtonPlain}>
               <View style={styles.searchButtonInner}>
                 <Ionicons name="arrow-forward" size={18} color="#FFFFFF" />
               </View>
-            </Glass>
+            </View>
           </TouchableOpacity>
         )}
       </View>
@@ -387,10 +376,16 @@ export default function HomeScreen() {
           >
             <View style={styles.supportInner}>
               <Ionicons name="heart-outline" size={16} color="#A85A72" />
-              <Text style={styles.supportText}>Поддержать проект</Text>
+              <Text style={styles.supportText}>Помочь проекту</Text>
             </View>
           </Glass>
         </TouchableOpacity>
+      )}
+
+      {!showList && (
+        <Text style={styles.supportHint}>
+          Идеи, замечания, поддержка проекта
+        </Text>
       )}
 
       {showList && <View style={styles.listHeader}>{searchBar}</View>}
@@ -534,7 +529,9 @@ const styles = StyleSheet.create({
   container: {
     paddingHorizontal: 24,
     paddingTop: 8,
-    paddingBottom: 40,
+    // Запас снизу: панель вкладок теперь парит ПОВЕРХ экрана,
+    // контент должен докручиваться выше неё.
+    paddingBottom: 120,
     flexGrow: 1,
   },
 
@@ -724,6 +721,22 @@ const styles = StyleSheet.create({
     fontSize: 15,
   },
 
+  // Обычное (не стеклянное) белое поле поиска — форма прежняя.
+  inputPlain: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: 16,
+    borderWidth: 0.75,
+    borderColor: "rgba(93,140,120,0.45)",
+    overflow: "hidden",
+  },
+
+  // Обычная зелёная кнопка-стрелка поиска.
+  searchButtonPlain: {
+    backgroundColor: "rgba(105,183,141,0.92)",
+    borderRadius: 16,
+    overflow: "hidden",
+  },
+
   supportButton: {
     alignSelf: "center",
     marginBottom: 6,
@@ -771,6 +784,17 @@ const styles = StyleSheet.create({
     color: "#A85A72",
     fontSize: 14,
     fontWeight: "600",
+  },
+
+  // Мелкая строка-пояснение под кнопкой «Помочь проекту».
+  supportHint: {
+    alignSelf: "center",
+    marginTop: 2,
+    marginBottom: 4,
+    fontSize: 11,
+    color: "#BC93A2",
+    textAlign: "center",
+    paddingHorizontal: 24,
   },
 
   founder: {

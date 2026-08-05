@@ -3,8 +3,8 @@ import {
   Philosopher_700Bold,
   useFonts,
 } from "@expo-google-fonts/philosopher";
-import { router } from "expo-router";
-import { useEffect } from "react";
+import { router, usePathname } from "expo-router";
+import { useEffect, useRef } from "react";
 import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
 
 import { Glass, MingiBackground, Tekmet } from "../components/mingi";
@@ -18,17 +18,34 @@ export default function AccessRestrictedScreen() {
     Philosopher_700Bold,
   });
 
+  // Где мы сейчас. Нужно перепроверке ниже: переброс разрешён, только
+  // пока человек действительно стоит на этом экране.
+  const pathname = usePathname();
+  const pathnameRef = useRef(pathname);
+  pathnameRef.current = pathname;
+
   // Если блокировку сняли, человек не должен сидеть в тупике до
   // перезагрузки: слушаем живое обновление и на подстраховку тихо
   // проверяем статус раз в 7 секунд — и сразу возвращаем в приложение.
   useEffect(() => {
     let cancelled = false;
+    let interval: ReturnType<typeof setInterval> | null = null;
 
     const checkUnblocked = async () => {
       try {
+        // Человек уже ушёл с этого экрана — перепроверке молчать.
+        // Страховка от «осиротевшего» таймера: даже если он выжил,
+        // выбрасывать людей с других экранов он больше не может.
+        if (cancelled || pathnameRef.current !== "/access-restricted") {
+          return;
+        }
+
         const profile = await getMyProfile();
 
         if (!cancelled && profile && !(profile as any).is_blocked) {
+          // Срабатываем один раз — и сразу глушим себя навсегда.
+          cancelled = true;
+          if (interval) clearInterval(interval);
           router.replace("/(tabs)");
         }
       } catch (e) {
@@ -36,7 +53,7 @@ export default function AccessRestrictedScreen() {
       }
     };
 
-    const interval = setInterval(checkUnblocked, 7000);
+    interval = setInterval(checkUnblocked, 7000);
     const unsubscribe = subscribeToChanges(
       "access-restricted-screen",
       [{ table: "users" }],
@@ -47,7 +64,7 @@ export default function AccessRestrictedScreen() {
 
     return () => {
       cancelled = true;
-      clearInterval(interval);
+      if (interval) clearInterval(interval);
       unsubscribe();
     };
   }, []);

@@ -323,7 +323,8 @@ const styles = StyleSheet.create({
   list: {
     paddingHorizontal: 20,
     paddingTop: 6,
-    paddingBottom: 28,
+    // Запас снизу под парящую панель вкладок.
+    paddingBottom: 120,
   },
 
   chatCard: {

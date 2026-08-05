@@ -47,7 +47,18 @@ export function subscribeToChanges(
       );
     });
 
-    channel.subscribe();
+    // Подписываемся и честно докладываем результат: раньше отказ сервера
+    // проглатывался молча, и живое обновление «умирало» незаметно.
+    channel.subscribe((status: string, err?: Error) => {
+      if (status === "SUBSCRIBED") {
+        console.log(`Живой эфир: канал «${channelName}» подключён`);
+      } else {
+        console.log(
+          `Живой эфир: канал «${channelName}» — статус ${status}`,
+          err?.message || "",
+        );
+      }
+    });
   } catch (e) {
     console.log("Не удалось подписаться на изменения:", e);
   }

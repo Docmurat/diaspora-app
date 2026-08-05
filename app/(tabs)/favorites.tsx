@@ -194,7 +194,8 @@ const styles = StyleSheet.create({
   container: {
     paddingHorizontal: 20,
     paddingTop: 64,
-    paddingBottom: 40,
+    // Запас снизу под парящую панель вкладок.
+    paddingBottom: 120,
     flexGrow: 1,
   },
 

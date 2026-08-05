@@ -587,7 +587,9 @@ const styles = StyleSheet.create({
   container: {
     paddingHorizontal: 20,
     paddingTop: 56,
-    paddingBottom: 40,
+    // Запас снизу под парящую панель вкладок (важно: последняя строка
+    // меню — «Выйти из аккаунта», её нужно докручивать выше капсулы).
+    paddingBottom: 120,
     flexGrow: 1,
   },
 

@@ -4,7 +4,7 @@ import {
   useFonts,
 } from "@expo-google-fonts/philosopher";
 import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -157,6 +157,12 @@ export default function ModerationScreen() {
   const [expandedCards, setExpandedCards] = useState<Record<string, boolean>>(
     {},
   );
+
+  // Прицельная карточка: мягкая подсветка + прокрутка списка к ней.
+  const [highlightId, setHighlightId] = useState<string | null>(null);
+  const scrollRef = useRef<ScrollView | null>(null);
+  // К какой карточке уже прокрутили — чтобы не дёргать список повторно.
+  const scrolledForRef = useRef<string | null>(null);
   const [me, setMe] = useState<any>(null);
 
   const [pendingUsers, setPendingUsers] = useState<any[]>([]);
@@ -238,8 +244,20 @@ export default function ModerationScreen() {
         [`registration-${focusId}`]: true,
         [`appeal-${focusId}`]: true,
       }));
+
+      // Навести прицел: подсветить и прокрутить, когда карточка отрисуется.
+      scrolledForRef.current = null;
+      setHighlightId(focusId);
     }
   }, [focusId, focusTab]);
+
+  // Подсветка прицельной карточки гаснет сама.
+  useEffect(() => {
+    if (!highlightId) return;
+
+    const timer = setTimeout(() => setHighlightId(null), 6000);
+    return () => clearTimeout(timer);
+  }, [highlightId]);
 
   const toggleNotices = async () => {
     if (!me?.id || savingNotices) return;
@@ -769,10 +787,39 @@ export default function ModerationScreen() {
     };
   };
 
+  // Под какими ключами прицельная карточка может жить в списке
+  // (уведомления о заявках и обращениях несут голый id участника).
+  const highlightKeys = (id: string) => [
+    id,
+    `registration-${id}`,
+    `appeal-${id}`,
+  ];
+
+  const isHighlighted = (itemId: string) =>
+    !!highlightId && highlightKeys(highlightId).includes(itemId);
+
+  // Карточка сообщает, где легла; если она прицельная — прокручиваем к ней.
+  const onCardLayout = (itemId: string, y: number) => {
+    if (isHighlighted(itemId) && scrolledForRef.current !== itemId) {
+      scrolledForRef.current = itemId;
+      scrollRef.current?.scrollTo({ y: Math.max(y - 90, 0), animated: true });
+    }
+  };
+
+  // После «Взять в работу» экран идёт вслед за карточкой: вкладка
+  // «В работе», карточка раскрыта, подсвечена, список прокручен к ней.
+  const followToInProgress = (cardId: string) => {
+    setActiveTab("in_progress");
+    setExpandedCards((prev) => ({ ...prev, [cardId]: true }));
+    scrolledForRef.current = null;
+    setHighlightId(cardId);
+  };
+
   const handleTakeUser = async (userId: string) => {
     try {
       await takeUserModeration(userId);
       await refreshOneUser(userId);
+      followToInProgress(`registration-${userId}`);
     } catch {
       Alert.alert(
         "Нельзя принять заявку",
@@ -818,6 +865,7 @@ export default function ModerationScreen() {
       }
 
       await refreshOneInviteRequest(requestId);
+      followToInProgress(`invite_request-${requestId}`);
     } catch {
       Alert.alert(
         "Нельзя принять заявку",
@@ -836,6 +884,7 @@ export default function ModerationScreen() {
     try {
       await takeNameChangeRequest(requestId);
       await refreshOneNameChange(requestId);
+      followToInProgress(`name_change-${requestId}`);
     } catch {
       Alert.alert(
         "Нельзя принять заявку",
@@ -854,6 +903,7 @@ export default function ModerationScreen() {
     try {
       await takeComplaint(complaintId);
       await refreshOneComplaint(complaintId);
+      followToInProgress(`complaint-${complaintId}`);
     } catch {
       Alert.alert(
         "Нельзя принять заявку",
@@ -872,6 +922,7 @@ export default function ModerationScreen() {
     try {
       await takeAppeal(appealId);
       await loadData(true);
+      followToInProgress(`appeal-${appealId}`);
     } catch {
       Alert.alert(
         "Нельзя взять обращение",
@@ -1565,7 +1616,11 @@ export default function ModerationScreen() {
       const isExpanded = !!expandedCards[item.id];
 
       return (
-        <View key={item.id} style={styles.card}>
+        <View
+          key={item.id}
+          style={[styles.card, isHighlighted(item.id) && styles.cardFocused]}
+          onLayout={(e) => onCardLayout(item.id, e.nativeEvent.layout.y)}
+        >
           <TouchableOpacity
             activeOpacity={0.9}
             onPress={() => toggleCard(item.id)}
@@ -1652,7 +1707,11 @@ export default function ModerationScreen() {
     }
 
     return (
-      <View key={item.id} style={styles.card}>
+      <View
+        key={item.id}
+        style={[styles.card, isHighlighted(item.id) && styles.cardFocused]}
+        onLayout={(e) => onCardLayout(item.id, e.nativeEvent.layout.y)}
+      >
         <TouchableOpacity
           activeOpacity={0.9}
           onPress={() => {
@@ -2353,7 +2412,7 @@ export default function ModerationScreen() {
               </TouchableOpacity>
             </View>
           )}
-        <ScrollView contentContainerStyle={styles.container}>
+        <ScrollView ref={scrollRef} contentContainerStyle={styles.container}>
           {unifiedItems.length === 0 ? (
             <Text style={styles.emptyText}>Список пуст</Text>
           ) : (
@@ -2609,6 +2668,13 @@ const styles = StyleSheet.create({
     marginBottom: 12,
     borderWidth: 0.75,
     borderColor: "rgba(93,140,120,0.28)",
+  },
+
+  // Прицельная карточка: к ней привело уведомление или «Взять в работу».
+  cardFocused: {
+    borderColor: "#69B78D",
+    borderWidth: 1.5,
+    backgroundColor: "#F2FAF5",
   },
 
   cardHeader: {

@@ -1,11 +1,13 @@
-import { useEffect, useState } from 'react';
-import { Redirect } from 'expo-router';
-import { View, ActivityIndicator, StyleSheet } from 'react-native';
-import { getMyProfile } from '../services/profileService';
+import { Redirect } from "expo-router";
+import { useEffect, useState } from "react";
+import { ActivityIndicator, StyleSheet, View } from "react-native";
+import { getMyProfile } from "../services/profileService";
 
 export default function Index() {
   const [ready, setReady] = useState(false);
-  const [route, setRoute] = useState<'welcome' | 'pending' | 'approved' | 'blocked' | 'deleted'>('welcome');
+  const [route, setRoute] = useState<
+    "welcome" | "pending" | "approved" | "blocked" | "deleted"
+  >("welcome");
 
   useEffect(() => {
     const init = async () => {
@@ -13,22 +15,22 @@ export default function Index() {
         const profile = await getMyProfile();
 
         if (!profile) {
-          setRoute('welcome');
+          setRoute("welcome");
           setReady(true);
           return;
         }
 
         if (profile.is_deleted) {
-          setRoute('deleted');
+          setRoute("deleted");
         } else if (profile.is_blocked) {
-          setRoute('blocked');
-        } else if (profile.moderation_status === 'approved') {
-          setRoute('approved');
+          setRoute("blocked");
+        } else if (profile.moderation_status === "approved") {
+          setRoute("approved");
         } else {
-          setRoute('pending');
+          setRoute("pending");
         }
       } catch {
-        setRoute('welcome');
+        setRoute("welcome");
       } finally {
         setReady(true);
       }
@@ -45,19 +47,19 @@ export default function Index() {
     );
   }
 
-  if (route === 'deleted') {
+  if (route === "deleted") {
     return <Redirect href="/profile-deleted" />;
   }
 
-  if (route === 'blocked') {
+  if (route === "blocked") {
     return <Redirect href="/access-restricted" />;
   }
 
-  if (route === 'approved') {
+  if (route === "approved") {
     return <Redirect href="/splash" />;
   }
 
-  if (route === 'pending') {
+  if (route === "pending") {
     return <Redirect href="/pending-approval" />;
   }
 
@@ -67,8 +69,8 @@ export default function Index() {
 const styles = StyleSheet.create({
   loader: {
     flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#fff',
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: "#fff",
   },
 });
