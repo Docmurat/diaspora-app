@@ -15,6 +15,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { Tekmet } from "../components/mingi";
 import { supabase } from "../lib/supabase";
@@ -87,6 +88,10 @@ export default function NotificationsScreen() {
     Philosopher_700Bold,
   });
 
+  // Отступ под чёлку/статус-бар: шапка у самого верха (образец Вехи 32).
+  // Хук обязан стоять ДО ранних выходов — иначе падение.
+  const insets = useSafeAreaInsets();
+
   const [items, setItems] = useState<AppNotification[]>([]);
   const [isModerator, setIsModerator] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -134,8 +139,12 @@ export default function NotificationsScreen() {
 
       if (!user || !alive) return;
 
+      // Имя канала уникальное на каждый заход на экран: при повторном
+      // монтировании библиотека иначе подсовывает СТАРЫЙ уже запущенный
+      // канал с тем же именем, и подписка падает (тот же капкан, что у
+      // TopBar в Вехе 29).
       channel = supabase
-        .channel(`notifications-list-${user.id}`)
+        .channel(`notifications-list-${user.id}-${Date.now()}`)
         .on(
           "postgres_changes",
           {
@@ -205,7 +214,10 @@ export default function NotificationsScreen() {
       <StatusBar style="dark" />
 
       <ScrollView
-        contentContainerStyle={styles.container}
+        contentContainerStyle={[
+          styles.container,
+          { paddingTop: insets.top + 10 },
+        ]}
         showsVerticalScrollIndicator={false}
       >
         <TouchableOpacity
@@ -316,7 +328,6 @@ const styles = StyleSheet.create({
 
   container: {
     paddingHorizontal: 20,
-    paddingTop: 56,
     paddingBottom: 40,
     flexGrow: 1,
   },

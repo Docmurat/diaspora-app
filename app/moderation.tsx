@@ -17,7 +17,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import { Tekmet } from "../components/mingi";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { supabase } from "../lib/supabase";
 import { subscribeToChanges } from "../services/liveService";
 import {
@@ -148,6 +148,10 @@ export default function ModerationScreen() {
   const params = useLocalSearchParams();
   const focusId = String(params.focus || "");
   const focusTab = String(params.tab || "");
+
+  // Отступ под чёлку/статус-бар: шапка у самого верха (образец Вехи 32).
+  // Хук обязан стоять ДО ранних выходов — иначе падение.
+  const insets = useSafeAreaInsets();
 
   const [activeTab, setActiveTab] = useState<QueueTab>("new");
   // Фильтр по виду заявки внутри вкладки «Новое»
@@ -552,6 +556,12 @@ export default function ModerationScreen() {
       .select(
         `
         *,
+        requester:user_id (
+          id,
+          first_name,
+          last_name,
+          avatar_path
+        ),
         assigned_moderator:assigned_to (
           id,
           first_name,
@@ -1911,6 +1921,9 @@ export default function ModerationScreen() {
                 const request = item.raw;
                 return (
                   <>
+                    {request.requester &&
+                      renderPersonRow("УЧАСТНИК", request.requester, false)}
+
                     <Text style={styles.mutedText}>
                       → {request.requested_first_name}{" "}
                       {request.requested_last_name}
@@ -2184,7 +2197,7 @@ export default function ModerationScreen() {
   return (
     <>
       <View style={styles.screen}>
-        <View style={styles.header}>
+        <View style={[styles.header, { paddingTop: insets.top + 10 }]}>
           <TouchableOpacity onPress={() => router.back()} activeOpacity={0.8}>
             <Text style={styles.backLinkText}>← Назад</Text>
           </TouchableOpacity>
@@ -2208,9 +2221,6 @@ export default function ModerationScreen() {
             </Text>
           </TouchableOpacity>
         </View>
-
-        <Text style={styles.title}>Модерация</Text>
-        <Tekmet style={styles.tekmet} />
 
         <View style={styles.tabsRow}>
           <TouchableOpacity
@@ -2482,7 +2492,6 @@ const styles = StyleSheet.create({
   },
 
   header: {
-    paddingTop: 56,
     paddingHorizontal: 20,
     paddingBottom: 6,
     flexDirection: "row",
@@ -2537,6 +2546,9 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     flexWrap: "wrap",
     paddingHorizontal: 20,
+    // Воздух между шапкой («Назад» + переключатель уведомлений)
+    // и канбаном очередей — появился после удаления заголовка.
+    paddingTop: 14,
     paddingBottom: 10,
   },
 

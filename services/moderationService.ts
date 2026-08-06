@@ -189,6 +189,12 @@ export async function getPendingNameChangeRequests() {
     .select(
       `
       *,
+      requester:user_id (
+        id,
+        first_name,
+        last_name,
+        avatar_path
+      ),
       assigned_moderator:assigned_to (
         id,
         first_name,

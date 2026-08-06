@@ -21,6 +21,7 @@ import {
   TouchableWithoutFeedback,
   View,
 } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { Glass, Tekmet } from "../../components/mingi";
 import { getModerationTaskCount } from "../../services/moderationService";
@@ -71,6 +72,10 @@ export default function ProfileScreen() {
     Philosopher_400Regular,
     Philosopher_700Bold,
   });
+
+  // Отступ под чёлку/статус-бар: шапка у самого верха (образец Вехи 32).
+  // Хук обязан стоять ДО ранних выходов — иначе падение.
+  const insets = useSafeAreaInsets();
 
   const [user, setUser] = useState<DbUserProfile | null>(null);
   const [loading, setLoading] = useState(true);
@@ -302,7 +307,10 @@ export default function ProfileScreen() {
         <StatusBar style="dark" />
 
         <ScrollView
-          contentContainerStyle={styles.container}
+          contentContainerStyle={[
+            styles.container,
+            { paddingTop: insets.top + 10 },
+          ]}
           showsVerticalScrollIndicator={false}
         >
           <TouchableOpacity
@@ -586,7 +594,6 @@ const styles = StyleSheet.create({
 
   container: {
     paddingHorizontal: 20,
-    paddingTop: 56,
     // Запас снизу под парящую панель вкладок (важно: последняя строка
     // меню — «Выйти из аккаунта», её нужно докручивать выше капсулы).
     paddingBottom: 120,
