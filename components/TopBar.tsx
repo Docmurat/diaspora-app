@@ -1,5 +1,10 @@
 // Верхняя строка приложения: слева аватар (ведёт в профиль),
 // справа колокольчик (ведёт в уведомления). Используется на всех вкладках.
+//
+// Веха 41: живой счётчик колокольчика переведён на общую службу
+// liveService — при обрыве связи она сама переподключается и просит
+// перечитать счётчик (самолечение одно на всех). Уникальность имени
+// канала теперь тоже обеспечивает служба.
 
 import { Ionicons } from "@expo/vector-icons";
 import { router, useFocusEffect } from "expo-router";
@@ -8,14 +13,9 @@ import { Image, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { supabase } from "../lib/supabase";
+import { subscribeToChanges } from "../services/liveService";
 import { getUnreadCount } from "../services/notificationService";
 import { getMyProfile } from "../services/profileService";
-
-// Каждому экземпляру TopBar — свой номер, чтобы имена realtime-каналов
-// не совпадали: TopBar стоит на каждой вкладке, и при одинаковом имени
-// второй экран получает УЖЕ запущенный канал первого и падает с ошибкой
-// «cannot add postgres_changes callbacks after subscribe()».
-let topBarInstanceCounter = 0;
 
 export default function TopBar({
   transparent = false,
@@ -57,10 +57,11 @@ export default function TopBar({
   );
 
   // Живой счётчик: база сама сообщает о новых уведомлениях,
-  // страницу обновлять не нужно.
+  // страницу обновлять не нужно. При обрыве связи liveService сам
+  // переподключится и вызовет refresh — счётчик догонит пропущенное.
   useEffect(() => {
     let alive = true;
-    let channel: ReturnType<typeof supabase.channel> | null = null;
+    let unsubscribe: (() => void) | null = null;
 
     const refresh = async () => {
       try {
@@ -78,37 +79,18 @@ export default function TopBar({
 
       if (!user || !alive) return;
 
-      topBarInstanceCounter += 1;
-      const channelName = `user-live-${user.id}-${topBarInstanceCounter}`;
-
-      channel = supabase
-        .channel(channelName)
-        .on(
-          "postgres_changes",
+      unsubscribe = subscribeToChanges(
+        "topbar-bell",
+        [
           {
-            event: "*",
-            schema: "public",
             table: "notifications",
-            filter: `user_id=eq.${user.id}`,
+            filter: { column: "user_id", value: user.id },
           },
-          () => {
-            refresh();
-          },
-        )
-        .subscribe((status: string, err?: Error) => {
-          // Докладываем результат подписки: молчаливый отказ сервера
-          // раньше оставлял колокольчик «глухим» без единой ошибки.
-          if (status === "SUBSCRIBED") {
-            console.log("Колокольчик: живая подписка подключена");
-          } else {
-            console.log(
-              `Колокольчик: подписка — статус ${status}`,
-              err?.message || "",
-            );
-          }
-        });
-      // Выбрасыванием при удалении/блокировке теперь занимается
-      // глобальный часовой components/AccountGuard.tsx (в корне приложения) —
+        ],
+        refresh,
+      );
+      // Выбрасыванием при удалении/блокировке занимается глобальный
+      // часовой components/AccountGuard.tsx (в корне приложения) —
       // он работает на всех экранах, а не только там, где есть TopBar.
     };
 
@@ -116,7 +98,7 @@ export default function TopBar({
 
     return () => {
       alive = false;
-      if (channel) supabase.removeChannel(channel);
+      if (unsubscribe) unsubscribe();
     };
   }, []);
 

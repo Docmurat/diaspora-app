@@ -3,10 +3,11 @@
 // Если человека удалили или заблокировали — уводит на нужный экран
 // сразу, с любого места.
 //
-// Три рубежа защиты:
+// Три рубежа защиты (Веха 40 — НЕ упрощать):
 // 1) осмотр сразу при входе/перезагрузке (раньше его не было — после F5
 //    удалённый оставался внутри);
-// 2) живые обновления (мгновенно, когда сервер их доставляет);
+// 2) живые обновления — с Вехи 41 через общую службу liveService:
+//    при обрыве связи она сама переподключается и вызывает проверку;
 // 3) тихий опрос раз в 12 секунд — страховка на случай, если живое
 //    событие не дошло (как запасная проверка на экране ожидания).
 
@@ -14,10 +15,7 @@ import { router, usePathname } from "expo-router";
 import { useEffect, useRef } from "react";
 
 import { supabase } from "../lib/supabase";
-
-// Свой номер каждому подключению, чтобы имена realtime-каналов не совпадали
-// (см. такой же приём в TopBar).
-let guardInstanceCounter = 0;
+import { subscribeToChanges } from "../services/liveService";
 
 const POLL_INTERVAL_MS = 12000;
 
@@ -28,9 +26,9 @@ export default function AccountGuard() {
 
   useEffect(() => {
     let alive = true;
-    let channel: ReturnType<typeof supabase.channel> | null = null;
     let watchedUserId: string | null = null;
     let pollTimer: ReturnType<typeof setInterval> | null = null;
+    let unsubscribeLive: (() => void) | null = null;
 
     const handleAccountState = (me: any) => {
       if (!me) return;
@@ -64,13 +62,9 @@ export default function AccountGuard() {
     };
 
     const drop = () => {
-      if (channel) {
-        try {
-          supabase.removeChannel(channel);
-        } catch (e) {
-          console.log("Часовой: не удалось отключить канал:", e);
-        }
-        channel = null;
+      if (unsubscribeLive) {
+        unsubscribeLive();
+        unsubscribeLive = null;
       }
       if (pollTimer) {
         clearInterval(pollTimer);
@@ -80,28 +74,21 @@ export default function AccountGuard() {
     };
 
     const subscribeFor = (userId: string) => {
-      guardInstanceCounter += 1;
       watchedUserId = userId;
 
       // Рубеж 1: осмотр сразу — важно после перезагрузки страницы.
       checkNow(userId);
 
-      // Рубеж 2: живые обновления.
-      channel = supabase
-        .channel(`account-guard-${userId}-${guardInstanceCounter}`)
-        .on(
-          "postgres_changes" as any,
-          {
-            event: "UPDATE",
-            schema: "public",
-            table: "users",
-            filter: `id=eq.${userId}`,
-          },
-          (payload: any) => {
-            if (alive) handleAccountState(payload.new);
-          },
-        )
-        .subscribe();
+      // Рубеж 2: живые обновления через liveService. Пришло событие
+      // (или связь восстановилась после обрыва) — перечитываем свою
+      // запись из базы и решаем, куда вести человека.
+      unsubscribeLive = subscribeToChanges(
+        "account-guard",
+        [{ table: "users", filter: { column: "id", value: userId } }],
+        () => {
+          if (alive && watchedUserId) checkNow(watchedUserId);
+        },
+      );
 
       // Рубеж 3: тихий опрос-страховка.
       pollTimer = setInterval(() => {
