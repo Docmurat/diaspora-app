@@ -3,10 +3,11 @@ import {
   Philosopher_700Bold,
   useFonts,
 } from "@expo-google-fonts/philosopher";
+import { Ionicons } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
-import { router, useLocalSearchParams } from "expo-router";
+import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
 import { StatusBar } from "expo-status-bar";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Alert,
   Image,
@@ -30,8 +31,13 @@ import {
 import { Glass, Tekmet } from "../components/mingi";
 import { supabase } from "../lib/supabase";
 import { registerUser } from "../services/authService";
+import { recordRegistrationConsents } from "../services/consentService";
 import { translateAuthError } from "../services/errorService";
 import { isRemoteAvatar, uploadAvatar } from "../services/storageService";
+import {
+  getMemorandumAccepted,
+  setMemorandumAccepted,
+} from "../store/consentFlow";
 import { formatBirthDateInput, normalizeBirthDate } from "../store/user";
 
 const categories = [
@@ -94,6 +100,28 @@ export default function RegisterScreen() {
   });
 
   const [step, setStep] = useState(1);
+
+  // Согласия (152-ФЗ): ДВЕ отдельные галочки — согласие на обработку ПДн
+  // обязано быть оформлено отдельно от прочих документов (ст. 9 в ред.
+  // 156-ФЗ). Обе обязательны для отправки анкеты.
+  const [consentPdn, setConsentPdn] = useState(false);
+  const [consentTerms, setConsentTerms] = useState(false);
+  // Меморандум руками не отмечается: галочка зажигается ТОЛЬКО кнопкой
+  // «Принимаю» в конце текста меморандума (иначе не прочтут).
+  const [consentMemo, setConsentMemo] = useState(false);
+
+  useEffect(() => {
+    setMemorandumAccepted(false); // чистый лист при входе в регистрацию
+  }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      if (getMemorandumAccepted()) {
+        setConsentMemo(true);
+        setError("");
+      }
+    }, []),
+  );
   const params = useLocalSearchParams();
   const inviteCode = String(params.inviteCode || "");
 
@@ -337,6 +365,13 @@ export default function RegisterScreen() {
       return;
     }
 
+    if (!consentPdn || !consentTerms || !consentMemo) {
+      setError(
+        "Для регистрации отметьте все три пункта: согласие на обработку данных, принятие соглашения и Меморандум сообщества",
+      );
+      return;
+    }
+
     const matchedCategory = categories.find(
       (item) => item.toLowerCase() === category.trim().toLowerCase(),
     );
@@ -374,6 +409,9 @@ export default function RegisterScreen() {
         extraInfo: "",
         avatarPath: null,
       });
+
+      // Журнал согласий: фиксируем принятые версии (не роняет регистрацию)
+      await recordRegistrationConsents(result.userId);
 
       if (avatarUri && !isRemoteAvatar(avatarUri)) {
         const uploaded = await uploadAvatar(result.userId, avatarUri);
@@ -764,6 +802,108 @@ export default function RegisterScreen() {
                 />
               </Glass>
 
+              <TouchableOpacity
+                style={styles.consentRow}
+                activeOpacity={0.8}
+                onPress={() => {
+                  setConsentPdn((v) => !v);
+                  setError("");
+                }}
+              >
+                <View
+                  style={[
+                    styles.consentBox,
+                    consentPdn && styles.consentBoxChecked,
+                  ]}
+                >
+                  {consentPdn && (
+                    <Ionicons name="checkmark" size={15} color="#FFFFFF" />
+                  )}
+                </View>
+                <Text style={styles.consentText}>
+                  Я даю согласие на обработку моих персональных данных{" "}
+                  <Text
+                    style={styles.consentLink}
+                    onPress={() => router.push("/consent" as any)}
+                  >
+                    (текст согласия)
+                  </Text>
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.consentRow}
+                activeOpacity={0.8}
+                onPress={() => {
+                  setConsentTerms((v) => !v);
+                  setError("");
+                }}
+              >
+                <View
+                  style={[
+                    styles.consentBox,
+                    consentTerms && styles.consentBoxChecked,
+                  ]}
+                >
+                  {consentTerms && (
+                    <Ionicons name="checkmark" size={15} color="#FFFFFF" />
+                  )}
+                </View>
+                <Text style={styles.consentText}>
+                  Принимаю{" "}
+                  <Text
+                    style={styles.consentLink}
+                    onPress={() => router.push("/terms" as any)}
+                  >
+                    Пользовательское соглашение
+                  </Text>{" "}
+                  и ознакомлен(а) с{" "}
+                  <Text
+                    style={styles.consentLink}
+                    onPress={() => router.push("/privacy" as any)}
+                  >
+                    Политикой конфиденциальности
+                  </Text>
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.consentRow}
+                activeOpacity={0.8}
+                onPress={() => {
+                  if (consentMemo) {
+                    // Снять принятие: галочка гаснет, кнопка отправки тухнет
+                    setConsentMemo(false);
+                    setMemorandumAccepted(false);
+                  } else {
+                    router.push("/memorandum?mode=accept" as any);
+                  }
+                }}
+              >
+                <View
+                  style={[
+                    styles.consentBox,
+                    consentMemo && styles.consentBoxChecked,
+                  ]}
+                >
+                  {consentMemo && (
+                    <Ionicons name="checkmark" size={15} color="#FFFFFF" />
+                  )}
+                </View>
+                <Text style={styles.consentText}>
+                  {consentMemo ? (
+                    "Меморандум «Минги-Тау» принят"
+                  ) : (
+                    <>
+                      Меморандум «Минги-Тау» —{" "}
+                      <Text style={styles.consentLink}>
+                        прочитать и принять
+                      </Text>
+                    </>
+                  )}
+                </Text>
+              </TouchableOpacity>
+
               {!!error && <Text style={styles.error}>{error}</Text>}
 
               <View style={styles.buttonsRow}>
@@ -790,11 +930,22 @@ export default function RegisterScreen() {
                 <TouchableOpacity
                   activeOpacity={0.85}
                   onPress={handleRegister}
-                  disabled={submitting || !step2Valid}
+                  disabled={
+                    submitting ||
+                    !step2Valid ||
+                    !consentPdn ||
+                    !consentTerms ||
+                    !consentMemo
+                  }
                   style={[
                     styles.primaryShadow,
                     styles.primaryHalf,
-                    (submitting || !step2Valid) && styles.disabled,
+                    (submitting ||
+                      !step2Valid ||
+                      !consentPdn ||
+                      !consentTerms ||
+                      !consentMemo) &&
+                      styles.disabled,
                   ]}
                 >
                   <Glass
@@ -1100,5 +1251,42 @@ const styles = StyleSheet.create({
 
   disabled: {
     opacity: 0.7,
+  },
+
+  consentRow: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    marginTop: 6,
+    marginBottom: 8,
+  },
+
+  consentBox: {
+    width: 22,
+    height: 22,
+    borderRadius: 6,
+    borderWidth: 1.5,
+    borderColor: "rgba(93,140,120,0.55)",
+    backgroundColor: "rgba(255,255,255,0.95)",
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: 10,
+    marginTop: 1,
+  },
+
+  consentBoxChecked: {
+    backgroundColor: "#69B78D",
+    borderColor: "#69B78D",
+  },
+
+  consentText: {
+    flex: 1,
+    fontSize: 13,
+    lineHeight: 19,
+    color: "#4E7364",
+  },
+
+  consentLink: {
+    color: "#96AC9E",
+    textDecorationLine: "underline",
   },
 });

@@ -361,6 +361,8 @@ export default function WelcomeScreen() {
             <Text style={styles.linkText}>Соглашение</Text>
           </TouchableOpacity>
         </View>
+
+        <Text style={styles.founder}>Основатель — Мурат Курджиев</Text>
       </View>
     </View>
   );
@@ -503,5 +505,12 @@ const styles = StyleSheet.create({
     marginHorizontal: 6,
     color: "#96AC9E",
     fontSize: 11.5,
+  },
+
+  founder: {
+    marginTop: 10,
+    fontSize: 12,
+    color: "#8FA79A",
+    textAlign: "center",
   },
 });

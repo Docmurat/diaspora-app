@@ -487,7 +487,7 @@ export default function HomeScreen() {
 
           {!showList && (
             <Text style={styles.founder}>
-              Основатель проекта — Мурат Курджиев
+              Основатель — Мурат Курджиев
             </Text>
           )}
         </View>

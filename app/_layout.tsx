@@ -54,6 +54,8 @@ export default function RootLayout() {
           <Stack.Screen name="moderation" />
           <Stack.Screen name="moderation-case-details" />
           <Stack.Screen name="moderation-edit-profile" />
+          <Stack.Screen name="consent" />
+          <Stack.Screen name="memorandum" />
           <Stack.Screen name="terms" />
           <Stack.Screen name="privacy" />
           <Stack.Screen name="test-db" />
