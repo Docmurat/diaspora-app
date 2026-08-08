@@ -1,10 +1,14 @@
 // Невидимый «часовой» аккаунта. Подключается один раз в корне приложения
-// (app/_layout.tsx) и слушает изменения СВОЕЙ записи в таблице участников.
-// Если человека удалили или заблокировали, пока он в приложении, —
-// уводит на нужный экран сразу, с любого места, без перезагрузки.
+// (app/_layout.tsx) и следит за СВОЕЙ записью в таблице участников.
+// Если человека удалили или заблокировали — уводит на нужный экран
+// сразу, с любого места.
 //
-// Раньше этим занималась верхняя панель (TopBar), но она стоит не на всех
-// экранах: на главной, в карточках и в чате человека не выбрасывало.
+// Три рубежа защиты:
+// 1) осмотр сразу при входе/перезагрузке (раньше его не было — после F5
+//    удалённый оставался внутри);
+// 2) живые обновления (мгновенно, когда сервер их доставляет);
+// 3) тихий опрос раз в 12 секунд — страховка на случай, если живое
+//    событие не дошло (как запасная проверка на экране ожидания).
 
 import { router, usePathname } from "expo-router";
 import { useEffect, useRef } from "react";
@@ -15,6 +19,8 @@ import { supabase } from "../lib/supabase";
 // (см. такой же приём в TopBar).
 let guardInstanceCounter = 0;
 
+const POLL_INTERVAL_MS = 12000;
+
 export default function AccountGuard() {
   const pathname = usePathname();
   const pathnameRef = useRef(pathname);
@@ -24,6 +30,7 @@ export default function AccountGuard() {
     let alive = true;
     let channel: ReturnType<typeof supabase.channel> | null = null;
     let watchedUserId: string | null = null;
+    let pollTimer: ReturnType<typeof setInterval> | null = null;
 
     const handleAccountState = (me: any) => {
       if (!me) return;
@@ -42,6 +49,20 @@ export default function AccountGuard() {
       }
     };
 
+    const checkNow = async (userId: string) => {
+      try {
+        const { data } = await supabase
+          .from("users")
+          .select("id, is_deleted, is_blocked")
+          .eq("id", userId)
+          .maybeSingle();
+
+        if (alive && data) handleAccountState(data);
+      } catch (e) {
+        console.log("Часовой: проверка не удалась:", e);
+      }
+    };
+
     const drop = () => {
       if (channel) {
         try {
@@ -51,6 +72,10 @@ export default function AccountGuard() {
         }
         channel = null;
       }
+      if (pollTimer) {
+        clearInterval(pollTimer);
+        pollTimer = null;
+      }
       watchedUserId = null;
     };
 
@@ -58,6 +83,10 @@ export default function AccountGuard() {
       guardInstanceCounter += 1;
       watchedUserId = userId;
 
+      // Рубеж 1: осмотр сразу — важно после перезагрузки страницы.
+      checkNow(userId);
+
+      // Рубеж 2: живые обновления.
       channel = supabase
         .channel(`account-guard-${userId}-${guardInstanceCounter}`)
         .on(
@@ -73,6 +102,11 @@ export default function AccountGuard() {
           },
         )
         .subscribe();
+
+      // Рубеж 3: тихий опрос-страховка.
+      pollTimer = setInterval(() => {
+        if (alive && watchedUserId) checkNow(watchedUserId);
+      }, POLL_INTERVAL_MS);
     };
 
     // Следим за входом/выходом: при входе подписываемся на свою запись,

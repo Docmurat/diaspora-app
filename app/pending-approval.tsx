@@ -7,7 +7,6 @@ import { router, useFocusEffect } from "expo-router";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
-  Alert,
   ScrollView,
   StyleSheet,
   Text,
@@ -45,6 +44,7 @@ export default function PendingApprovalScreen() {
   const [profile, setProfile] = useState<any>(null);
   const [sendingAgain, setSendingAgain] = useState(false);
   const [resubmitMessage, setResubmitMessage] = useState("");
+  const [submitError, setSubmitError] = useState("");
 
   const loadData = useCallback(async (silent = false) => {
     try {
@@ -78,6 +78,17 @@ export default function PendingApprovalScreen() {
     }
   }, []);
 
+  // Стоп-кран: после первого перехода внутрь приложения все проверки
+  // этого экрана глохнут. Без него таймер продолжал гонять человека
+  // по кругу «заставка — главный экран — заставка».
+  const redirectedRef = useRef(false);
+
+  const goInside = () => {
+    if (redirectedRef.current) return;
+    redirectedRef.current = true;
+    router.replace("/splash");
+  };
+
   // Живое обновление: решение модератора и его сообщения прилетают сами
   useEffect(() => {
     let alive = true;
@@ -91,7 +102,9 @@ export default function PendingApprovalScreen() {
       if (!user || !alive) return;
 
       channel = supabase
-        .channel(`pending-approval-${user.id}`)
+        // Имя канала уникальное на каждый заход на экран (капкан Вехи 29):
+        // со статичным именем повторный вход ронял приложение.
+        .channel(`pending-approval-${user.id}-${Date.now()}`)
         .on(
           "postgres_changes",
           {
@@ -104,7 +117,7 @@ export default function PendingApprovalScreen() {
             const fresh = payload.new as any;
 
             if (fresh?.moderation_status === "approved") {
-              router.replace("/splash");
+              goInside();
               return;
             }
 
@@ -150,11 +163,17 @@ export default function PendingApprovalScreen() {
   useEffect(() => {
     const interval = setInterval(async () => {
       try {
+        if (redirectedRef.current) {
+          clearInterval(interval);
+          return;
+        }
+
         const fresh = await getMyProfile();
         if (!fresh) return;
 
         if (fresh.moderation_status === "approved") {
-          router.replace("/splash");
+          clearInterval(interval);
+          goInside();
           return;
         }
 
@@ -185,32 +204,53 @@ export default function PendingApprovalScreen() {
   const lastMessage =
     messages.length > 0 ? messages[messages.length - 1] : null;
 
+  // Повторная отправка видна по серверному флажку изменений (он взводится
+  // при отправке и гаснет, когда модератор открывает карточку). Раньше
+  // экран смотрел только на последнее сообщение — при отправке без
+  // сопроводительного текста он «не замечал» отправку.
   const hasUserResubmittedAfterRevision =
-    isNeedsRevision && lastMessage?.author_role === "user";
+    isNeedsRevision &&
+    ((profile as any)?.moderator_has_unread_changes === true ||
+      lastMessage?.author_role === "user");
 
   const showRevisionActions =
     isNeedsRevision && !hasUserResubmittedAfterRevision;
 
   const handleSubmitAgain = async () => {
     if (!profile?.id) {
-      Alert.alert("Ошибка", "Профиль не найден");
+      setSubmitError("Профиль не найден");
       return;
     }
 
     try {
       setSendingAgain(true);
+      setSubmitError("");
+
+      // После доработки заявка остаётся закреплённой за своим модератором
+      // (статус не меняется). После отклонения — подаётся заново: статус
+      // «pending», карточка возвращается в «Новое» неназначенной, а
+      // модераторам сам приходит триггер «Новая заявка на вступление».
+      const updatePayload = isRejected
+        ? {
+            moderation_status: "pending",
+            moderator_has_unread_changes: false,
+            moderation_completed_by_name: null,
+            moderation_completed_by: null,
+            moderation_completed_at: null,
+            moderation_assigned_to: null,
+            moderation_assigned_name: null,
+            moderation_taken_at: null,
+            updated_at: new Date().toISOString(),
+          }
+        : {
+            moderation_status: "needs_revision",
+            moderator_has_unread_changes: true,
+            updated_at: new Date().toISOString(),
+          };
 
       const { error: updateError } = await supabase
         .from("users")
-        .update({
-          // Статус НЕ меняем: заявка остаётся в очереди «На доработке»
-          // и закреплённой за своим модератором. Признак ниже говорит
-          // модератору, что человек прислал исправления, — на нём же
-          // висит уведомление.
-          moderation_status: "needs_revision",
-          moderator_has_unread_changes: true,
-          updated_at: new Date().toISOString(),
-        })
+        .update(updatePayload)
         .eq("id", profile.id);
 
       if (updateError) {
@@ -219,7 +259,16 @@ export default function PendingApprovalScreen() {
 
       const covering = resubmitMessage.trim();
 
-      if (covering) {
+      // След в хронологии остаётся всегда: либо сопроводительный текст
+      // участника, либо автотекст — чтобы модератор, вернувшись в
+      // карточку позже, видел, что произошло.
+      const trailText =
+        covering ||
+        (isRejected
+          ? "Заявка подана повторно после отклонения."
+          : "Анкета отправлена повторно после исправлений.");
+
+      {
         const { error: messageError } = await supabase
           .from("moderation_messages")
           .insert({
@@ -227,7 +276,7 @@ export default function PendingApprovalScreen() {
             request_id: profile.id, // ВАЖНОЕ 1
             author_user_id: profile.id,
             author_role: "user",
-            message: covering,
+            message: trailText,
             read_by_user: true,
             read_by_moderator: false,
           });
@@ -238,16 +287,13 @@ export default function PendingApprovalScreen() {
       }
 
       setResubmitMessage("");
+      // Экран сам переключится на «На рассмотрении»: loadData обновит
+      // профиль, и серверный флажок изменений покажет отправку.
       await loadData();
-
-      Alert.alert(
-        "Отправлено",
-        "Анкета повторно отправлена модератору на рассмотрение.",
-      );
     } catch (e) {
       const message =
         e instanceof Error ? e.message : "Не удалось отправить анкету повторно";
-      Alert.alert("Ошибка", message);
+      setSubmitError(message);
     } finally {
       setSendingAgain(false);
     }
@@ -281,10 +327,12 @@ export default function PendingApprovalScreen() {
 
         <Text style={styles.text}>
           {isRejected
-            ? "Модератор отклонил вашу анкету. Ознакомьтесь с комментарием ниже."
+            ? "Модератор отклонил вашу анкету. Ознакомьтесь с комментарием ниже. Вы можете исправить анкету и подать заявку повторно."
             : showRevisionActions
               ? "Исправьте данные, затем отправьте анкету на повторное рассмотрение."
-              : "Спасибо за регистрацию. Сейчас ваша анкета проверяется модератором."}
+              : hasUserResubmittedAfterRevision
+                ? "Исправления отправлены модератору. Как только он проверит анкету, экран обновится сам."
+                : "Спасибо за регистрацию. Сейчас ваша анкета проверяется модератором."}
         </Text>
 
         {!isRejected && !showRevisionActions && (
@@ -308,7 +356,7 @@ export default function PendingApprovalScreen() {
           </Glass>
         )}
 
-        {showRevisionActions ? (
+        {showRevisionActions || isRejected ? (
           <>
             <TouchableOpacity
               activeOpacity={0.85}
@@ -338,12 +386,20 @@ export default function PendingApprovalScreen() {
                 style={styles.textArea}
                 value={resubmitMessage}
                 onChangeText={setResubmitMessage}
-                placeholder="Например: исправил город и профессию"
+                placeholder={
+                  isRejected
+                    ? "Например: объясните, почему заявку стоит пересмотреть"
+                    : "Например: исправил город и профессию"
+                }
                 placeholderTextColor="#8FA79A"
                 multiline
                 textAlignVertical="top"
               />
             </Glass>
+
+            {!!submitError && (
+              <Text style={styles.submitError}>{submitError}</Text>
+            )}
 
             <TouchableOpacity
               activeOpacity={0.85}
@@ -358,13 +414,17 @@ export default function PendingApprovalScreen() {
               >
                 <View style={styles.buttonInner}>
                   <Text style={styles.primaryButtonText}>
-                    {sendingAgain ? "Отправка..." : "Отправить повторно"}
+                    {sendingAgain
+                      ? "Отправка..."
+                      : isRejected
+                        ? "Подать заявку повторно"
+                        : "Отправить повторно"}
                   </Text>
                 </View>
               </Glass>
             </TouchableOpacity>
           </>
-        ) : !isRejected ? (
+        ) : (
           <TouchableOpacity
             activeOpacity={0.85}
             onPress={() => router.push("/contact-admin")}
@@ -382,7 +442,7 @@ export default function PendingApprovalScreen() {
               </View>
             </Glass>
           </TouchableOpacity>
-        ) : null}
+        )}
 
         <TouchableOpacity
           onPress={async () => {
@@ -536,6 +596,13 @@ const styles = StyleSheet.create({
     fontSize: 14,
     marginTop: 22,
     textDecorationLine: "underline",
+  },
+
+  submitError: {
+    color: "#C05B4D",
+    fontSize: 14,
+    textAlign: "center",
+    marginBottom: 10,
   },
 
   disabled: {

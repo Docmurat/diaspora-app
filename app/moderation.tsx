@@ -1799,14 +1799,19 @@ export default function ModerationScreen() {
 
                     {renderInviteMessages(user.id)}
 
-                    <TouchableOpacity
-                      style={styles.secondaryActionFull}
-                      onPress={() => handleOpenDraftProfile(user.id)}
-                    >
-                      <Text style={styles.secondaryActionFullText}>
-                        Открыть профиль
-                      </Text>
-                    </TouchableOpacity>
+                    {/* Анкета открывается только модератору, который взял
+                        заявку в работу: в «Новом» кнопки нет. */}
+                    {!!user.moderation_assigned_to &&
+                      canManageAssignedTask(user.moderation_assigned_to) && (
+                        <TouchableOpacity
+                          style={styles.secondaryActionFull}
+                          onPress={() => handleOpenDraftProfile(user.id)}
+                        >
+                          <Text style={styles.secondaryActionFullText}>
+                            Открыть профиль
+                          </Text>
+                        </TouchableOpacity>
+                      )}
 
                     <View style={styles.assignmentBlock}>
                       {!user.moderation_assigned_to &&

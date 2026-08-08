@@ -167,7 +167,8 @@ export function subscribeToMessages({
   onUpdate,
 }: SubscribeToMessagesParams) {
   const channel = supabase
-    .channel(`messages:chat:${chatId}`)
+    // Имя канала уникальное на каждый вход в чат (капкан Вехи 29).
+    .channel(`messages:chat:${chatId}:${Date.now()}`)
     .on(
       "postgres_changes",
       {

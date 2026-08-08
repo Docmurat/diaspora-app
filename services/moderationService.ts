@@ -145,6 +145,10 @@ export async function rejectUser(
       moderation_assigned_to: mode === "revision" ? me.id : null,
       moderation_assigned_name: mode === "revision" ? moderatorName : null,
       moderation_taken_at: mode === "revision" ? now : null,
+      // Новый круг доработки начинается с чистого листа: флажок
+      // «прислал исправления» гаснет, иначе экран новичка думает,
+      // что исправления уже отправлены.
+      moderator_has_unread_changes: false,
       updated_at: now,
     })
     .eq("id", userId)
