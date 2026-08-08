@@ -19,8 +19,10 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { Tekmet } from "../components/mingi";
 import { supabase } from "../lib/supabase";
+import { subscribeToChanges } from "../services/liveService";
 import {
   AppNotification,
+  deleteNotification,
   getMyNotifications,
   markAllNotificationsRead,
   markNotificationRead,
@@ -62,12 +64,46 @@ function formatWhen(dateString: string) {
     date.getMonth() === yesterday.getMonth() &&
     date.getFullYear() === yesterday.getFullYear();
 
-  if (isYesterday) return "Вчера";
+  // Под заголовком группы «Вчера» показываем время, а не слово ещё раз
+  if (isYesterday) {
+    return date.toLocaleTimeString("ru-RU", {
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  }
 
   return date.toLocaleDateString("ru-RU", {
     day: "2-digit",
     month: "2-digit",
   });
+}
+
+// Разбивка списка по датам: Сегодня · Вчера · Последние 7 дней ·
+// Последние 30 дней · Ранее. Границы считаются от начала суток.
+function groupLabel(dateString: string): string {
+  const date = new Date(dateString);
+  const now = new Date();
+
+  const startOfToday = new Date(
+    now.getFullYear(),
+    now.getMonth(),
+    now.getDate(),
+  );
+
+  const startOfYesterday = new Date(startOfToday);
+  startOfYesterday.setDate(startOfToday.getDate() - 1);
+
+  const startOf7Days = new Date(startOfToday);
+  startOf7Days.setDate(startOfToday.getDate() - 7);
+
+  const startOf30Days = new Date(startOfToday);
+  startOf30Days.setDate(startOfToday.getDate() - 30);
+
+  if (date >= startOfToday) return "Сегодня";
+  if (date >= startOfYesterday) return "Вчера";
+  if (date >= startOf7Days) return "Последние 7 дней";
+  if (date >= startOf30Days) return "Последние 30 дней";
+  return "Ранее";
 }
 
 // Часть ссылок ведёт в закрытые разделы: например, уведомления о заявке
@@ -97,10 +133,12 @@ export default function NotificationsScreen() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (silent = false) => {
     try {
-      setLoading(true);
-      setError("");
+      if (!silent) {
+        setLoading(true);
+        setError("");
+      }
 
       const [data, profile] = await Promise.all([
         getMyNotifications(),
@@ -112,12 +150,14 @@ export default function NotificationsScreen() {
         profile?.role === "owner" || profile?.role === "moderator",
       );
     } catch (e) {
-      const message =
-        e instanceof Error ? e.message : "Не удалось загрузить уведомления";
-      setError(message);
-      setItems([]);
+      if (!silent) {
+        const message =
+          e instanceof Error ? e.message : "Не удалось загрузить уведомления";
+        setError(message);
+        setItems([]);
+      }
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   }, []);
 
@@ -127,10 +167,14 @@ export default function NotificationsScreen() {
     }, [load]),
   );
 
-  // Новые уведомления прилетают сами, без обновления страницы
+  // Новые уведомления прилетают сами, без обновления страницы.
+  // С Вехи 41 — через liveService: при обрыве связи служба сама
+  // переподключится и вызовет тихую перезагрузку списка
+  // («догоняем пропущенное»). Тихая перезагрузка не показывает
+  // крутилку и не сбрасывает список при случайной ошибке сети.
   useEffect(() => {
     let alive = true;
-    let channel: ReturnType<typeof supabase.channel> | null = null;
+    let unsubscribe: (() => void) | null = null;
 
     const subscribe = async () => {
       const {
@@ -139,37 +183,27 @@ export default function NotificationsScreen() {
 
       if (!user || !alive) return;
 
-      // Имя канала уникальное на каждый заход на экран: при повторном
-      // монтировании библиотека иначе подсовывает СТАРЫЙ уже запущенный
-      // канал с тем же именем, и подписка падает (тот же капкан, что у
-      // TopBar в Вехе 29).
-      channel = supabase
-        .channel(`notifications-list-${user.id}-${Date.now()}`)
-        .on(
-          "postgres_changes",
+      unsubscribe = subscribeToChanges(
+        "notifications-list",
+        [
           {
-            event: "INSERT",
-            schema: "public",
             table: "notifications",
-            filter: `user_id=eq.${user.id}`,
+            filter: { column: "user_id", value: user.id },
           },
-          (payload) => {
-            const item = payload.new as AppNotification;
-            setItems((prev) =>
-              prev.some((n) => n.id === item.id) ? prev : [item, ...prev],
-            );
-          },
-        )
-        .subscribe();
+        ],
+        () => {
+          if (alive) load(true);
+        },
+      );
     };
 
     subscribe();
 
     return () => {
       alive = false;
-      if (channel) supabase.removeChannel(channel);
+      if (unsubscribe) unsubscribe();
     };
-  }, []);
+  }, [load]);
 
   const handleOpen = async (item: AppNotification) => {
     if (!item.is_read) {
@@ -203,11 +237,38 @@ export default function NotificationsScreen() {
     }
   };
 
+  // Удаление одним нажатием (решение владельца: уведомление — не та
+  // ценность, чтобы охранять его подтверждением). Удаление мгновенное:
+  // строка исчезает сразу, при ошибке сервера возвращается на место
+  // (образец закладок Вехи 31).
+  const handleDeletePress = (item: AppNotification) => {
+    const snapshot = items;
+    setItems((prev) => prev.filter((n) => n.id !== item.id));
+
+    deleteNotification(item.id).catch((e) => {
+      console.log("Не удалось удалить уведомление:", e);
+      setItems(snapshot);
+    });
+  };
+
   if (!fontsLoaded) {
     return <View style={styles.screen} />;
   }
 
   const hasUnread = items.some((item) => !item.is_read);
+
+  // Группы по датам. Список приходит от новых к старым, поэтому
+  // достаточно идти подряд и открывать новую группу при смене ярлыка.
+  const groups: { label: string; items: AppNotification[] }[] = [];
+  items.forEach((item) => {
+    const label = groupLabel(item.created_at);
+    const last = groups[groups.length - 1];
+    if (last && last.label === label) {
+      last.items.push(item);
+    } else {
+      groups.push({ label, items: [item] });
+    }
+  });
 
   return (
     <View style={styles.screen}>
@@ -253,7 +314,7 @@ export default function NotificationsScreen() {
           <>
             <Text style={styles.emptyText}>{error}</Text>
 
-            <TouchableOpacity onPress={load} activeOpacity={0.8}>
+            <TouchableOpacity onPress={() => load()} activeOpacity={0.8}>
               <Text style={styles.markAllText}>Повторить</Text>
             </TouchableOpacity>
           </>
@@ -263,57 +324,73 @@ export default function NotificationsScreen() {
             события сообщества.
           </Text>
         ) : (
-          items.map((item) => {
-            const openable = canOpenLink(item.link, isModerator);
+          groups.map((group) => (
+            <View key={group.label}>
+              <Text style={styles.sectionHeader}>{group.label}</Text>
 
-            return (
-              <TouchableOpacity
-                key={item.id}
-                activeOpacity={openable ? 0.85 : 1}
-                onPress={() => handleOpen(item)}
-                style={[styles.card, !item.is_read && styles.cardUnread]}
-              >
-                <Ionicons
-                  name={ICONS[item.type] || "notifications-outline"}
-                  size={20}
-                  color={
-                    item.is_read
-                      ? "#A8BDB1"
-                      : ACCENT_TYPES.includes(item.type)
-                        ? "#C05B4D"
-                        : "#69B78D"
-                  }
-                  style={styles.cardIcon}
-                />
+              {group.items.map((item) => {
+                const openable = canOpenLink(item.link, isModerator);
 
-                <View style={styles.cardBody}>
-                  <View style={styles.cardTop}>
-                    <Text
-                      style={[
-                        styles.cardTitle,
-                        !item.is_read && styles.cardTitleUnread,
-                      ]}
-                      numberOfLines={1}
+                return (
+                  <TouchableOpacity
+                    key={item.id}
+                    activeOpacity={openable ? 0.85 : 1}
+                    onPress={() => handleOpen(item)}
+                    style={[styles.card, !item.is_read && styles.cardUnread]}
+                  >
+                    <Ionicons
+                      name={ICONS[item.type] || "notifications-outline"}
+                      size={20}
+                      color={
+                        item.is_read
+                          ? "#A8BDB1"
+                          : ACCENT_TYPES.includes(item.type)
+                            ? "#C05B4D"
+                            : "#69B78D"
+                      }
+                      style={styles.cardIcon}
+                    />
+
+                    <View style={styles.cardBody}>
+                      <View style={styles.cardTop}>
+                        <Text
+                          style={[
+                            styles.cardTitle,
+                            !item.is_read && styles.cardTitleUnread,
+                          ]}
+                          numberOfLines={1}
+                        >
+                          {item.title}
+                        </Text>
+
+                        <Text style={styles.cardTime}>
+                          {formatWhen(item.created_at)}
+                        </Text>
+                      </View>
+
+                      {!!item.body && (
+                        <Text style={styles.cardText} numberOfLines={2}>
+                          {item.body}
+                        </Text>
+                      )}
+                    </View>
+
+                    {!item.is_read && <View style={styles.dot} />}
+
+                    <TouchableOpacity
+                      onPress={() => handleDeletePress(item)}
+                      activeOpacity={0.7}
+                      hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                      style={styles.deleteBtn}
+                      accessibilityLabel="Удалить уведомление"
                     >
-                      {item.title}
-                    </Text>
-
-                    <Text style={styles.cardTime}>
-                      {formatWhen(item.created_at)}
-                    </Text>
-                  </View>
-
-                  {!!item.body && (
-                    <Text style={styles.cardText} numberOfLines={2}>
-                      {item.body}
-                    </Text>
-                  )}
-                </View>
-
-                {!item.is_read && <View style={styles.dot} />}
-              </TouchableOpacity>
-            );
-          })
+                      <Ionicons name="close" size={16} color="#A8BDB1" />
+                    </TouchableOpacity>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          ))
         )}
       </ScrollView>
     </View>
@@ -378,6 +455,16 @@ const styles = StyleSheet.create({
 
   loader: {
     marginTop: 30,
+  },
+
+  sectionHeader: {
+    fontSize: 12,
+    letterSpacing: 2,
+    textTransform: "uppercase",
+    color: "#719686",
+    marginTop: 10,
+    marginBottom: 10,
+    marginLeft: 4,
   },
 
   emptyText: {
@@ -450,5 +537,14 @@ const styles = StyleSheet.create({
     borderRadius: 4,
     backgroundColor: "#69B78D",
     marginLeft: 10,
+  },
+
+  deleteBtn: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    alignItems: "center",
+    justifyContent: "center",
+    marginLeft: 8,
   },
 });
