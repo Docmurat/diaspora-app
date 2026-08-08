@@ -7,6 +7,7 @@ import { router } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
+  ActivityIndicator,
   Alert,
   KeyboardAvoidingView,
   Platform,
@@ -19,6 +20,7 @@ import {
 } from "react-native";
 import { Glass, Tekmet } from "../components/mingi";
 import { supabase } from "../lib/supabase";
+import { subscribeToChanges } from "../services/liveService";
 import { sendAppealMessage } from "../services/moderationService";
 import { getMyProfile } from "../services/profileService";
 
@@ -47,6 +49,10 @@ export default function ContactAdminScreen() {
   const [appealId, setAppealId] = useState<string | null>(null);
   const [appealMessages, setAppealMessages] = useState<any[]>([]);
   const [threadReady, setThreadReady] = useState(false);
+  // Пока анкета не загружена, мы не знаем, кто перед нами и есть ли у
+  // него переписка, — экран показывает крутилку, а не форму (иначе
+  // форма мигает и перескакивает на чат — заметный скачок).
+  const [profileReady, setProfileReady] = useState(false);
 
   const scrollRef = useRef<ScrollView | null>(null);
 
@@ -61,6 +67,8 @@ export default function ContactAdminScreen() {
         }
       } catch (e) {
         console.log("Ошибка загрузки профиля:", e);
+      } finally {
+        setProfileReady(true);
       }
     };
 
@@ -85,6 +93,10 @@ export default function ContactAdminScreen() {
 
   // Ищем открытое обращение и, если оно есть, грузим переписку.
   const loadThread = useCallback(async () => {
+    // Анкета ещё грузится — рано: без неё экран принял бы человека за
+    // «обычного без переписки» и показал форму, а потом перескочил на чат.
+    if (!profileReady) return;
+
     if (!isRegularUser) {
       setThreadReady(true);
       return;
@@ -128,55 +140,34 @@ export default function ContactAdminScreen() {
     } finally {
       setThreadReady(true);
     }
-  }, [isRegularUser, profile?.id]);
+  }, [profileReady, isRegularUser, profile?.id]);
 
   useEffect(() => {
     loadThread();
   }, [loadThread]);
 
   // Живое обновление переписки: ответ модератора и закрытие обращения
-  // прилетают сами. Имя канала уникальное на каждый заход (капкан Вехи 29).
+  // прилетают сами. С Вехи 43 — через liveService (самолечение общее).
+  // Закрытие обращения ловится тем же loadThread: закрытое обращение
+  // в выборке открытых не находится, и экран сам возвращает форму.
   useEffect(() => {
     if (!appealId) return;
 
-    const channel = supabase
-      .channel(`contact-admin-${appealId}-${Date.now()}`)
-      .on(
-        "postgres_changes",
+    const unsubscribe = subscribeToChanges(
+      "contact-admin",
+      [
         {
-          event: "INSERT",
-          schema: "public",
           table: "moderation_messages",
-          filter: `request_id=eq.${appealId}`,
+          filter: { column: "request_id", value: appealId },
         },
-        () => {
-          loadThread();
-        },
-      )
-      .on(
-        "postgres_changes",
-        {
-          event: "UPDATE",
-          schema: "public",
-          table: "appeals",
-          filter: `id=eq.${appealId}`,
-        },
-        (payload) => {
-          const fresh = payload.new as any;
-          if (fresh?.status === "closed") {
-            // Обращение закрыли — возвращаем обычную форму.
-            setAppealId(null);
-            setAppealMessages([]);
-          } else {
-            loadThread();
-          }
-        },
-      )
-      .subscribe();
+        { table: "appeals", filter: { column: "id", value: appealId } },
+      ],
+      () => {
+        loadThread();
+      },
+    );
 
-    return () => {
-      supabase.removeChannel(channel);
-    };
+    return unsubscribe;
   }, [appealId, loadThread]);
 
   // Показ переписки: автопрокрутка к последнему сообщению.
@@ -301,6 +292,17 @@ export default function ContactAdminScreen() {
 
   if (!fontsLoaded) {
     return <View style={styles.screen} />;
+  }
+
+  if (!profileReady || !threadReady) {
+    return (
+      <View style={styles.screen}>
+        <StatusBar style="dark" />
+        <View style={styles.loaderWrap}>
+          <ActivityIndicator size="large" color="#69B78D" />
+        </View>
+      </View>
+    );
   }
 
   if (success) {
@@ -485,6 +487,12 @@ const styles = StyleSheet.create({
 
   keyboardWrap: {
     flex: 1,
+  },
+
+  loaderWrap: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
   },
 
   container: {
