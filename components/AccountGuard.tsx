@@ -18,6 +18,9 @@ import { supabase } from "../lib/supabase";
 import { subscribeToChanges } from "../services/liveService";
 
 const POLL_INTERVAL_MS = 12000;
+// Сердцебиение «я в сети»: раз в минуту тихо пишем last_seen_at.
+// По нему чат показывает «в сети / был(а)…» (веха чата).
+const HEARTBEAT_INTERVAL_MS = 60000;
 
 export default function AccountGuard() {
   const pathname = usePathname();
@@ -28,20 +31,35 @@ export default function AccountGuard() {
     let alive = true;
     let watchedUserId: string | null = null;
     let pollTimer: ReturnType<typeof setInterval> | null = null;
+    let heartbeatTimer: ReturnType<typeof setInterval> | null = null;
     let unsubscribeLive: (() => void) | null = null;
 
     const handleAccountState = (me: any) => {
       if (!me) return;
 
       if (me.is_deleted) {
-        if (pathnameRef.current !== "/profile-deleted") {
+        // Удалённому разрешены ДВА экрана: «Профиль удалён» и обращение
+        // к администрации (законный путь просить восстановление в
+        // 30-дневном окне). Раньше часовой выбрасывал из contact-admin
+        // обратно через ~12 сек — гонка, пойманная казнью Рулона.
+        const allowed =
+          pathnameRef.current === "/profile-deleted" ||
+          pathnameRef.current === "/contact-admin";
+
+        if (!allowed) {
           router.replace("/profile-deleted");
         }
         return;
       }
 
       if (me.is_blocked) {
-        if (pathnameRef.current !== "/access-restricted") {
+        // Заблокированному так же разрешено обращение к администрации
+        // (кнопка «Написать администрации» стоит на самом экране).
+        const allowed =
+          pathnameRef.current === "/access-restricted" ||
+          pathnameRef.current === "/contact-admin";
+
+        if (!allowed) {
           router.replace("/access-restricted");
         }
       }
@@ -61,6 +79,18 @@ export default function AccountGuard() {
       }
     };
 
+    // Сердцебиение — отдельно от трёх рубежей защиты, их не касается.
+    const beat = async (userId: string) => {
+      try {
+        await supabase
+          .from("users")
+          .update({ last_seen_at: new Date().toISOString() })
+          .eq("id", userId);
+      } catch (e) {
+        // не в сети — следующий удар сердца сам всё поправит
+      }
+    };
+
     const drop = () => {
       if (unsubscribeLive) {
         unsubscribeLive();
@@ -69,6 +99,10 @@ export default function AccountGuard() {
       if (pollTimer) {
         clearInterval(pollTimer);
         pollTimer = null;
+      }
+      if (heartbeatTimer) {
+        clearInterval(heartbeatTimer);
+        heartbeatTimer = null;
       }
       watchedUserId = null;
     };
@@ -94,6 +128,12 @@ export default function AccountGuard() {
       pollTimer = setInterval(() => {
         if (alive && watchedUserId) checkNow(watchedUserId);
       }, POLL_INTERVAL_MS);
+
+      // Сердцебиение: сразу при входе и дальше раз в минуту.
+      beat(userId);
+      heartbeatTimer = setInterval(() => {
+        if (alive && watchedUserId) beat(watchedUserId);
+      }, HEARTBEAT_INTERVAL_MS);
     };
 
     // Следим за входом/выходом: при входе подписываемся на свою запись,

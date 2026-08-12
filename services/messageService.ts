@@ -24,12 +24,17 @@ async function getCurrentUserId(): Promise<string> {
   return user.id;
 }
 
-export async function getMessages(chatId: string): Promise<ChatMessage[]> {
+export async function getMessages(
+  chatId: string,
+  // «Очистить чат»: сообщения не позднее этой отметки не показываем
+  // (отметка лежит на строке участника, у собеседника своя).
+  afterIso?: string | null,
+): Promise<ChatMessage[]> {
   if (!chatId) {
     throw new Error("Не передан chatId");
   }
 
-  const { data, error } = await supabase
+  let query = supabase
     .from("messages")
     .select(
       `
@@ -42,8 +47,15 @@ export async function getMessages(chatId: string): Promise<ChatMessage[]> {
       is_deleted
     `,
     )
-    .eq("chat_id", chatId)
-    .order("created_at", { ascending: true });
+    .eq("chat_id", chatId);
+
+  if (afterIso) {
+    query = query.gt("created_at", afterIso);
+  }
+
+  const { data, error } = await query.order("created_at", {
+    ascending: true,
+  });
 
   if (error) {
     throw new Error(error.message);
@@ -58,17 +70,12 @@ export async function sendMessage(
 ): Promise<ChatMessage> {
   const senderId = await getCurrentUserId();
 
-  console.log("sendMessage service started");
-  console.log("chatId:", chatId);
-  console.log("senderId:", senderId);
-  console.log("raw text:", text);
 
   if (!chatId) {
     throw new Error("Не передан chatId");
   }
 
   const trimmedText = text.trim();
-  console.log("trimmedText:", trimmedText);
 
   if (!trimmedText) {
     throw new Error("Сообщение пустое");
@@ -94,8 +101,6 @@ export async function sendMessage(
     )
     .single();
 
-  console.log("sendMessage insert data:", data);
-  console.log("sendMessage insert error:", error);
 
   if (error || !data) {
     throw new Error(error?.message || "Не удалось отправить сообщение");
@@ -129,7 +134,6 @@ export async function sendMessage(
       });
     }
   } catch (e) {
-    console.log("Уведомление о сообщении не создано:", e);
   }
 
   return data as ChatMessage;
@@ -155,49 +159,6 @@ export async function markChatAsRead(chatId: string): Promise<void> {
   }
 }
 
-type SubscribeToMessagesParams = {
-  chatId: string;
-  onInsert: (message: ChatMessage) => void;
-  onUpdate?: (message: ChatMessage) => void;
-};
-
-export function subscribeToMessages({
-  chatId,
-  onInsert,
-  onUpdate,
-}: SubscribeToMessagesParams) {
-  const channel = supabase
-    // Имя канала уникальное на каждый вход в чат (капкан Вехи 29).
-    .channel(`messages:chat:${chatId}:${Date.now()}`)
-    .on(
-      "postgres_changes",
-      {
-        event: "INSERT",
-        schema: "public",
-        table: "messages",
-        filter: `chat_id=eq.${chatId}`,
-      },
-      (payload) => {
-        onInsert(payload.new as ChatMessage);
-      },
-    )
-    .on(
-      "postgres_changes",
-      {
-        event: "UPDATE",
-        schema: "public",
-        table: "messages",
-        filter: `chat_id=eq.${chatId}`,
-      },
-      (payload) => {
-        if (onUpdate) {
-          onUpdate(payload.new as ChatMessage);
-        }
-      },
-    )
-    .subscribe();
-
-  return () => {
-    supabase.removeChannel(channel);
-  };
-}
+// Своей realtime-подписки здесь больше НЕТ: с вехи чата экран диалога
+// слушает таблицу messages через services/liveService (самолечение общее,
+// капкан Вехи 29 закрыт в самой службе).

@@ -6,6 +6,7 @@ export type ChatListItem = {
   updatedAt: string;
   lastMessageText: string | null;
   lastMessageAt: string | null;
+  unreadCount: number;
   otherUser: {
     id: string;
     first_name: string | null;
@@ -33,9 +34,6 @@ async function getCurrentUserId(): Promise<string> {
 export async function getOrCreateDirectChat(otherUserId: string): Promise<string> {
   const myUserId = await getCurrentUserId();
 
-  console.log('getOrCreateDirectChat started');
-  console.log('myUserId:', myUserId);
-  console.log('otherUserId:', otherUserId);
 
   if (!otherUserId) {
     throw new Error('Не передан userId собеседника');
@@ -49,8 +47,6 @@ export async function getOrCreateDirectChat(otherUserId: string): Promise<string
     other_user_id: otherUserId,
   });
 
-  console.log('rpc get_or_create_direct_chat data:', data);
-  console.log('rpc get_or_create_direct_chat error:', error);
 
   if (error || !data) {
     throw new Error(error?.message || 'Не удалось создать или получить чат');
@@ -66,6 +62,8 @@ export async function getMyChats(): Promise<ChatListItem[]> {
     .from('chat_participants')
     .select(`
       chat_id,
+      cleared_at,
+      last_read_at,
       chats (
         id,
         created_at,
@@ -81,16 +79,66 @@ export async function getMyChats(): Promise<ChatListItem[]> {
     throw new Error(participantError.message);
   }
 
+  // «Очистить чат» и пустые диалоги: показываем чат только если в нём
+  // есть хотя бы одно сообщение НОВЕЕ моей отметки очистки. Пустой или
+  // очищенный диалог прячется, пока кто-то не напишет снова.
+  const clearedByChat = new Map<string, string | null>();
+  const readByChat = new Map<string, string | null>();
+  for (const row of participantRows || []) {
+    clearedByChat.set((row as any).chat_id, (row as any).cleared_at || null);
+    readByChat.set((row as any).chat_id, (row as any).last_read_at || null);
+  }
+
   const chatRows = (participantRows || [])
     .map((row: any) => row.chats)
     .filter(Boolean)
-    .filter((chat: any) => chat.chat_type === 'direct');
+    .filter((chat: any) => chat.chat_type === 'direct')
+    .filter((chat: any) => {
+      if (!chat.last_message_at) return false;
+      const cleared = clearedByChat.get(chat.id);
+      if (!cleared) return true;
+      return (
+        new Date(chat.last_message_at).getTime() >
+        new Date(cleared).getTime()
+      );
+    });
 
   if (chatRows.length === 0) {
     return [];
   }
 
   const chatIds = chatRows.map((chat: any) => chat.id);
+
+  // Непрочитанное: чужие сообщения новее моего last_read_at (и новее
+  // отметки очистки). Один запрос на все чаты, счёт на месте.
+  const unreadByChat = new Map<string, number>();
+  try {
+    // Лёгкий запрос: только хвост за 30 дней — метки нужны свежим
+    // разговорам, гонять всю историю ради счётчика незачем.
+    const monthAgo = new Date(
+      Date.now() - 30 * 24 * 60 * 60 * 1000,
+    ).toISOString();
+
+    const { data: freshMessages } = await supabase
+      .from('messages')
+      .select('chat_id, sender_id, created_at')
+      .in('chat_id', chatIds)
+      .neq('sender_id', myUserId)
+      .gt('created_at', monthAgo);
+
+    for (const m of freshMessages || []) {
+      const readAt = readByChat.get(m.chat_id);
+      const clearedAt = clearedByChat.get(m.chat_id);
+      const t = new Date(m.created_at).getTime();
+
+      if (readAt && t <= new Date(readAt).getTime()) continue;
+      if (clearedAt && t <= new Date(clearedAt).getTime()) continue;
+
+      unreadByChat.set(m.chat_id, (unreadByChat.get(m.chat_id) || 0) + 1);
+    }
+  } catch {
+    // счётчик — украшение, список важнее; при ошибке просто без цифр
+  }
 
   const { data: allParticipants, error: allParticipantsError } = await supabase
     .from('chat_participants')
@@ -131,6 +179,10 @@ export async function getMyChats(): Promise<ChatListItem[]> {
       updatedAt: chat.updated_at,
       lastMessageText: chat.last_message_text,
       lastMessageAt: chat.last_message_at,
+      unreadCount: unreadByChat.get(chat.id) || 0,
+      // Анкета собеседника может быть скрыта правилами базы (вычищен
+      // чистильщиком или отключён администрацией) — тогда берём хотя бы
+      // его id из строки участника, чтобы диалог открывался для чтения.
       otherUser: otherParticipant?.users
         ? {
             id: otherParticipant.users.id,
@@ -141,7 +193,17 @@ export async function getMyChats(): Promise<ChatListItem[]> {
             category: otherParticipant.users.category,
             city: otherParticipant.users.city,
           }
-        : null,
+        : otherParticipant
+          ? {
+              id: otherParticipant.user_id,
+              first_name: null,
+              last_name: null,
+              avatar_path: null,
+              profession: null,
+              category: null,
+              city: null,
+            }
+          : null,
     };
   });
 

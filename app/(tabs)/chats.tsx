@@ -5,7 +5,7 @@ import {
 } from "@expo-google-fonts/philosopher";
 import { router, useFocusEffect } from "expo-router";
 import { StatusBar } from "expo-status-bar";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Image,
@@ -19,6 +19,7 @@ import {
 import TopBar from "../../components/TopBar";
 import { Glass, Tekmet } from "../../components/mingi";
 import { ChatListItem, getMyChats } from "../../services/chatService";
+import { subscribeToChanges } from "../../services/liveService";
 
 function formatChatTime(dateString?: string | null) {
   if (!dateString) return "";
@@ -61,7 +62,9 @@ function getFullName(chat: ChatListItem) {
   const lastName = chat.otherUser?.last_name?.trim() || "";
   const fullName = `${firstName} ${lastName}`.trim();
 
-  return fullName || "Пользователь";
+  // Анкета скрыта правилами базы (вычищен чистильщиком или отключён
+  // администрацией) — переписка остаётся, собеседник обезличен.
+  return fullName || "Удалённый участник";
 }
 
 function getAvatarLetter(chat: ChatListItem) {
@@ -78,21 +81,41 @@ export default function ChatsScreen() {
   const [chats, setChats] = useState<ChatListItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [screenError, setScreenError] = useState("");
+  const loadedOnceRef = useRef(false);
 
   const loadChats = async () => {
     try {
-      setLoading(true);
+      // Полноэкранная крутилка — только при САМОМ ПЕРВОМ открытии.
+      // При возвратах с диалога список уже на экране — обновляем тихо,
+      // без занавеса (образец Вехи 42): ощущение мгновенного возврата.
+      if (!loadedOnceRef.current) {
+        setLoading(true);
+      }
       setScreenError("");
 
       const data = await getMyChats();
       setChats(data);
+      loadedOnceRef.current = true;
     } catch (e) {
       const message =
         e instanceof Error ? e.message : "Не удалось загрузить список чатов";
       setScreenError(message);
-      setChats([]);
+      if (!loadedOnceRef.current) {
+        setChats([]);
+      }
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Тихая перезагрузка для живого обновления (образец Вехи 42):
+  // без крутилки, при ошибке сети текущий список не сбрасывается.
+  const reloadChatsQuiet = async () => {
+    try {
+      const data = await getMyChats();
+      setChats(data);
+    } catch {
+      // живое обновление само повторит при следующем событии
     }
   };
 
@@ -101,6 +124,19 @@ export default function ChatsScreen() {
       loadChats();
     }, []),
   );
+
+  // Живой список: новое сообщение возвращает очищенный диалог, двигает
+  // порядок, обновляет превью и метки непрочитанного — само, без F5.
+  useEffect(() => {
+    const unsubscribe = subscribeToChanges(
+      "chats-list",
+      [{ table: "messages" }],
+      () => {
+        if (loadedOnceRef.current) reloadChatsQuiet();
+      },
+    );
+    return unsubscribe;
+  }, []);
 
   const preparedChats = useMemo(() => {
     return chats.map((chat) => {
@@ -189,7 +225,12 @@ export default function ChatsScreen() {
                 })
               }
             >
-              <View style={styles.chatCard}>
+              <View
+                style={[
+                  styles.chatCard,
+                  chat.unreadCount > 0 && styles.chatCardUnread,
+                ]}
+              >
                 <View style={styles.chatCardInner}>
                   {chat.otherUser?.avatar_path ? (
                     <Image
@@ -197,7 +238,13 @@ export default function ChatsScreen() {
                       style={styles.avatarImage}
                     />
                   ) : (
-                    <View style={styles.avatar}>
+                    <View
+                      style={[
+                        styles.avatar,
+                        chat.fullName === "Удалённый участник" &&
+                          styles.avatarMuted,
+                      ]}
+                    >
                       <Text style={styles.avatarText}>{chat.avatarLetter}</Text>
                     </View>
                   )}
@@ -211,9 +258,22 @@ export default function ChatsScreen() {
                       <Text style={styles.time}>{chat.timeLabel}</Text>
                     </View>
 
-                    <Text style={styles.lastMessage} numberOfLines={1}>
-                      {chat.previewText}
-                    </Text>
+                    <View style={styles.bottomRow}>
+                      <Text
+                        style={styles.lastMessage}
+                        numberOfLines={1}
+                      >
+                        {chat.previewText}
+                      </Text>
+
+                      {chat.unreadCount > 0 && (
+                        <View style={styles.unreadBadge}>
+                          <Text style={styles.unreadBadgeText}>
+                            {chat.unreadCount > 99 ? "99+" : chat.unreadCount}
+                          </Text>
+                        </View>
+                      )}
+                    </View>
                   </View>
                 </View>
               </View>
@@ -336,6 +396,12 @@ const styles = StyleSheet.create({
     overflow: "hidden",
   },
 
+  // Непрочитанный чат: мягкая фирменная зелень всего контейнера.
+  chatCardUnread: {
+    backgroundColor: "rgba(105,183,141,0.10)",
+    borderColor: "rgba(93,140,120,0.45)",
+  },
+
   chatCardInner: {
     flexDirection: "row",
     alignItems: "center",
@@ -350,6 +416,10 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
     marginRight: 12,
+  },
+
+  avatarMuted: {
+    backgroundColor: "#B9C8BF",
   },
 
   avatarImage: {
@@ -391,8 +461,31 @@ const styles = StyleSheet.create({
     color: "#8FA79A",
   },
 
+  bottomRow: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+
   lastMessage: {
+    flex: 1,
     fontSize: 14,
     color: "#4E7364",
+    marginRight: 8,
+  },
+
+  unreadBadge: {
+    minWidth: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: "rgba(105,183,141,0.92)",
+    justifyContent: "center",
+    alignItems: "center",
+    paddingHorizontal: 6,
+  },
+
+  unreadBadgeText: {
+    color: "#FFFFFF",
+    fontSize: 12,
+    fontWeight: "700",
   },
 });
