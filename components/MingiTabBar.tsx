@@ -15,6 +15,13 @@
 // messages (пришло новое) и СВОЮ строку chat_participants (я прочитал
 // чат — last_read_at сдвинулся, метка гаснет). Счёт — лёгкая функция
 // getTotalUnread из chatService; при любой ошибке метка просто 0.
+//
+// ТОЧКА НА «ПОМОЩИ» (Веха 52): просто точка, без числа (решение
+// владельца). Горит, если по категориям моего фильтра есть живые посты
+// новее моего последнего захода на вкладку (users.help_seen_at).
+// Слушает help_posts (новый пост → зажечься) и СВОЮ строку users
+// (открыл вкладку, help_seen_at сдвинулся → погаснуть). Счёт —
+// hasUnseenHelpPosts из helpService; при любой ошибке точки просто нет.
 
 import { Ionicons } from "@expo/vector-icons";
 import type { BottomTabBarProps } from "@react-navigation/bottom-tabs";
@@ -25,6 +32,7 @@ import Svg, { Defs, LinearGradient, Rect, Stop } from "react-native-svg";
 
 import { supabase } from "../lib/supabase";
 import { getTotalUnread } from "../services/chatService";
+import { hasUnseenHelpPosts } from "../services/helpService";
 import { subscribeToChanges } from "../services/liveService";
 
 const ACTIVE_COLOR = "#3F6B5B";
@@ -74,20 +82,30 @@ export default function MingiTabBar({ state, navigation }: BottomTabBarProps) {
   // Суммарное число непрочитанных для метки на вкладке «Чаты».
   const [unreadTotal, setUnreadTotal] = useState(0);
 
+  // Точка на вкладке «Помощь»: есть непросмотренные посты по фильтру.
+  const [helpDot, setHelpDot] = useState(false);
+
   useEffect(() => {
     let alive = true; // панель размонтировали — ничего не трогаем
     let unsubscribe: (() => void) | null = null;
 
     const refresh = async () => {
-      const total = await getTotalUnread();
-      if (alive) setUnreadTotal(total);
+      const [total, hasUnseen] = await Promise.all([
+        getTotalUnread(),
+        hasUnseenHelpPosts(),
+      ]);
+
+      if (alive) {
+        setUnreadTotal(total);
+        setHelpDot(hasUnseen);
+      }
     };
 
     (async () => {
       // Первый счёт сразу при появлении панели.
       refresh();
 
-      // Для подписки на СВОЮ строку chat_participants нужен свой id.
+      // Для подписки на СВОИ строки нужен свой id.
       const {
         data: { user },
       } = await supabase.auth.getUser();
@@ -102,6 +120,11 @@ export default function MingiTabBar({ state, navigation }: BottomTabBarProps) {
             table: "chat_participants",
             filter: { column: "user_id", value: user.id },
           },
+          // Стена помощи: новый/закрытый пост — пересчитать точку.
+          { table: "help_posts" },
+          // Своя строка users: открыл вкладку «Помощь» (help_seen_at
+          // сдвинулся) или сменил фильтр — точка пересчитывается.
+          { table: "users", filter: { column: "id", value: user.id } },
         ],
         refresh,
       );
@@ -166,6 +189,7 @@ export default function MingiTabBar({ state, navigation }: BottomTabBarProps) {
           };
 
           const showBadge = tab.name === "chats" && unreadTotal > 0;
+          const showDot = tab.name === "help" && helpDot;
 
           return (
             <Pressable
@@ -176,7 +200,9 @@ export default function MingiTabBar({ state, navigation }: BottomTabBarProps) {
               accessibilityLabel={
                 showBadge
                   ? `${tab.label}, непрочитанных: ${unreadTotal}`
-                  : tab.label
+                  : showDot
+                    ? `${tab.label}, есть новые посты`
+                    : tab.label
               }
               accessibilityState={{ selected: isActive }}
             >
@@ -194,6 +220,8 @@ export default function MingiTabBar({ state, navigation }: BottomTabBarProps) {
                     </Text>
                   </View>
                 )}
+
+                {showDot && <View style={styles.dot} />}
               </View>
             </Pressable>
           );
@@ -282,5 +310,18 @@ const styles = StyleSheet.create({
     color: "#FFFFFF",
     fontSize: 10,
     fontWeight: "700",
+  },
+
+  // Точка на «Помощи» — в тон метке чатов, но без числа.
+  dot: {
+    position: "absolute",
+    top: -3,
+    right: -6,
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: "rgba(105,183,141,1)",
+    borderWidth: 1.5,
+    borderColor: "#FFFFFF",
   },
 });

@@ -36,6 +36,8 @@ export default function RootLayout() {
           <Stack.Screen name="splash" />
           <Stack.Screen name="(tabs)" />
           <Stack.Screen name="chat" />
+          <Stack.Screen name="help-post" />
+          <Stack.Screen name="new-help-post" />
           <Stack.Screen name="notifications" />
           <Stack.Screen name="settings" />
           <Stack.Screen name="user-profile" />
@@ -58,7 +60,6 @@ export default function RootLayout() {
           <Stack.Screen name="memorandum" />
           <Stack.Screen name="terms" />
           <Stack.Screen name="privacy" />
-          <Stack.Screen name="test-db" />
         </Stack>
       </AppFrame>
       <StatusBar style="dark" />
