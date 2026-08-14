@@ -1,4 +1,4 @@
-import { supabase } from '../lib/supabase';
+import { supabase } from "../lib/supabase";
 
 export type ChatListItem = {
   chatId: string;
@@ -25,31 +25,31 @@ async function getCurrentUserId(): Promise<string> {
   } = await supabase.auth.getUser();
 
   if (error || !user?.id) {
-    throw new Error('Пользователь не авторизован');
+    throw new Error("Пользователь не авторизован");
   }
 
   return user.id;
 }
 
-export async function getOrCreateDirectChat(otherUserId: string): Promise<string> {
+export async function getOrCreateDirectChat(
+  otherUserId: string,
+): Promise<string> {
   const myUserId = await getCurrentUserId();
 
-
   if (!otherUserId) {
-    throw new Error('Не передан userId собеседника');
+    throw new Error("Не передан userId собеседника");
   }
 
   if (otherUserId === myUserId) {
-    throw new Error('Нельзя создать чат с самим собой');
+    throw new Error("Нельзя создать чат с самим собой");
   }
 
-  const { data, error } = await supabase.rpc('get_or_create_direct_chat', {
+  const { data, error } = await supabase.rpc("get_or_create_direct_chat", {
     other_user_id: otherUserId,
   });
 
-
   if (error || !data) {
-    throw new Error(error?.message || 'Не удалось создать или получить чат');
+    throw new Error(error?.message || "Не удалось создать или получить чат");
   }
 
   return data as string;
@@ -59,8 +59,9 @@ export async function getMyChats(): Promise<ChatListItem[]> {
   const myUserId = await getCurrentUserId();
 
   const { data: participantRows, error: participantError } = await supabase
-    .from('chat_participants')
-    .select(`
+    .from("chat_participants")
+    .select(
+      `
       chat_id,
       cleared_at,
       last_read_at,
@@ -72,8 +73,9 @@ export async function getMyChats(): Promise<ChatListItem[]> {
         last_message_at,
         chat_type
       )
-    `)
-    .eq('user_id', myUserId);
+    `,
+    )
+    .eq("user_id", myUserId);
 
   if (participantError) {
     throw new Error(participantError.message);
@@ -92,14 +94,13 @@ export async function getMyChats(): Promise<ChatListItem[]> {
   const chatRows = (participantRows || [])
     .map((row: any) => row.chats)
     .filter(Boolean)
-    .filter((chat: any) => chat.chat_type === 'direct')
+    .filter((chat: any) => chat.chat_type === "direct")
     .filter((chat: any) => {
       if (!chat.last_message_at) return false;
       const cleared = clearedByChat.get(chat.id);
       if (!cleared) return true;
       return (
-        new Date(chat.last_message_at).getTime() >
-        new Date(cleared).getTime()
+        new Date(chat.last_message_at).getTime() > new Date(cleared).getTime()
       );
     });
 
@@ -120,11 +121,11 @@ export async function getMyChats(): Promise<ChatListItem[]> {
     ).toISOString();
 
     const { data: freshMessages } = await supabase
-      .from('messages')
-      .select('chat_id, sender_id, created_at')
-      .in('chat_id', chatIds)
-      .neq('sender_id', myUserId)
-      .gt('created_at', monthAgo);
+      .from("messages")
+      .select("chat_id, sender_id, created_at")
+      .in("chat_id", chatIds)
+      .neq("sender_id", myUserId)
+      .gt("created_at", monthAgo);
 
     for (const m of freshMessages || []) {
       const readAt = readByChat.get(m.chat_id);
@@ -141,8 +142,9 @@ export async function getMyChats(): Promise<ChatListItem[]> {
   }
 
   const { data: allParticipants, error: allParticipantsError } = await supabase
-    .from('chat_participants')
-    .select(`
+    .from("chat_participants")
+    .select(
+      `
       chat_id,
       user_id,
       users (
@@ -154,8 +156,9 @@ export async function getMyChats(): Promise<ChatListItem[]> {
         category,
         city
       )
-    `)
-    .in('chat_id', chatIds);
+    `,
+    )
+    .in("chat_id", chatIds);
 
   if (allParticipantsError) {
     throw new Error(allParticipantsError.message);
@@ -214,4 +217,68 @@ export async function getMyChats(): Promise<ChatListItem[]> {
   });
 
   return result;
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// Суммарное число непрочитанных по ВСЕМ чатам — для метки на вкладке
+// «Чаты» в MingiTabBar. Считает тем же способом, что и метки в списке
+// (хвост 30 дней, чужие сообщения новее last_read_at и cleared_at),
+// но без загрузки анкет собеседников — запрос лёгкий.
+// Метка — украшение: при любой ошибке тихо возвращаем 0, панель
+// вкладок падать не должна никогда.
+export async function getTotalUnread(): Promise<number> {
+  try {
+    const myUserId = await getCurrentUserId();
+
+    const { data: participantRows, error } = await supabase
+      .from("chat_participants")
+      .select("chat_id, cleared_at, last_read_at")
+      .eq("user_id", myUserId);
+
+    if (error || !participantRows || participantRows.length === 0) {
+      return 0;
+    }
+
+    const readByChat = new Map<string, string | null>();
+    const clearedByChat = new Map<string, string | null>();
+    const chatIds: string[] = [];
+
+    for (const row of participantRows) {
+      chatIds.push((row as any).chat_id);
+      readByChat.set((row as any).chat_id, (row as any).last_read_at || null);
+      clearedByChat.set((row as any).chat_id, (row as any).cleared_at || null);
+    }
+
+    const monthAgo = new Date(
+      Date.now() - 30 * 24 * 60 * 60 * 1000,
+    ).toISOString();
+
+    const { data: freshMessages, error: messagesError } = await supabase
+      .from("messages")
+      .select("chat_id, sender_id, created_at")
+      .in("chat_id", chatIds)
+      .neq("sender_id", myUserId)
+      .gt("created_at", monthAgo);
+
+    if (messagesError) {
+      return 0;
+    }
+
+    let total = 0;
+
+    for (const m of freshMessages || []) {
+      const readAt = readByChat.get(m.chat_id);
+      const clearedAt = clearedByChat.get(m.chat_id);
+      const t = new Date(m.created_at).getTime();
+
+      if (readAt && t <= new Date(readAt).getTime()) continue;
+      if (clearedAt && t <= new Date(clearedAt).getTime()) continue;
+
+      total += 1;
+    }
+
+    return total;
+  } catch {
+    return 0;
+  }
 }

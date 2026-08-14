@@ -1692,24 +1692,25 @@ export default function ModerationScreen() {
                   false,
                 )}
 
-              {archiveItem.type === "appeal" ? (
-                renderAppealMessages(archiveItem.entityId)
-              ) : (
-                <TouchableOpacity
-                  style={styles.secondaryActionFull}
-                  onPress={() =>
-                    router.push({
-                      pathname: "/moderation-case-details",
-                      params: {
-                        kind: archiveItem.type,
-                        entityId: archiveItem.entityId,
-                      },
-                    })
-                  }
-                >
-                  <Text style={styles.secondaryActionFullText}>Изучить</Text>
-                </TouchableOpacity>
-              )}
+              {/* Обращение: переписка видна сразу, а «Изучить» открывает
+                  подробности на общем экране (Веха 50). */}
+              {archiveItem.type === "appeal" &&
+                renderAppealMessages(archiveItem.entityId)}
+
+              <TouchableOpacity
+                style={styles.secondaryActionFull}
+                onPress={() =>
+                  router.push({
+                    pathname: "/moderation-case-details",
+                    params: {
+                      kind: archiveItem.type,
+                      entityId: archiveItem.entityId,
+                    },
+                  })
+                }
+              >
+                <Text style={styles.secondaryActionFullText}>Изучить</Text>
+              </TouchableOpacity>
             </>
           )}
         </View>
@@ -3091,9 +3092,6 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     color: "#3F6B5B",
   },
-
-  /*sdsdsывывd*/
-  /*sdsdsывывd*/
 
   modalConfirmButton: {
     flex: 1,
