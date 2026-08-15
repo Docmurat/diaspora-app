@@ -409,6 +409,12 @@ export async function getPendingComplaints() {
         email,
         avatar_path
       ),
+      help_post:help_post_id (
+        id,
+        body,
+        category,
+        status
+      ),
       assigned_moderator:assigned_to (
         id,
         first_name,
@@ -751,7 +757,9 @@ export async function getOpenAppeals() {
         phone,
         avatar_path,
         is_deleted,
-        is_blocked
+        is_blocked,
+        category,
+        qualification_confirmed_at
       ),
       assigned_moderator:assigned_to (
         id,
@@ -977,6 +985,65 @@ export async function sendAppealMessage(userId: string, message: string) {
     });
 
   if (msgError) throw new Error(msgError.message);
+}
+
+// ================== ПОДТВЕРЖДЕНИЕ КВАЛИФИКАЦИИ (Веха 57) ==================
+// Стена помощи: скрытые блоки и скрытые обсуждения в чувствительных
+// категориях (Медицина, Юриспруденция) видят только ПОДТВЕРЖДЁННЫЕ
+// специалисты категории. Подтверждает модератор — при одобрении анкеты
+// или по запросу участника (обращение). В users пишется КТО и КОГДА
+// (след «кого наказать»). Снять подтверждение можно тем же путём.
+
+export async function confirmQualification(userId: string) {
+  const me = await checkAccess();
+  const now = new Date().toISOString();
+
+  const { data, error } = await supabase
+    .from("users")
+    .update({
+      qualification_confirmed_at: now,
+      qualification_confirmed_by: me.id,
+      updated_at: now,
+    })
+    .eq("id", userId)
+    .select("id, category")
+    .maybeSingle();
+
+  if (error) throw new Error(error.message);
+  if (!data) {
+    throw new Error(
+      "Не удалось подтвердить квалификацию: база не приняла изменение",
+    );
+  }
+
+  await createNotification({
+    userId,
+    type: "moderation",
+    title: "Квалификация подтверждена",
+    body: `Ваша квалификация в категории «${(data as any).category || ""}» подтверждена. На Стене помощи вам доступны скрытые материалы и обсуждения этой категории.`,
+    link: "/(tabs)/help",
+  });
+}
+
+export async function revokeQualification(userId: string) {
+  await checkAccess();
+  const now = new Date().toISOString();
+
+  const { data, error } = await supabase
+    .from("users")
+    .update({
+      qualification_confirmed_at: null,
+      qualification_confirmed_by: null,
+      updated_at: now,
+    })
+    .eq("id", userId)
+    .select("id")
+    .maybeSingle();
+
+  if (error) throw new Error(error.message);
+  if (!data) {
+    throw new Error("Не удалось снять подтверждение: база не приняла изменение");
+  }
 }
 
 // Восстановление удалённого профиля. Только основатель: он же

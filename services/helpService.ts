@@ -76,6 +76,33 @@ export type HelpFeedItem = {
   isMine: boolean; // мой пост — метки «новое» не получает
 };
 
+// ─────────────────────────────────────────────────────────────────────
+// ПАМЯТКА ПОДПИСАННЫХ ССЫЛОК (Веха 55). Ссылка на файл живёт час; если
+// при каждом заходе в ленту или пост подписывать заново — адрес меняется,
+// картинка считается новой и перекачивается (мерцание при возврате из
+// поста). Держим готовые ссылки в памяти ~50 минут: та же ссылка — тот же
+// кэш картинки, никакого мерцания. Память живёт, пока открыто приложение.
+const SIGNED_TTL_SEC = 3600;
+const SIGNED_REUSE_MS = 50 * 60 * 1000;
+const signedUrlCache = new Map<string, { url: string; madeAt: number }>();
+
+async function signPath(path: string): Promise<string | null> {
+  const cached = signedUrlCache.get(path);
+  if (cached && Date.now() - cached.madeAt < SIGNED_REUSE_MS) {
+    return cached.url;
+  }
+  try {
+    const { data } = await supabase.storage
+      .from("help-attachments")
+      .createSignedUrl(path, SIGNED_TTL_SEC);
+    const url = data?.signedUrl || null;
+    if (url) signedUrlCache.set(path, { url, madeAt: Date.now() });
+    return url;
+  } catch {
+    return null;
+  }
+}
+
 async function getCurrentUserId(): Promise<string> {
   const {
     data: { user },
@@ -109,8 +136,10 @@ export async function getHelpFeed(
       "id, author_id, category, post_type, body, status, has_hidden, " +
         "comments_hidden, created_at, archived_at",
     )
+    // Заблокированные — только свои (у автора висит красным с чипом,
+    // Веха 57); чужие заблокированные правила базы и так не отдают.
     .or(
-      `status.eq.active,and(status.eq.archived,archived_at.gt.${threeDaysAgo})`,
+      `status.eq.active,and(status.eq.archived,archived_at.gt.${threeDaysAgo}),and(status.eq.blocked,author_id.eq.${myUserId})`,
     )
     .order("created_at", { ascending: false })
     .limit(200);
@@ -129,6 +158,16 @@ export async function getHelpFeed(
     return [];
   }
 
+  return enrichFeedItems(posts, myUserId);
+}
+
+// Наряжаем сырые строки help_posts в карточки ленты: авторы, счётчики,
+// миниатюры. Одна функция на ленту и архив (Веха 56), чтобы карточки не
+// разъезжались.
+async function enrichFeedItems(
+  posts: any[],
+  myUserId: string,
+): Promise<HelpFeedItem[]> {
   const postIds = posts.map((p: any) => p.id);
   const authorIds = Array.from(new Set(posts.map((p: any) => p.author_id)));
 
@@ -178,8 +217,13 @@ export async function getHelpFeed(
       .order("created_at", { ascending: true });
 
     const wanted: { postId: string; path: string }[] = [];
+    const ttlEdge =
+      Date.now() - HELP_ATTACHMENT_TTL_DAYS * 24 * 60 * 60 * 1000;
 
     for (const a of attachments || []) {
+      // Просроченные (старше 90 дней) в карточке не считаем — их уже нет
+      // или скоро не будет.
+      if (a.created_at && new Date(a.created_at).getTime() < ttlEdge) continue;
       if ((a.mime_type || "").startsWith("image/")) {
         const n = (photoCountByPost.get(a.post_id) || 0) + 1;
         photoCountByPost.set(a.post_id, n);
@@ -193,16 +237,10 @@ export async function getHelpFeed(
       // Подписываем по одной (пакетная подпись на нашем хранилище
       // отвечает 500), но параллельно — лента не ждёт по очереди.
       const results = await Promise.all(
-        wanted.map(async (w) => {
-          try {
-            const { data: signed } = await supabase.storage
-              .from("help-attachments")
-              .createSignedUrl(w.path, 3600);
-            return { postId: w.postId, url: signed?.signedUrl || null };
-          } catch {
-            return { postId: w.postId, url: null };
-          }
-        }),
+        wanted.map(async (w) => ({
+          postId: w.postId,
+          url: await signPath(w.path),
+        })),
       );
 
       for (const r of results) {
@@ -229,6 +267,64 @@ export async function getHelpFeed(
     photoCount: photoCountByPost.get(p.id) || 0,
     thumbUrls: thumbUrlsByPost.get(p.id) || [],
   }));
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// АРХИВ И ПОИСК (Веха 56). Архив — все закрытые посты (status=archived),
+// новые сверху. Поиск — по словам, терпимый к опечаткам: функция базы
+// search_help_archive (pg_trgm, word_similarity) ищет по тексту поста И по
+// комментариям; правила чтения действуют внутри неё (security invoker) —
+// скрытые обсуждения чужим не ищутся. Пустой запрос = просто архив.
+
+export async function getHelpArchive(
+  query: string,
+  filterCategories: string[],
+): Promise<HelpFeedItem[]> {
+  const myUserId = await getCurrentUserId();
+  const q = query.trim();
+  const cats = filterCategories.length > 0 ? filterCategories : null;
+
+  const FIELDS =
+    "id, author_id, category, post_type, body, status, has_hidden, " +
+    "comments_hidden, created_at, archived_at";
+
+  let posts: any[] = [];
+
+  if (q.length < 2) {
+    let req = supabase
+      .from("help_posts")
+      .select(FIELDS)
+      .eq("status", "archived")
+      .order("archived_at", { ascending: false })
+      .limit(200);
+    if (cats) req = req.in("category", cats);
+
+    const { data, error } = await req;
+    if (error) throw new Error(error.message);
+    posts = data || [];
+  } else {
+    const { data: found, error } = await supabase.rpc("search_help_archive", {
+      q,
+      cats,
+    });
+    if (error) throw new Error(error.message);
+
+    const ids: string[] = (found || []).map((r: any) => r.id);
+    if (ids.length === 0) return [];
+
+    const { data, error: postsError } = await supabase
+      .from("help_posts")
+      .select(FIELDS)
+      .in("id", ids);
+    if (postsError) throw new Error(postsError.message);
+
+    // Порядок — как выдала функция (по близости к запросу).
+    const byId = new Map<string, any>((data || []).map((p: any) => [p.id, p]));
+    posts = ids.map((id) => byId.get(id)).filter(Boolean);
+  }
+
+  if (posts.length === 0) return [];
+  return enrichFeedItems(posts, myUserId);
 }
 
 // ─────────────────────────────────────────────────────────────────────
@@ -436,6 +532,41 @@ export type NewHelpFile = {
   isHidden: boolean;
 };
 
+// Лимиты вложений (Веха 55, решение владельца): в ОТКРЫТОМ и в СКРЫТОМ
+// блоках — до 10 фото и до 10 файлов КАЖДЫЙ. Форма и служба смотрят
+// на одни и те же числа, чтобы не разъехаться.
+export const MAX_PHOTOS_PER_BLOCK = 10;
+export const MAX_FILES_PER_BLOCK = 10;
+export const MAX_FILE_MB = 15;
+
+export function isImageMime(mime: string | null | undefined): boolean {
+  return (mime || "").startsWith("image/");
+}
+
+// Проверка лимитов перед публикацией: возвращает текст ошибки или null.
+export function checkHelpFileLimits(files: NewHelpFile[]): string | null {
+  const count = (hidden: boolean, image: boolean) =>
+    files.filter(
+      (f) => f.isHidden === hidden && isImageMime(f.mimeType) === image,
+    ).length;
+
+  if (count(false, true) > MAX_PHOTOS_PER_BLOCK)
+    return `В открытом блоке — не больше ${MAX_PHOTOS_PER_BLOCK} фото`;
+  if (count(false, false) > MAX_FILES_PER_BLOCK)
+    return `В открытом блоке — не больше ${MAX_FILES_PER_BLOCK} файлов`;
+  if (count(true, true) > MAX_PHOTOS_PER_BLOCK)
+    return `В скрытом блоке — не больше ${MAX_PHOTOS_PER_BLOCK} фото`;
+  if (count(true, false) > MAX_FILES_PER_BLOCK)
+    return `В скрытом блоке — не больше ${MAX_FILES_PER_BLOCK} файлов`;
+
+  const tooBig = files.find(
+    (f) => (f.size || 0) > MAX_FILE_MB * 1024 * 1024,
+  );
+  if (tooBig) return `Файл «${tooBig.name}» больше ${MAX_FILE_MB} МБ`;
+
+  return null;
+}
+
 export async function createHelpPost(input: {
   category: string;
   postType: HelpPostType;
@@ -445,6 +576,12 @@ export async function createHelpPost(input: {
   files: NewHelpFile[];
 }): Promise<{ postId: string; failedFiles: string[] }> {
   const myUserId = await getCurrentUserId();
+
+  // Лимиты — ещё раз здесь: форма могла пропустить, служба — нет.
+  const limitError = checkHelpFileLimits(input.files);
+  if (limitError) {
+    throw new Error(limitError);
+  }
 
   const hiddenText = input.hiddenBody.trim();
   const hasHiddenFiles = input.files.some((f) => f.isHidden);
@@ -536,9 +673,15 @@ export type HelpAttachmentItem = {
   id: string;
   fileName: string | null;
   mimeType: string | null;
+  fileSize: number | null;
+  isImage: boolean; // фото — в коллаж, остальное — строкой с именем
   isHidden: boolean;
   signedUrl: string | null;
+  expired: boolean; // старше 90 дней — срок хранения истёк (Веха 56)
 };
+
+// Срок хранения вложений Стены — 90 дней, как в чате (решение владельца).
+export const HELP_ATTACHMENT_TTL_DAYS = 90;
 
 export type HelpPostDetails = {
   id: string;
@@ -554,6 +697,7 @@ export type HelpPostDetails = {
   hiddenBody: string | null; // null = нет допуска или нет текста
   hiddenVisible: boolean; // достал ли я хоть что-то скрытое
   attachments: HelpAttachmentItem[];
+  blockedReason: string | null; // причина блокировки (Веха 57)
 };
 
 // Параметры для экрана /user-profile — тот же набор, что в «Людях»
@@ -585,7 +729,7 @@ export async function getHelpPost(postId: string): Promise<HelpPostDetails> {
     .from("help_posts")
     .select(
       "id, author_id, category, post_type, body, status, has_hidden, " +
-        "comments_hidden, created_at",
+        "comments_hidden, created_at, blocked_reason",
     )
     .eq("id", postId)
     .single();
@@ -628,30 +772,40 @@ export async function getHelpPost(postId: string): Promise<HelpPostDetails> {
   try {
     const { data: rows } = await supabase
       .from("help_attachments")
-      .select("id, storage_path, file_name, mime_type, is_hidden")
+      .select(
+        "id, storage_path, file_name, mime_type, file_size, is_hidden, created_at",
+      )
       .eq("post_id", postId)
       .order("created_at", { ascending: true });
 
-    for (const row of rows || []) {
+    const ttlEdge = Date.now() - HELP_ATTACHMENT_TTL_DAYS * 24 * 60 * 60 * 1000;
+    const isExpired = (row: any) =>
+      !!row.created_at && new Date(row.created_at).getTime() < ttlEdge;
+
+    // Ссылки подписываем ПО ОДНОЙ, но параллельно (урок Вехи 54:
+    // пакетная подпись на нашем хранилище отвечает 500). До 40 вложений
+    // на пост — очередью было бы заметно медленно. Просроченные не
+    // подписываем вовсе — экран покажет пометку.
+    const signed = await Promise.all(
+      (rows || []).map((row) =>
+        isExpired(row) ? Promise.resolve(null) : signPath(row.storage_path),
+      ),
+    );
+
+    (rows || []).forEach((row, i) => {
       if (row.is_hidden) sawHiddenAttachment = true;
-
-      let signedUrl: string | null = null;
-      try {
-        const { data: signed } = await supabase.storage
-          .from("help-attachments")
-          .createSignedUrl(row.storage_path, 3600);
-
-        signedUrl = signed?.signedUrl || null;
-      } catch {}
 
       attachments.push({
         id: row.id,
         fileName: row.file_name,
         mimeType: row.mime_type,
+        fileSize: row.file_size ?? null,
+        isImage: isImageMime(row.mime_type),
         isHidden: !!row.is_hidden,
-        signedUrl,
+        signedUrl: signed[i],
+        expired: isExpired(row),
       });
-    }
+    });
   } catch {}
 
   return {
@@ -668,6 +822,7 @@ export async function getHelpPost(postId: string): Promise<HelpPostDetails> {
     hiddenBody,
     hiddenVisible: !!hiddenBody || sawHiddenAttachment,
     attachments,
+    blockedReason: p.blocked_reason || null,
   };
 }
 
@@ -866,4 +1021,114 @@ export async function reopenHelpPost(postId: string): Promise<void> {
   if (error) {
     throw new Error(error.message);
   }
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// МОДЕРАЦИЯ СТЕНЫ (Веха 57). Меню «⋮» на экране поста у модераторов:
+// заблокировать (status=blocked — пост и комментарии не видны никому,
+// кроме автора и модераторов; триггер уведомляет автора), снять
+// блокировку, убрать в архив, удалить насовсем. Правила базы: hp_update
+// пускает модераторов в blocked, hp_delete — модераторов (Веха 57).
+// Кто именно — пишется в blocked_by / archived_by (след).
+
+export async function isHelpModerator(): Promise<boolean> {
+  try {
+    const myUserId = await getCurrentUserId();
+    const { data } = await supabase
+      .from("users")
+      .select("role")
+      .eq("id", myUserId)
+      .single();
+    return data?.role === "owner" || data?.role === "moderator";
+  } catch {
+    return false;
+  }
+}
+
+async function moderatorUpdatePost(postId: string, patch: Record<string, any>) {
+  const { data, error } = await supabase
+    .from("help_posts")
+    .update(patch)
+    .eq("id", postId)
+    .select("id")
+    .maybeSingle();
+
+  if (error) throw new Error(error.message);
+  if (!data) {
+    throw new Error("База не приняла изменение (нет прав или пост не найден)");
+  }
+}
+
+export async function blockHelpPost(
+  postId: string,
+  reason: string,
+): Promise<void> {
+  const myUserId = await getCurrentUserId();
+  const text = reason.trim();
+  if (!text) throw new Error("Укажите причину блокировки — автор её увидит");
+  await moderatorUpdatePost(postId, {
+    status: "blocked",
+    blocked_at: new Date().toISOString(),
+    blocked_by: myUserId,
+    blocked_reason: text,
+  });
+}
+
+export async function unblockHelpPost(postId: string): Promise<void> {
+  await moderatorUpdatePost(postId, {
+    status: "active",
+    blocked_at: null,
+    blocked_by: null,
+    blocked_reason: null,
+  });
+}
+
+export async function archiveHelpPostByModerator(postId: string): Promise<void> {
+  const myUserId = await getCurrentUserId();
+  await moderatorUpdatePost(postId, {
+    status: "archived",
+    archived_at: new Date().toISOString(),
+    archived_by: myUserId,
+  });
+}
+
+// Удаление насовсем: комментарии, скрытый текст и строки вложений уходят
+// каскадом (база); файлы на полке приберёт 90-дневный чистильщик.
+export async function deleteHelpPost(postId: string): Promise<void> {
+  const { data, error } = await supabase
+    .from("help_posts")
+    .delete()
+    .eq("id", postId)
+    .select("id")
+    .maybeSingle();
+
+  if (error) throw new Error(error.message);
+  if (!data) {
+    throw new Error("База не приняла удаление (нет прав или пост не найден)");
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// ЖАЛОБА НА ПОСТ (Веха 57). Идёт в общую таблицу complaints (тот же
+// конвейер модерации, что и жалобы на людей): target — автор поста,
+// help_post_id — сам пост (в карточке модератора кнопка «Открыть пост»).
+// Модераторам и основателю жалоба не нужна — они действуют напрямую.
+export async function reportHelpPost(
+  postId: string,
+  authorId: string,
+  reason: string,
+): Promise<void> {
+  const myUserId = await getCurrentUserId();
+  const text = reason.trim();
+  if (!text) throw new Error("Опишите, что не так с постом");
+
+  const { error } = await supabase.from("complaints").insert({
+    reporter_user_id: myUserId,
+    target_user_id: authorId,
+    help_post_id: postId,
+    reason: `Жалоба на пост Стены помощи. ${text}`,
+    status: "pending",
+  });
+
+  if (error) throw new Error(error.message);
 }

@@ -151,12 +151,9 @@ export default function EditProfileScreen() {
     }, [loadProfile]),
   );
 
-  const filteredCategories = useMemo(() => {
-    const search = category.trim().toLowerCase();
-    if (!search) return categories;
-
-    return categories.filter((item) => item.toLowerCase().includes(search));
-  }, [category]);
+  // Категория — только из списка (Веха 57, замечание владельца): поле не
+  // редактируется руками, нажатие раскрывает полный список.
+  const filteredCategories = categories;
 
   const categoryValid = useMemo(
     () =>
@@ -283,6 +280,13 @@ export default function EditProfileScreen() {
           country: joinLocations(locations).country,
           city: joinLocations(locations).city,
           category: matchedCategory,
+          // Сменил сферу — подтверждение квалификации теряет силу
+          // (Веха 57): иначе врач, ставший «юристом», получил бы доступ к
+          // чужим скрытым материалам. Новое подтверждение — через запрос.
+          ...(matchedCategory !== (user.category || "") &&
+          (user as any).qualification_confirmed_at
+            ? { qualification_confirmed_at: null, qualification_confirmed_by: null }
+            : {}),
           profession,
           bio,
           telegram: telegram || null,
@@ -552,20 +556,31 @@ export default function EditProfileScreen() {
             }}
           />
 
-          <Glass {...glassInputProps} style={styles.inputWrap}>
-            <TextInput
-              placeholder="Сфера деятельности *"
-              placeholderTextColor="#8FA79A"
-              style={styles.input}
-              value={category}
-              onChangeText={(text) => {
-                setCategory(text);
-                setShowCategoryOptions(true);
-                setError("");
-              }}
-              onFocus={() => setShowCategoryOptions(true)}
-            />
-          </Glass>
+          <TouchableOpacity
+            activeOpacity={0.85}
+            onPress={() => {
+              setShowCategoryOptions((v) => !v);
+              setError("");
+            }}
+          >
+            <Glass {...glassInputProps} style={styles.inputWrap}>
+              <View style={styles.selectRow}>
+                <Text
+                  style={[
+                    styles.input,
+                    styles.selectText,
+                    !category && styles.selectPlaceholder,
+                  ]}
+                  numberOfLines={1}
+                >
+                  {category || "Сфера деятельности *"}
+                </Text>
+                <Text style={styles.selectChevron}>
+                  {showCategoryOptions ? "▴" : "▾"}
+                </Text>
+              </View>
+            </Glass>
+          </TouchableOpacity>
 
           {showCategoryOptions && filteredCategories.length > 0 && (
             <Glass {...glassInputProps} style={styles.optionsBox}>
@@ -583,7 +598,15 @@ export default function EditProfileScreen() {
                     setError("");
                   }}
                 >
-                  <Text style={styles.optionText}>{item}</Text>
+                  <Text
+                    style={[
+                      styles.optionText,
+                      item === category && styles.optionTextActive,
+                    ]}
+                  >
+                    {item === category ? "✓ " : ""}
+                    {item}
+                  </Text>
                 </TouchableOpacity>
               ))}
             </Glass>
@@ -889,6 +912,32 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: "#7E988B",
     lineHeight: 17,
+  },
+
+  selectRow: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+
+  selectText: {
+    flex: 1,
+    lineHeight: 52,
+    ...(Platform.OS === "android" ? { textAlignVertical: "center" as const } : {}),
+  },
+
+  selectPlaceholder: {
+    color: "#8FA79A",
+  },
+
+  selectChevron: {
+    fontSize: 14,
+    color: "#719686",
+    paddingRight: 14,
+  },
+
+  optionTextActive: {
+    color: "#3F6B5B",
+    fontWeight: "600",
   },
 
   optionsBox: {

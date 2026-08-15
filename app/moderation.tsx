@@ -3,6 +3,7 @@ import {
   Philosopher_700Bold,
   useFonts,
 } from "@expo-google-fonts/philosopher";
+import { Ionicons } from "@expo/vector-icons";
 import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -24,6 +25,8 @@ import {
   approveNameChangeRequest,
   approveUser,
   closeAppeal,
+  confirmQualification,
+  revokeQualification,
   getAppealMessages,
   getBlockedUsers,
   getClosedAppeals,
@@ -42,6 +45,7 @@ import {
   takeUserModeration,
   unblockUser,
 } from "../services/moderationService";
+import { SENSITIVE_CATEGORIES } from "../services/helpService";
 import { getCurrentProfile } from "../services/sessionService";
 
 type QueueTab = "new" | "in_progress" | "needs_revision" | "done";
@@ -380,6 +384,12 @@ export default function ModerationScreen() {
           last_name,
           email,
           avatar_path
+        ),
+        help_post:help_post_id (
+          id,
+          body,
+          category,
+          status
         )
       `,
       )
@@ -980,6 +990,78 @@ export default function ModerationScreen() {
     } finally {
       setSendingReplyId(null);
     }
+  };
+
+  // Подтверждение квалификации (Веха 57): переключатель в карточке
+  // заявки и в карточке обращения. Список перечитывается тихо.
+  const [qualBusyId, setQualBusyId] = useState<string | null>(null);
+
+  const handleToggleQualification = async (person: any) => {
+    if (!person?.id || qualBusyId) return;
+    setQualBusyId(person.id);
+    try {
+      if (person.qualification_confirmed_at) {
+        await revokeQualification(person.id);
+      } else {
+        await confirmQualification(person.id);
+      }
+      await loadData(true);
+    } catch (e) {
+      const message =
+        e instanceof Error ? e.message : "Ошибка подтверждения квалификации";
+      Alert.alert("Ошибка", message);
+    } finally {
+      setQualBusyId(null);
+    }
+  };
+
+  // Плашка + кнопка для чувствительной категории. canAct — можно ли
+  // сейчас нажимать (задача взята мной / обращение в моей работе).
+  const renderQualificationBlock = (person: any, canAct: boolean) => {
+    if (!person?.category || !SENSITIVE_CATEGORIES.includes(person.category)) {
+      return null;
+    }
+    const confirmed = !!person.qualification_confirmed_at;
+    const busy = qualBusyId === person.id;
+
+    return (
+      <View
+        style={[
+          styles.qualBlock,
+          confirmed ? styles.qualBlockOk : styles.qualBlockWarn,
+        ]}
+      >
+        <View style={{ flex: 1 }}>
+          <Text style={styles.qualTitle}>
+            {confirmed
+              ? `Квалификация подтверждена · ${person.category}`
+              : `Чувствительная категория · ${person.category}`}
+          </Text>
+          <Text style={styles.qualHint}>
+            {confirmed
+              ? "Видит скрытые материалы и обсуждения категории на Стене помощи."
+              : "Без подтверждения категория остаётся в описании, но скрытые материалы Стены недоступны. Подтверждайте, только если уверены."}
+          </Text>
+        </View>
+        {canAct && (
+          <TouchableOpacity
+            style={[
+              styles.qualButton,
+              confirmed && styles.qualButtonRevoke,
+              busy && styles.actionDisabled,
+            ]}
+            disabled={busy}
+            onPress={() => handleToggleQualification(person)}
+          >
+            <Text
+              style={[styles.qualButtonText, confirmed && styles.qualButtonTextRevoke]}
+            >
+              {busy ? "…" : confirmed ? "Снять" : "Подтвердить"}
+            </Text>
+          </TouchableOpacity>
+        )}
+      </View>
+    );
   };
 
   const handleApproveUser = async (user: any) => {
@@ -1796,7 +1878,16 @@ export default function ModerationScreen() {
                       <Text style={styles.text}>
                         Профессия: {user.profession || "—"}
                       </Text>
+                      <Text style={styles.text}>
+                        Сфера: {user.category || "—"}
+                      </Text>
                     </View>
+
+                    {renderQualificationBlock(
+                      user,
+                      !!user.moderation_assigned_to &&
+                        canManageAssignedTask(user.moderation_assigned_to),
+                    )}
 
                     {renderInviteMessages(user.id)}
 
@@ -1981,11 +2072,57 @@ export default function ModerationScreen() {
                 const complaint = item.raw;
                 return (
                   <>
-                    {renderPersonRow(
-                      "НА КОГО ЖАЛУЮТСЯ",
-                      complaint.target,
-                      true,
+                    {/* Жалоба на пост Стены (Веха 57): карточка поста с
+                        началом текста — нажатие открывает пост; автор поста
+                        и жалобщик — строками с переходом в профиль. */}
+                    {!!complaint.help_post_id && (
+                      <TouchableOpacity
+                        activeOpacity={0.85}
+                        style={styles.postRow}
+                        onPress={() =>
+                          router.push({
+                            pathname: "/help-post" as any,
+                            params: { id: complaint.help_post_id },
+                          })
+                        }
+                      >
+                        <View style={styles.postRowIcon}>
+                          <Ionicons
+                            name="document-text-outline"
+                            size={18}
+                            color="#3F6B5B"
+                          />
+                        </View>
+                        <View style={styles.personInfo}>
+                          <Text style={[styles.personLabel, styles.personLabelAccent]}>
+                            ПОСТ СТЕНЫ ПОМОЩИ
+                            {complaint.help_post?.category
+                              ? ` · ${complaint.help_post.category}`
+                              : ""}
+                            {complaint.help_post?.status === "blocked"
+                              ? " · заблокирован"
+                              : complaint.help_post?.status === "archived"
+                                ? " · в архиве"
+                                : ""}
+                          </Text>
+                          <Text style={styles.personName} numberOfLines={2}>
+                            {complaint.help_post?.body
+                              ? complaint.help_post.body
+                              : "Пост удалён"}
+                          </Text>
+                        </View>
+                        <Text style={styles.personArrow}>›</Text>
+                      </TouchableOpacity>
                     )}
+
+                    {/* У жалобы на пост автора не показываем (решение
+                        владельца): в пост ведёт строка выше. */}
+                    {!complaint.help_post_id &&
+                      renderPersonRow(
+                        "НА КОГО ЖАЛУЮТСЯ",
+                        complaint.target,
+                        true,
+                      )}
                     {renderPersonRow(
                       "КТО ПОЖАЛОВАЛСЯ",
                       complaint.reporter,
@@ -2043,6 +2180,14 @@ export default function ModerationScreen() {
                 return (
                   <>
                     {renderPersonRow("АВТОР ОБРАЩЕНИЯ", appeal.author, false)}
+
+                    {!appeal.author?.is_deleted &&
+                      !appeal.author?.is_blocked &&
+                      renderQualificationBlock(
+                        appeal.author,
+                        !!appeal.assigned_to &&
+                          canManageAssignedTask(appeal.assigned_to),
+                      )}
 
                     {appeal.author?.is_deleted && (
                       <Text style={styles.mutedText}>
@@ -2828,6 +2973,63 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
 
+  // Плашка квалификации (Веха 57)
+  qualBlock: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    marginTop: 10,
+    borderRadius: 14,
+    borderWidth: 0.75,
+    padding: 10,
+  },
+
+  qualBlockWarn: {
+    backgroundColor: "rgba(224,163,62,0.08)",
+    borderColor: "rgba(224,163,62,0.4)",
+  },
+
+  qualBlockOk: {
+    backgroundColor: "rgba(105,183,141,0.10)",
+    borderColor: "rgba(105,183,141,0.4)",
+  },
+
+  qualTitle: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: "#3F6B5B",
+  },
+
+  qualHint: {
+    fontSize: 11.5,
+    lineHeight: 16,
+    color: "#7E988B",
+    marginTop: 2,
+  },
+
+  qualButton: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 12,
+    backgroundColor: "rgba(105,183,141,0.92)",
+  },
+
+  qualButtonRevoke: {
+    backgroundColor: "#FFFFFF",
+    borderWidth: 0.75,
+    borderColor: "rgba(93,140,120,0.45)",
+  },
+
+  qualButtonText: {
+    fontSize: 12.5,
+    fontWeight: "600",
+    color: "#FFFFFF",
+  },
+
+  qualButtonTextRevoke: {
+    color: "#3F6B5B",
+  },
+
   infoBlock: {
     marginTop: 8,
   },
@@ -2836,6 +3038,27 @@ const styles = StyleSheet.create({
     fontSize: 14.5,
     lineHeight: 21,
     color: "#2F4A3C",
+  },
+
+  // Строка поста Стены в карточке жалобы (Веха 57)
+  postRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "rgba(105,183,141,0.10)",
+    borderRadius: 14,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    marginTop: 8,
+  },
+
+  postRowIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 12,
+    backgroundColor: "#FFFFFF",
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: 10,
   },
 
   personRow: {

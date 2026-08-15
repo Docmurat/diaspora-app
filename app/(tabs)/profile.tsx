@@ -24,7 +24,11 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { Glass, Tekmet } from "../../components/mingi";
-import { getModerationTaskCount } from "../../services/moderationService";
+import { SENSITIVE_CATEGORIES } from "../../services/helpService";
+import {
+  getModerationTaskCount,
+  sendAppealMessage,
+} from "../../services/moderationService";
 import { DbUserProfile, getMyProfile } from "../../services/profileService";
 import { signOutUser } from "../../services/sessionService";
 import { getAgeFromBirthDate } from "../../store/user";
@@ -83,6 +87,32 @@ export default function ProfileScreen() {
   const [moderationCount, setModerationCount] = useState(0);
   const [confirmLogout, setConfirmLogout] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
+
+  // Запрос подтверждения квалификации (Веха 57) — обращение к
+  // администрации с готовым текстом, без ухода с экрана.
+  const [qualRequesting, setQualRequesting] = useState(false);
+  const [qualRequestSent, setQualRequestSent] = useState(false);
+  const [qualError, setQualError] = useState("");
+
+  const handleRequestQualification = async () => {
+    if (!user?.id || qualRequesting || qualRequestSent) return;
+    setQualRequesting(true);
+    setQualError("");
+    try {
+      await sendAppealMessage(
+        user.id,
+        `Прошу подтвердить мою квалификацию в категории «${user.category}» ` +
+          `(профессия: ${user.profession || "—"}) для доступа к скрытым ` +
+          `материалам Стены помощи. Готов(а) предоставить подтверждающие документы.`,
+      );
+      setQualRequestSent(true);
+    } catch (e: any) {
+      console.log("Запрос квалификации не ушёл:", e);
+      setQualError("Не удалось отправить запрос. Попробуйте позже.");
+    } finally {
+      setQualRequesting(false);
+    }
+  };
 
   useFocusEffect(
     useCallback(() => {
@@ -433,6 +463,54 @@ export default function ProfileScreen() {
           >
             <Text style={styles.infoTitle}>СФЕРА ДЕЯТЕЛЬНОСТИ</Text>
             <Text style={styles.infoText}>{user.category || "—"}</Text>
+
+            {/* Квалификация (Веха 57): только в чувствительных категориях
+                Стены. Подтверждена — строка; нет — кнопка «Запросить»
+                создаёт обращение к администрации прямо отсюда. */}
+            {!!user.category &&
+              SENSITIVE_CATEGORIES.includes(user.category) &&
+              ((user as any).qualification_confirmed_at ? (
+                <View style={styles.qualRow}>
+                  <Ionicons name="shield-checkmark" size={15} color="#69B78D" />
+                  <Text style={styles.qualOkText}>
+                    Квалификация подтверждена — вам доступны скрытые
+                    материалы Стены помощи
+                  </Text>
+                </View>
+              ) : (
+                <View>
+                  <Text style={styles.qualHintText}>
+                    Скрытые материалы Стены помощи в категории
+                    «{user.category}» доступны подтверждённым специалистам.
+                  </Text>
+                  <TouchableOpacity
+                    style={[
+                      styles.qualButton,
+                      (qualRequestSent || qualRequesting) &&
+                        styles.qualButtonDone,
+                    ]}
+                    activeOpacity={0.8}
+                    disabled={qualRequestSent || qualRequesting}
+                    onPress={handleRequestQualification}
+                  >
+                    <Text
+                      style={[
+                        styles.qualButtonText,
+                        qualRequestSent && styles.qualButtonTextDone,
+                      ]}
+                    >
+                      {qualRequesting
+                        ? "Отправляем…"
+                        : qualRequestSent
+                          ? "Запрос отправлен — ответ придёт в колокольчик"
+                          : "Запросить подтверждение квалификации"}
+                    </Text>
+                  </TouchableOpacity>
+                  {!!qualError && (
+                    <Text style={styles.qualErrorText}>{qualError}</Text>
+                  )}
+                </View>
+              ))}
           </TouchableOpacity>
 
           <TouchableOpacity
@@ -780,6 +858,57 @@ const styles = StyleSheet.create({
     letterSpacing: 1.4,
     marginBottom: 8,
     color: "#719686",
+  },
+
+  // Квалификация (Веха 57)
+  qualRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    marginTop: 8,
+  },
+
+  qualOkText: {
+    flex: 1,
+    fontSize: 12.5,
+    lineHeight: 17,
+    color: "#3F6B5B",
+  },
+
+  qualHintText: {
+    fontSize: 12,
+    lineHeight: 17,
+    color: "#7E988B",
+    marginTop: 8,
+  },
+
+  qualButton: {
+    alignSelf: "flex-start",
+    marginTop: 8,
+    paddingHorizontal: 14,
+    paddingVertical: 9,
+    borderRadius: 14,
+    backgroundColor: "rgba(105,183,141,0.92)",
+  },
+
+  qualButtonDone: {
+    backgroundColor: "rgba(105,183,141,0.14)",
+  },
+
+  qualButtonText: {
+    fontSize: 12.5,
+    fontWeight: "600",
+    color: "#FFFFFF",
+  },
+
+  qualButtonTextDone: {
+    color: "#3F6B5B",
+  },
+
+  qualErrorText: {
+    fontSize: 12,
+    color: "#C05B4D",
+    marginTop: 6,
   },
 
   infoText: {

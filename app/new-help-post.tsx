@@ -1,8 +1,9 @@
-// Новый пост на Стене помощи (Веха 52).
-// Тип (Вопрос/Предложение) → категория → текст → фото (до 3).
+// Новый пост на Стене помощи (Веха 52, вложения — Веха 55).
+// Тип (Вопрос/Предложение) → категория → текст → вложения: до 10 фото
+// и до 10 файлов (лимиты — в helpService, общие с сервисом).
 // В чувствительных категориях (Медицина, Юриспруденция) появляется
-// скрытый блок: текст + файлы, видимые только автору, модераторам и
-// подтверждённым специалистам категории.
+// скрытый блок: текст + такие же вложения (10 фото + 10 файлов),
+// видимые только автору, модераторам и подтверждённым специалистам.
 // Подтверждения и ошибки — экранные (Alert с «Да/Нет» в браузере
 // не работает — правило проекта).
 
@@ -35,14 +36,22 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import {
   HELP_CATEGORIES,
   HelpPostType,
+  MAX_FILES_PER_BLOCK,
+  MAX_FILE_MB,
+  MAX_PHOTOS_PER_BLOCK,
   NewHelpFile,
   SENSITIVE_CATEGORIES,
+  checkHelpFileLimits,
   createHelpPost,
 } from "../services/helpService";
 
-const MAX_OPEN_PHOTOS = 3;
-const MAX_HIDDEN_FILES = 5;
-const MAX_FILE_MB = 15;
+// Размер файла человеческим языком: «2,4 МБ» / «310 КБ».
+function formatSize(bytes: number | null): string {
+  if (!bytes) return "";
+  if (bytes >= 1024 * 1024)
+    return `${(bytes / 1024 / 1024).toFixed(1).replace(".", ",")} МБ`;
+  return `${Math.max(1, Math.round(bytes / 1024))} КБ`;
+}
 
 // Фото перед отправкой ужимаем до 1600 px — правило вложений (Веха 49).
 async function preparePhoto(asset: {
@@ -89,7 +98,10 @@ export default function NewHelpPostScreen() {
 
   const isSensitive = SENSITIVE_CATEGORIES.includes(category);
 
-  const openPhotos = files.filter((f) => !f.isHidden);
+  const openPhotos = files.filter((f) => !f.isHidden && f.isImage);
+  const openDocs = files.filter((f) => !f.isHidden && !f.isImage);
+  const hiddenPhotos = files.filter((f) => f.isHidden && f.isImage);
+  const hiddenDocs = files.filter((f) => f.isHidden && !f.isImage);
   const hiddenFiles = files.filter((f) => f.isHidden);
 
   // Галочка скрытого блока стоит, а сам блок пуст (ни текста, ни
@@ -107,17 +119,17 @@ export default function NewHelpPostScreen() {
     !hiddenBlockEmpty &&
     !submitting;
 
+  // Фото: можно выбрать сразу несколько; лишние сверх лимита отрезаем
+  // и говорим об этом.
   const pickPhoto = async (isHidden: boolean) => {
     setError("");
 
-    const limit = isHidden ? MAX_HIDDEN_FILES : MAX_OPEN_PHOTOS;
-    const current = isHidden ? hiddenFiles.length : openPhotos.length;
+    const current = (isHidden ? hiddenPhotos : openPhotos).length;
+    const room = MAX_PHOTOS_PER_BLOCK - current;
 
-    if (current >= limit) {
+    if (room <= 0) {
       setError(
-        isHidden
-          ? `В скрытом блоке — не больше ${MAX_HIDDEN_FILES} файлов`
-          : `Фото — не больше ${MAX_OPEN_PHOTOS}`,
+        `${isHidden ? "В скрытом блоке" : "Фото"} — не больше ${MAX_PHOTOS_PER_BLOCK} фото`,
       );
       return;
     }
@@ -126,63 +138,96 @@ export default function NewHelpPostScreen() {
       const picked = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
         quality: 1,
+        allowsMultipleSelection: true,
+        selectionLimit: room,
       });
 
-      if (picked.canceled || !picked.assets?.[0]) return;
+      if (picked.canceled || !picked.assets?.length) return;
 
-      const prepared = await preparePhoto(picked.assets[0]);
+      const assets = picked.assets.slice(0, room);
+      const prepared: PickedFile[] = [];
 
-      setFiles((prev) => [
-        ...prev,
-        {
-          uri: prepared.uri,
-          name: prepared.name,
-          mimeType: prepared.mimeType,
+      for (const asset of assets) {
+        const photo = await preparePhoto(asset);
+        prepared.push({
+          uri: photo.uri,
+          name: photo.name,
+          mimeType: photo.mimeType,
           size: null,
           isHidden,
           isImage: true,
-        },
-      ]);
+        });
+      }
+
+      setFiles((prev) => [...prev, ...prepared]);
+
+      if (picked.assets.length > room) {
+        setError(
+          `Добавлено ${room} из ${picked.assets.length}: не больше ${MAX_PHOTOS_PER_BLOCK} фото в блоке`,
+        );
+      }
     } catch (e) {
       console.log("Фото не выбралось:", e);
       setError("Не удалось добавить фото, попробуйте ещё раз");
     }
   };
 
-  const pickDocument = async () => {
+  // Файлы (документы): тоже несколько за раз. Картинка, выбранная как
+  // «файл», считается фото — уходит в коллаж, но лимит у неё фотографий.
+  const pickDocument = async (isHidden: boolean) => {
     setError("");
 
-    if (hiddenFiles.length >= MAX_HIDDEN_FILES) {
-      setError(`В скрытом блоке — не больше ${MAX_HIDDEN_FILES} файлов`);
+    const current = (isHidden ? hiddenDocs : openDocs).length;
+    const room = MAX_FILES_PER_BLOCK - current;
+
+    if (room <= 0) {
+      setError(
+        `${isHidden ? "В скрытом блоке" : "Файлов"} — не больше ${MAX_FILES_PER_BLOCK}`,
+      );
       return;
     }
 
     try {
       const picked = await DocumentPicker.getDocumentAsync({
         copyToCacheDirectory: true,
-        multiple: false,
+        multiple: true,
       });
 
-      if (picked.canceled || !picked.assets?.[0]) return;
+      if (picked.canceled || !picked.assets?.length) return;
 
-      const asset = picked.assets[0];
+      const accepted: PickedFile[] = [];
+      let skippedBig = 0;
+      let skippedLimit = 0;
 
-      if (asset.size && asset.size > MAX_FILE_MB * 1024 * 1024) {
-        setError(`Файл больше ${MAX_FILE_MB} МБ — выберите поменьше`);
-        return;
-      }
-
-      setFiles((prev) => [
-        ...prev,
-        {
+      for (const asset of picked.assets) {
+        if (asset.size && asset.size > MAX_FILE_MB * 1024 * 1024) {
+          skippedBig += 1;
+          continue;
+        }
+        const isImage = (asset.mimeType || "").startsWith("image/");
+        if (!isImage && accepted.filter((a) => !a.isImage).length >= room) {
+          skippedLimit += 1;
+          continue;
+        }
+        accepted.push({
           uri: asset.uri,
           name: asset.name || `file-${Date.now()}`,
           mimeType: asset.mimeType || "application/octet-stream",
           size: asset.size ?? null,
-          isHidden: true,
-          isImage: (asset.mimeType || "").startsWith("image/"),
-        },
-      ]);
+          isHidden,
+          isImage,
+        });
+      }
+
+      setFiles((prev) => [...prev, ...accepted]);
+
+      if (skippedBig > 0) {
+        setError(`Пропущено ${skippedBig}: файл больше ${MAX_FILE_MB} МБ`);
+      } else if (skippedLimit > 0) {
+        setError(
+          `Пропущено ${skippedLimit}: не больше ${MAX_FILES_PER_BLOCK} файлов в блоке`,
+        );
+      }
     } catch (e) {
       console.log("Файл не выбрался:", e);
       setError("Не удалось добавить файл, попробуйте ещё раз");
@@ -221,6 +266,14 @@ export default function NewHelpPostScreen() {
 
   const submit = async () => {
     if (!canSubmit || !postType) return;
+
+    const limitError = checkHelpFileLimits(
+      files.map(({ isImage, ...file }) => file),
+    );
+    if (limitError) {
+      setError(limitError);
+      return;
+    }
 
     setSubmitting(true);
     setError("");
@@ -363,8 +416,13 @@ export default function NewHelpPostScreen() {
           }}
         />
 
-        {/* Открытые фото */}
-        <Text style={styles.label}>Фото (видны всем)</Text>
+        {/* Открытые вложения: фото коллажем, файлы строками (Веха 55) */}
+        <View style={styles.labelRow}>
+          <Text style={styles.label}>Фото (видны всем)</Text>
+          <Text style={styles.counter}>
+            {openPhotos.length} / {MAX_PHOTOS_PER_BLOCK}
+          </Text>
+        </View>
 
         <View style={styles.filesRow}>
           {openPhotos.map((file) => (
@@ -380,7 +438,7 @@ export default function NewHelpPostScreen() {
             </View>
           ))}
 
-          {openPhotos.length < MAX_OPEN_PHOTOS && (
+          {openPhotos.length < MAX_PHOTOS_PER_BLOCK && (
             <TouchableOpacity
               style={styles.addTile}
               activeOpacity={0.75}
@@ -391,6 +449,43 @@ export default function NewHelpPostScreen() {
             </TouchableOpacity>
           )}
         </View>
+
+        <View style={styles.labelRow}>
+          <Text style={styles.label}>Файлы (видны всем)</Text>
+          <Text style={styles.counter}>
+            {openDocs.length} / {MAX_FILES_PER_BLOCK}
+          </Text>
+        </View>
+
+        {openDocs.map((file) => (
+          <View key={file.uri} style={styles.docRow}>
+            <Ionicons name="document-text-outline" size={18} color="#4E7364" />
+            <Text style={styles.docRowName} numberOfLines={1}>
+              {file.name}
+            </Text>
+            {!!file.size && (
+              <Text style={styles.docRowSize}>{formatSize(file.size)}</Text>
+            )}
+            <TouchableOpacity
+              onPress={() => removeFile(file.uri)}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            >
+              <Ionicons name="close" size={18} color="#96AC9E" />
+            </TouchableOpacity>
+          </View>
+        ))}
+
+        {openDocs.length < MAX_FILES_PER_BLOCK && (
+          <TouchableOpacity
+            style={styles.addDocButton}
+            activeOpacity={0.75}
+            onPress={() => pickDocument(false)}
+          >
+            <Ionicons name="attach-outline" size={16} color="#3F6B5B" />
+            <Text style={styles.hiddenAddText}>Добавить файл</Text>
+            <Text style={styles.addDocHint}>до {MAX_FILE_MB} МБ</Text>
+          </TouchableOpacity>
+        )}
 
         {/* Скрытый блок — только в чувствительных категориях.
             Снаружи — галочка с пояснением; включили — раскрывается
@@ -441,65 +536,78 @@ export default function NewHelpPostScreen() {
               onChangeText={setHiddenBody}
             />
 
-            <View style={styles.filesRow}>
-              {hiddenFiles.map((file) =>
-                file.isImage ? (
-                  <View key={file.uri} style={styles.photoWrap}>
-                    <Image source={{ uri: file.uri }} style={styles.photo} />
-                    <TouchableOpacity
-                      style={styles.photoRemove}
-                      onPress={() => removeFile(file.uri)}
-                      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                    >
-                      <Ionicons name="close" size={13} color="#FFFFFF" />
-                    </TouchableOpacity>
-                  </View>
-                ) : (
-                  <View key={file.uri} style={styles.docTile}>
-                    <Ionicons
-                      name="document-text-outline"
-                      size={18}
-                      color="#4E7364"
-                    />
-                    <Text style={styles.docName} numberOfLines={2}>
-                      {file.name}
-                    </Text>
-                    <TouchableOpacity
-                      style={styles.photoRemove}
-                      onPress={() => removeFile(file.uri)}
-                      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                    >
-                      <Ionicons name="close" size={13} color="#FFFFFF" />
-                    </TouchableOpacity>
-                  </View>
-                ),
-              )}
+            <View style={styles.labelRow}>
+              <Text style={styles.hiddenSubLabel}>Фото</Text>
+              <Text style={styles.counter}>
+                {hiddenPhotos.length} / {MAX_PHOTOS_PER_BLOCK}
+              </Text>
             </View>
 
-            {hiddenFiles.length < MAX_HIDDEN_FILES && (
-              <View style={styles.hiddenButtonsRow}>
+            <View style={styles.filesRow}>
+              {hiddenPhotos.map((file) => (
+                <View key={file.uri} style={styles.photoWrap}>
+                  <Image source={{ uri: file.uri }} style={styles.photo} />
+                  <TouchableOpacity
+                    style={styles.photoRemove}
+                    onPress={() => removeFile(file.uri)}
+                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  >
+                    <Ionicons name="close" size={13} color="#FFFFFF" />
+                  </TouchableOpacity>
+                </View>
+              ))}
+
+              {hiddenPhotos.length < MAX_PHOTOS_PER_BLOCK && (
                 <TouchableOpacity
-                  style={styles.hiddenAddButton}
+                  style={styles.addTile}
                   activeOpacity={0.75}
                   onPress={() => pickPhoto(true)}
                 >
-                  <Ionicons name="image-outline" size={16} color="#3F6B5B" />
-                  <Text style={styles.hiddenAddText}>Фото</Text>
+                  <Ionicons name="image-outline" size={22} color="#719686" />
+                  <Text style={styles.addTileText}>Фото</Text>
                 </TouchableOpacity>
+              )}
+            </View>
 
+            <View style={styles.labelRow}>
+              <Text style={styles.hiddenSubLabel}>Файлы</Text>
+              <Text style={styles.counter}>
+                {hiddenDocs.length} / {MAX_FILES_PER_BLOCK}
+              </Text>
+            </View>
+
+            {hiddenDocs.map((file) => (
+              <View key={file.uri} style={styles.docRow}>
+                <Ionicons
+                  name="document-text-outline"
+                  size={18}
+                  color="#4E7364"
+                />
+                <Text style={styles.docRowName} numberOfLines={1}>
+                  {file.name}
+                </Text>
+                {!!file.size && (
+                  <Text style={styles.docRowSize}>{formatSize(file.size)}</Text>
+                )}
                 <TouchableOpacity
-                  style={styles.hiddenAddButton}
-                  activeOpacity={0.75}
-                  onPress={pickDocument}
+                  onPress={() => removeFile(file.uri)}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                 >
-                  <Ionicons
-                    name="attach-outline"
-                    size={16}
-                    color="#3F6B5B"
-                  />
-                  <Text style={styles.hiddenAddText}>Файл</Text>
+                  <Ionicons name="close" size={18} color="#96AC9E" />
                 </TouchableOpacity>
               </View>
+            ))}
+
+            {hiddenDocs.length < MAX_FILES_PER_BLOCK && (
+              <TouchableOpacity
+                style={styles.addDocButton}
+                activeOpacity={0.75}
+                onPress={() => pickDocument(true)}
+              >
+                <Ionicons name="attach-outline" size={16} color="#3F6B5B" />
+                <Text style={styles.hiddenAddText}>Добавить файл</Text>
+                <Text style={styles.addDocHint}>до {MAX_FILE_MB} МБ</Text>
+              </TouchableOpacity>
             )}
           </View>
         )}
@@ -762,23 +870,72 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
 
-  hiddenButtonsRow: {
-    flexDirection: "row",
-    gap: 10,
-    marginTop: 10,
-  },
-
-  hiddenAddButton: {
+  // Кнопка «Добавить файл» — общая для открытого и скрытого блоков.
+  addDocButton: {
+    alignSelf: "flex-start",
     flexDirection: "row",
     alignItems: "center",
-    gap: 5,
+    gap: 6,
     paddingHorizontal: 14,
     paddingVertical: 8,
     borderRadius: 14,
     borderWidth: 0.75,
     borderColor: "rgba(93,140,120,0.45)",
     backgroundColor: "rgba(255,255,255,0.95)",
+    marginTop: 4,
     ...(Platform.OS === "web" ? ({ cursor: "pointer" } as any) : {}),
+  },
+
+  addDocHint: {
+    fontSize: 11,
+    color: "#8FA79A",
+    marginLeft: 2,
+  },
+
+  // Подпись + счётчик «3 / 10» в одну строку.
+  labelRow: {
+    flexDirection: "row",
+    alignItems: "flex-end",
+    justifyContent: "space-between",
+  },
+
+  counter: {
+    fontSize: 12,
+    color: "#96AC9E",
+    marginBottom: 8,
+  },
+
+  hiddenSubLabel: {
+    fontSize: 12.5,
+    fontWeight: "600",
+    color: "#4E7364",
+    marginTop: 4,
+    marginBottom: 8,
+  },
+
+  // Строка файла с именем, размером и крестиком.
+  docRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    borderRadius: 14,
+    borderWidth: 0.75,
+    borderColor: "rgba(93,140,120,0.35)",
+    backgroundColor: "#FFFFFF",
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    marginBottom: 8,
+  },
+
+  docRowName: {
+    flex: 1,
+    fontSize: 13,
+    color: "#4E7364",
+  },
+
+  docRowSize: {
+    fontSize: 11.5,
+    color: "#96AC9E",
   },
 
   hiddenAddText: {
@@ -807,23 +964,6 @@ const styles = StyleSheet.create({
     lineHeight: 17,
     color: "#7E988B",
     marginTop: 2,
-  },
-
-  docTile: {
-    width: 110,
-    height: 76,
-    borderRadius: 14,
-    borderWidth: 0.75,
-    borderColor: "rgba(93,140,120,0.35)",
-    backgroundColor: "#FFFFFF",
-    padding: 8,
-    gap: 4,
-  },
-
-  docName: {
-    fontSize: 10.5,
-    lineHeight: 13,
-    color: "#4E7364",
   },
 
   errorText: {

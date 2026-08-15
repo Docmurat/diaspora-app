@@ -30,11 +30,14 @@ import {
   isFavoriteInDb,
   removeFavoriteFromDb,
 } from "../services/favoritesService";
+import { SENSITIVE_CATEGORIES } from "../services/helpService";
 import {
   assignModerator,
   blockUser,
+  confirmQualification,
   removeModerator,
   restoreUser,
+  revokeQualification,
   softDeleteUser,
   unblockUser,
 } from "../services/moderationService";
@@ -121,6 +124,7 @@ export default function UserProfileScreen() {
   // Удаление подтверждается вторым нажатием: всплывающие окна с «Да/Нет»
   // в браузере не работают, а случайное касание стирает человека.
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [confirmRevokeQual, setConfirmRevokeQual] = useState(false);
   const [restoring, setRestoring] = useState(false);
   const [blockState, setBlockState] = useState({
     iBlockedUser: false,
@@ -330,6 +334,31 @@ export default function UserProfileScreen() {
       Alert.alert(
         "Ошибка",
         e instanceof Error ? e.message : "Ошибка снятия модератора",
+      );
+    }
+  };
+
+  // Квалификация (Веха 57): подтвердить / снять — модераторам, только в
+  // чувствительных категориях Стены. Снятие — вторым нажатием.
+  // (Состояние confirmRevokeQual объявлено выше, рядом с остальными хуками.)
+  const handleToggleQualification = async () => {
+    try {
+      if (user.qualification_confirmed_at) {
+        if (!confirmRevokeQual) {
+          setConfirmRevokeQual(true);
+          return;
+        }
+        await revokeQualification(user.id);
+      } else {
+        await confirmQualification(user.id);
+      }
+      setConfirmRevokeQual(false);
+      setShowMenu(false);
+      await loadProfile();
+    } catch (e) {
+      Alert.alert(
+        "Ошибка",
+        e instanceof Error ? e.message : "Ошибка подтверждения квалификации",
       );
     }
   };
@@ -645,6 +674,33 @@ export default function UserProfileScreen() {
                 )}
               </TouchableOpacity>
             )}
+
+            {isAdmin &&
+              !!user.category &&
+              SENSITIVE_CATEGORIES.includes(user.category) && (
+                <TouchableOpacity
+                  style={styles.menuItem}
+                  onPress={handleToggleQualification}
+                >
+                  <Text
+                    style={[
+                      styles.menuItemText,
+                      confirmRevokeQual && styles.dangerText,
+                    ]}
+                  >
+                    {user.qualification_confirmed_at
+                      ? confirmRevokeQual
+                        ? "Точно снять? Нажмите ещё раз"
+                        : "Снять подтверждение квалификации"
+                      : "Подтвердить квалификацию"}
+                  </Text>
+                  <Text style={styles.menuItemHint}>
+                    {user.qualification_confirmed_at
+                      ? `Подтверждена · ${user.category}. Снятие закроет скрытые материалы Стены.`
+                      : `${user.category}: откроет скрытые материалы и обсуждения Стены помощи.`}
+                  </Text>
+                </TouchableOpacity>
+              )}
 
             {isAdmin && (
               <TouchableOpacity
