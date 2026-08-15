@@ -72,6 +72,8 @@ export type HelpFeedItem = {
   author: HelpAuthor | null;
   commentCount: number;
   photoCount: number; // открытые фото — для пометки в карточке
+  thumbUrls: string[]; // до 3 миниатюр открытых фото (как в Threads)
+  isMine: boolean; // мой пост — метки «новое» не получает
 };
 
 async function getCurrentUserId(): Promise<string> {
@@ -94,6 +96,7 @@ async function getCurrentUserId(): Promise<string> {
 export async function getHelpFeed(
   filterCategories: string[] | null,
 ): Promise<HelpFeedItem[]> {
+  const myUserId = await getCurrentUserId();
   // Лента: живые посты + закрытые за последние 3 дня (серые, с пометкой
   // «Завершено» — люди видят, что вопрос решился). Старше — только архив.
   const threeDaysAgo = new Date(
@@ -138,7 +141,8 @@ export async function getHelpFeed(
       .in("id", authorIds);
 
     for (const a of authors || []) {
-      authorById.set(a.id, a as HelpAuthor);
+      const row = a as unknown as HelpAuthor;
+      authorById.set(row.id, row);
     }
   } catch {
     // анкета может быть скрыта правилами — карточка выживет без автора
@@ -161,20 +165,51 @@ export async function getHelpFeed(
     }
   } catch {}
 
+  // Открытые фото: счётчик + миниатюры (до 3 на карточку). Ссылки
+  // подписываем ОДНИМ пакетным запросом на всю ленту, чтобы не тормозить.
   const photoCountByPost = new Map<string, number>();
+  const thumbUrlsByPost = new Map<string, string[]>();
   try {
     const { data: attachments } = await supabase
       .from("help_attachments")
-      .select("post_id, is_hidden, mime_type")
+      .select("post_id, is_hidden, mime_type, storage_path, created_at")
       .in("post_id", postIds)
-      .eq("is_hidden", false);
+      .eq("is_hidden", false)
+      .order("created_at", { ascending: true });
+
+    const wanted: { postId: string; path: string }[] = [];
 
     for (const a of attachments || []) {
       if ((a.mime_type || "").startsWith("image/")) {
-        photoCountByPost.set(
-          a.post_id,
-          (photoCountByPost.get(a.post_id) || 0) + 1,
-        );
+        const n = (photoCountByPost.get(a.post_id) || 0) + 1;
+        photoCountByPost.set(a.post_id, n);
+        if (n <= 3 && a.storage_path) {
+          wanted.push({ postId: a.post_id, path: a.storage_path });
+        }
+      }
+    }
+
+    if (wanted.length > 0) {
+      // Подписываем по одной (пакетная подпись на нашем хранилище
+      // отвечает 500), но параллельно — лента не ждёт по очереди.
+      const results = await Promise.all(
+        wanted.map(async (w) => {
+          try {
+            const { data: signed } = await supabase.storage
+              .from("help-attachments")
+              .createSignedUrl(w.path, 3600);
+            return { postId: w.postId, url: signed?.signedUrl || null };
+          } catch {
+            return { postId: w.postId, url: null };
+          }
+        }),
+      );
+
+      for (const r of results) {
+        if (!r.url) continue;
+        const urls = thumbUrlsByPost.get(r.postId) || [];
+        urls.push(r.url);
+        thumbUrlsByPost.set(r.postId, urls);
       }
     }
   } catch {}
@@ -189,25 +224,39 @@ export async function getHelpFeed(
     commentsHidden: !!p.comments_hidden,
     createdAt: p.created_at,
     author: authorById.get(p.author_id) || null,
+    isMine: p.author_id === myUserId,
     commentCount: commentCountByPost.get(p.id) || 0,
     photoCount: photoCountByPost.get(p.id) || 0,
+    thumbUrls: thumbUrlsByPost.get(p.id) || [],
   }));
 }
 
 // ─────────────────────────────────────────────────────────────────────
-// ФИЛЬТР И ТОЧКА. Настройки лежат в своей строке users:
-// help_filter_categories (null/[] = все), help_seen_at (последний
-// заход на вкладку — для точки в MingiTabBar).
+// ФИЛЬТР, УВЕДОМЛЕНИЯ И ТОЧКА (Веха 54). Всё лежит в своей строке users.
+// Три независимые вещи:
+//  • help_filter_categories — фильтр ЛЕНТЫ. Просто фильтр, запоминается,
+//    ни на что больше не влияет (null/[] = все).
+//  • help_notify_categories — «какие посты мне важны» для точки и
+//    колокольчика (null/[] = все категории).
+//  • help_notify_new_posts — колокольчик: true — уведомлять о новых
+//    постах важных категорий, false — тишина, но точка всё равно горит.
+//  • help_seen_at — последний заход на вкладку (точка гаснет).
+// Триггер notify_on_help_post в базе смотрит на два последних поля.
 
-export async function getMyHelpSettings(): Promise<{
+export type HelpSettings = {
   filterCategories: string[];
+  notifyCategories: string[];
   notifyNewPosts: boolean;
-}> {
+};
+
+export async function getMyHelpSettings(): Promise<HelpSettings> {
   const myUserId = await getCurrentUserId();
 
   const { data, error } = await supabase
     .from("users")
-    .select("help_filter_categories, help_notify_new_posts")
+    .select(
+      "help_filter_categories, help_notify_categories, help_notify_new_posts",
+    )
     .eq("id", myUserId)
     .single();
 
@@ -215,12 +264,15 @@ export async function getMyHelpSettings(): Promise<{
     throw new Error(error.message);
   }
 
+  const row = data as any;
   return {
-    filterCategories: data?.help_filter_categories || [],
-    notifyNewPosts: data?.help_notify_new_posts !== false,
+    filterCategories: row?.help_filter_categories || [],
+    notifyCategories: row?.help_notify_categories || [],
+    notifyNewPosts: row?.help_notify_new_posts !== false,
   };
 }
 
+// Фильтр ленты — только лента, ничего больше.
 export async function saveMyHelpFilter(
   filterCategories: string[],
 ): Promise<void> {
@@ -231,6 +283,27 @@ export async function saveMyHelpFilter(
     .update({
       help_filter_categories:
         filterCategories.length > 0 ? filterCategories : null,
+    })
+    .eq("id", myUserId);
+
+  if (error) {
+    throw new Error(error.message);
+  }
+}
+
+// Настройки уведомлений: важные категории ([] = все) и колокольчик.
+export async function saveMyHelpNotifySettings(
+  notifyCategories: string[],
+  notifyNewPosts: boolean,
+): Promise<void> {
+  const myUserId = await getCurrentUserId();
+
+  const { error } = await supabase
+    .from("users")
+    .update({
+      help_notify_categories:
+        notifyCategories.length > 0 ? notifyCategories : null,
+      help_notify_new_posts: notifyNewPosts,
     })
     .eq("id", myUserId);
 
@@ -253,19 +326,22 @@ export async function markHelpSeen(): Promise<void> {
   }
 }
 
-// Есть ли живые посты по моему фильтру новее моего последнего захода —
-// для точки на вкладке. При любой ошибке тихо «нет».
+// Точка на вкладке: есть ли живые чужие посты ВАЖНЫХ категорий
+// (help_notify_categories; пусто = все) новее моего последнего захода.
+// Колокольчик на точку не влияет. При любой ошибке тихо «нет».
 export async function hasUnseenHelpPosts(): Promise<boolean> {
   try {
     const myUserId = await getCurrentUserId();
 
     const { data: me, error: meError } = await supabase
       .from("users")
-      .select("help_seen_at, help_filter_categories")
+      .select("help_seen_at, help_notify_categories")
       .eq("id", myUserId)
       .single();
 
     if (meError) return false;
+
+    const my = me as any;
 
     let query = supabase
       .from("help_posts")
@@ -274,13 +350,13 @@ export async function hasUnseenHelpPosts(): Promise<boolean> {
       .neq("author_id", myUserId)
       .limit(1);
 
-    if (me?.help_seen_at) {
-      query = query.gt("created_at", me.help_seen_at);
+    if (my?.help_seen_at) {
+      query = query.gt("created_at", my.help_seen_at);
     }
 
-    const filter = me?.help_filter_categories || [];
-    if (filter.length > 0) {
-      query = query.in("category", filter);
+    const important: string[] = my?.help_notify_categories || [];
+    if (important.length > 0) {
+      query = query.in("category", important);
     }
 
     const { data, error } = await query;
@@ -290,6 +366,59 @@ export async function hasUnseenHelpPosts(): Promise<boolean> {
     return (data || []).length > 0;
   } catch {
     return false;
+  }
+}
+
+// Где именно новое (Веха 54): категории важных чужих живых постов новее
+// моего последнего захода + сам момент захода. Экран ленты по этому
+// подсвечивает карточки, кнопку фильтра и чипы, а точку на вкладке гасит
+// ТОЛЬКО когда лента с текущим фильтром показала эти категории.
+export type UnseenHelpInfo = {
+  seenAt: string | null; // мой прошлый заход (посты новее — «новые»)
+  categories: string[]; // где есть новое (пусто = нового нет)
+};
+
+export async function getUnseenHelpInfo(): Promise<UnseenHelpInfo> {
+  try {
+    const myUserId = await getCurrentUserId();
+
+    const { data: me, error: meError } = await supabase
+      .from("users")
+      .select("help_seen_at, help_notify_categories")
+      .eq("id", myUserId)
+      .single();
+
+    if (meError) return { seenAt: null, categories: [] };
+
+    const my = me as any;
+    const seenAt: string | null = my?.help_seen_at || null;
+
+    let query = supabase
+      .from("help_posts")
+      .select("category")
+      .eq("status", "active")
+      .neq("author_id", myUserId)
+      .limit(200);
+
+    if (seenAt) {
+      query = query.gt("created_at", seenAt);
+    }
+
+    const important: string[] = my?.help_notify_categories || [];
+    if (important.length > 0) {
+      query = query.in("category", important);
+    }
+
+    const { data, error } = await query;
+    if (error) return { seenAt, categories: [] };
+
+    const categories: string[] = Array.from(
+      new Set<string>((data || []).map((r: any) => String(r.category))),
+    );
+
+    return { seenAt, categories };
+  } catch {
+    return { seenAt: null, categories: [] };
   }
 }
 
@@ -465,15 +594,19 @@ export async function getHelpPost(postId: string): Promise<HelpPostDetails> {
     throw new Error(error?.message || "Пост не найден");
   }
 
+  // Мостик для проверщика типов: список полей собран из двух строчек,
+  // и подсказчик Supabase не может его прочитать — берём строку как есть.
+  const p = post as any;
+
   let author: HelpAuthor | null = null;
   try {
     const { data: authorRow } = await supabase
       .from("users")
       .select(AUTHOR_FIELDS)
-      .eq("id", post.author_id)
+      .eq("id", p.author_id)
       .single();
 
-    author = (authorRow as HelpAuthor) || null;
+    author = (authorRow as unknown as HelpAuthor) || null;
   } catch {}
 
   // Скрытый текст: строка придёт только при допуске.
@@ -522,18 +655,215 @@ export async function getHelpPost(postId: string): Promise<HelpPostDetails> {
   } catch {}
 
   return {
-    id: post.id,
-    category: post.category,
-    postType: post.post_type as HelpPostType,
-    body: post.body,
-    status: post.status,
-    hasHidden: !!post.has_hidden,
-    commentsHidden: !!post.comments_hidden,
-    createdAt: post.created_at,
+    id: p.id,
+    category: p.category,
+    postType: p.post_type as HelpPostType,
+    body: p.body,
+    status: p.status,
+    hasHidden: !!p.has_hidden,
+    commentsHidden: !!p.comments_hidden,
+    createdAt: p.created_at,
     author,
-    isMine: post.author_id === myUserId,
+    isMine: p.author_id === myUserId,
     hiddenBody,
     hiddenVisible: !!hiddenBody || sawHiddenAttachment,
     attachments,
   };
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// КОММЕНТАРИИ (Веха 53). Один уровень, «Ответить» на конкретное
+// сообщение (reply_to). При comments_hidden правила базы сами отдают
+// строки только автору поста, модераторам и подтверждённым
+// специалистам категории — экран лишнего не увидит.
+
+export type HelpCommentItem = {
+  id: string;
+  authorId: string;
+  body: string;
+  createdAt: string;
+  replyTo: string | null; // id комментария, на который отвечают
+  author: HelpAuthor | null;
+  isMine: boolean; // мой комментарий — можно удалить
+};
+
+export async function getHelpComments(
+  postId: string,
+): Promise<HelpCommentItem[]> {
+  const myUserId = await getCurrentUserId();
+
+  const { data: rows, error } = await supabase
+    .from("help_comments")
+    .select("id, author_id, body, reply_to, created_at")
+    .eq("post_id", postId)
+    .order("created_at", { ascending: true });
+
+  if (error) {
+    throw new Error(error.message);
+  }
+
+  if (!rows || rows.length === 0) {
+    return [];
+  }
+
+  // Авторы — вторым запросом, как везде.
+  const authorIds = Array.from(new Set(rows.map((r: any) => r.author_id)));
+  const authorById = new Map<string, HelpAuthor>();
+  try {
+    const { data: authors } = await supabase
+      .from("users")
+      .select(AUTHOR_FIELDS)
+      .in("id", authorIds);
+
+    for (const a of authors || []) {
+      const row = a as unknown as HelpAuthor;
+      authorById.set(row.id, row);
+    }
+  } catch {
+    // анкета может быть скрыта — комментарий выживет без автора
+  }
+
+  return rows.map((r: any) => ({
+    id: r.id,
+    authorId: r.author_id,
+    body: r.body,
+    createdAt: r.created_at,
+    replyTo: r.reply_to || null,
+    author: authorById.get(r.author_id) || null,
+    isMine: r.author_id === myUserId,
+  }));
+}
+
+// Новый комментарий (replyTo = null) или ответ (replyTo = id).
+// Уведомления автору поста / автору исходного комментария шлют
+// триггеры в базе — экрану ничего делать не нужно.
+export async function addHelpComment(
+  postId: string,
+  body: string,
+  replyTo: string | null,
+): Promise<void> {
+  const myUserId = await getCurrentUserId();
+
+  const text = body.trim();
+  if (!text) {
+    throw new Error("Пустой комментарий");
+  }
+
+  const { error } = await supabase.from("help_comments").insert({
+    post_id: postId,
+    author_id: myUserId,
+    body: text,
+    reply_to: replyTo,
+  });
+
+  if (error) {
+    throw new Error(error.message);
+  }
+}
+
+// Удаление: правило hc_delete в базе пускает автора комментария и
+// автора поста. Удалённый исчезает совсем; у ответов на него пометка
+// «кому» просто гаснет (ссылка reply_to обнуляется базой).
+export async function deleteHelpComment(commentId: string): Promise<void> {
+  const { error } = await supabase
+    .from("help_comments")
+    .delete()
+    .eq("id", commentId);
+
+  if (error) {
+    throw new Error(error.message);
+  }
+}
+
+// Открыл пост — уведомления колокольчика про него гаснут (по образцу
+// чата: тот гасит уведомления собеседника при входе). Ссылки триггеров
+// ведут на /help-post?id=…, по ним и находим. Гашение — украшение:
+// при любой ошибке молчим, пост важнее.
+export async function markHelpPostNotificationsRead(
+  postId: string,
+): Promise<void> {
+  try {
+    const myUserId = await getCurrentUserId();
+
+    await supabase
+      .from("notifications")
+      .update({ is_read: true })
+      .eq("user_id", myUserId)
+      .eq("is_read", false)
+      .like("link", `%help-post?id=${postId}%`);
+  } catch {
+    // молчим
+  }
+}
+
+// Подтверждённый ли я специалист этой категории — для показа скрытого
+// обсуждения (правила базы решают сами; это только для вида экрана).
+export async function canJoinHiddenDiscussion(
+  category: string,
+): Promise<boolean> {
+  try {
+    const myUserId = await getCurrentUserId();
+
+    const { data } = await supabase
+      .from("users")
+      .select("category, qualification_confirmed_at")
+      .eq("id", myUserId)
+      .single();
+
+    return !!data?.qualification_confirmed_at && data?.category === category;
+  } catch {
+    return false;
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// АРХИВ (Веха 53). Автор закрывает пост (читать можно, писать нельзя)
+// и может вернуть его; правило hp_update пускает автора active↔archived.
+// Закрытый пост ещё 3 дня висит в ленте серым, потом — только архив.
+
+export async function closeHelpPost(postId: string): Promise<void> {
+  const myUserId = await getCurrentUserId();
+  const stamp = new Date().toISOString();
+
+  let { error } = await supabase
+    .from("help_posts")
+    .update({ status: "archived", archived_at: stamp, archived_by: myUserId })
+    .eq("id", postId)
+    .eq("author_id", myUserId);
+
+  // Страховка: если колонки archived_by в базе вдруг нет — закрываем
+  // без неё, пост важнее следа.
+  if (error && /archived_by/.test(error.message || "")) {
+    ({ error } = await supabase
+      .from("help_posts")
+      .update({ status: "archived", archived_at: stamp })
+      .eq("id", postId)
+      .eq("author_id", myUserId));
+  }
+
+  if (error) {
+    throw new Error(error.message);
+  }
+}
+
+export async function reopenHelpPost(postId: string): Promise<void> {
+  const myUserId = await getCurrentUserId();
+
+  let { error } = await supabase
+    .from("help_posts")
+    .update({ status: "active", archived_at: null, archived_by: null })
+    .eq("id", postId)
+    .eq("author_id", myUserId);
+
+  if (error && /archived_by/.test(error.message || "")) {
+    ({ error } = await supabase
+      .from("help_posts")
+      .update({ status: "active", archived_at: null })
+      .eq("id", postId)
+      .eq("author_id", myUserId));
+  }
+
+  if (error) {
+    throw new Error(error.message);
+  }
 }

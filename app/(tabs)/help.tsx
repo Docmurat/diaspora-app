@@ -1,8 +1,15 @@
-// Вкладка «Помощь» — лента Стены помощи (Веха 52).
-// Заглушка «Скоро» уступила место живой ленте: карточки с чипами
-// (категория + Вопрос/Предложение), окно фильтра по категориям,
-// плавающая кнопка нового поста. При входе на вкладку пишем
+// Вкладка «Помощь» — лента Стены помощи (Вехи 52, 54).
+// Карточки с чипами (категория + Вопрос/Предложение), окно фильтра по
+// категориям, плавающая кнопка нового поста. При входе на вкладку пишем
 // help_seen_at — точка на вкладке гаснет.
+// Веха 54: фильтр — ПРОСТО фильтр ленты (запоминается, ни на что не
+// влияет). Рядом — шестерёнка «Уведомления»: какие категории важны
+// (точка + колокольчик) и включён ли колокольчик. Две настройки
+// независимы; по умолчанию у всех «все категории» и колокольчик включён.
+// «Где новое»: карточки важных постов новее прошлого захода помечены
+// зелёной точкой; если фильтр их прячет — точка на кнопке фильтра, точки
+// на чипах и строка «Новое в: …» (нажатие переключает фильтр). Точка на
+// вкладке гаснет ТОЛЬКО когда лента с текущим фильтром показала новое.
 
 import {
   Philosopher_400Regular,
@@ -30,11 +37,12 @@ import {
   HELP_CATEGORIES,
   HelpFeedItem,
   POST_TYPE_LABELS,
-  authorProfileParams,
   getHelpFeed,
   getMyHelpSettings,
+  getUnseenHelpInfo,
   markHelpSeen,
   saveMyHelpFilter,
+  saveMyHelpNotifySettings,
 } from "../../services/helpService";
 import { subscribeToChanges } from "../../services/liveService";
 
@@ -90,6 +98,20 @@ export default function HelpScreen() {
   const [filter, setFilter] = useState<string[]>([]);
   const [filterLoaded, setFilterLoaded] = useState(false);
 
+  // «Где новое»: момент прошлого захода и категории с новыми важными
+  // постами. seenRef держит момент до тех пор, пока не погасим точку —
+  // иначе после markHelpSeen карточки мгновенно перестали бы быть «новыми».
+  const [unseenCats, setUnseenCats] = useState<string[]>([]);
+  const seenRef = useRef<string | null>(null);
+  const seenLoadedRef = useRef(false);
+  // Открытые на этой вкладке посты — у них метка «новое» гаснет сразу.
+  const [openedIds, setOpenedIds] = useState<string[]>([]);
+
+  // Настройки уведомлений (Веха 54): важные категории и колокольчик.
+  const [notifyOpen, setNotifyOpen] = useState(false);
+  const [notifyCategories, setNotifyCategories] = useState<string[]>([]);
+  const [notifyNewPosts, setNotifyNewPosts] = useState(true);
+
   // Свежий фильтр для перезагрузок из подписки (замыкание не устаревает).
   const filterRef = useRef<string[]>([]);
   filterRef.current = filter;
@@ -98,6 +120,29 @@ export default function HelpScreen() {
     try {
       const feed = await getHelpFeed(categories);
       setPosts(feed);
+
+      // Где новое (по важным категориям), затем — умное гашение точки:
+      // гасим только если текущий фильтр показывает ВСЕ категории с новым.
+      const info = await getUnseenHelpInfo();
+      if (!seenLoadedRef.current) {
+        // Момент прошлого захода запоминаем ОДИН раз за визит; при живых
+        // обновлениях (и после markHelpSeen) не трогаем — иначе метка
+        // «новое» слетала бы с непрочитанных постов при каждом новом.
+        seenRef.current = info.seenAt;
+        seenLoadedRef.current = true;
+      }
+      setUnseenCats(info.categories);
+
+      const shownAll =
+        info.categories.length > 0 &&
+        (categories.length === 0 ||
+          info.categories.every((c) => categories.includes(c)));
+
+      if (shownAll) {
+        // Точка на вкладке гаснет; карточки остаются «новыми» до ухода
+        // с вкладки (seenRef не трогаем).
+        markHelpSeen();
+      }
     } catch (e) {
       console.log("Ошибка загрузки Стены помощи:", e);
       setPosts([]);
@@ -112,8 +157,6 @@ export default function HelpScreen() {
       let alive = true;
 
       (async () => {
-        markHelpSeen();
-
         let categories = filterRef.current;
 
         if (!filterLoaded) {
@@ -122,6 +165,8 @@ export default function HelpScreen() {
             categories = settings.filterCategories;
             if (alive) {
               setFilter(categories);
+              setNotifyCategories(settings.notifyCategories);
+              setNotifyNewPosts(settings.notifyNewPosts);
               setFilterLoaded(true);
             }
           } catch {
@@ -134,9 +179,22 @@ export default function HelpScreen() {
 
       return () => {
         alive = false;
+        // Ушёл с вкладки — при следующем заходе «новизна» считается заново.
+        seenLoadedRef.current = false;
+        setOpenedIds([]);
       };
     }, [filterLoaded, loadFeed]),
   );
+
+  // Переключить фильтр на категории с новым (нажатие на строку «Новое в»).
+  const showUnseen = () => {
+    if (unseenCats.length === 0) return;
+    const next = [...unseenCats];
+    setFilter(next);
+    setLoading(true);
+    loadFeed(next);
+    saveMyHelpFilter(next).catch(() => {});
+  };
 
   // Живая лента: новый пост появляется сам, без кнопки «Обновить».
   useEffect(() => {
@@ -158,15 +216,45 @@ export default function HelpScreen() {
     setLoading(true);
     loadFeed(next);
 
-    // Сохраняем тихо: фильтр управляет ещё и уведомлениями (триггер в базе).
+    // Сохраняем тихо: просто чтобы фильтр помнился между заходами.
     saveMyHelpFilter(next).catch((e) =>
       console.log("Фильтр не сохранился:", e),
     );
   };
 
+  // Настройки уведомлений — сохраняем тихо при каждом изменении.
+  const persistNotify = (categories: string[], bell: boolean) => {
+    saveMyHelpNotifySettings(categories, bell).catch((e) =>
+      console.log("Настройки уведомлений не сохранились:", e),
+    );
+  };
+
+  const toggleNotifyCategory = (category: string) => {
+    const next = notifyCategories.includes(category)
+      ? notifyCategories.filter((c) => c !== category)
+      : [...notifyCategories, category];
+    setNotifyCategories(next);
+    persistNotify(next, notifyNewPosts);
+  };
+
+  const setNotifyAll = () => {
+    setNotifyCategories([]);
+    persistNotify([], notifyNewPosts);
+  };
+
+  const toggleBell = () => {
+    const next = !notifyNewPosts;
+    setNotifyNewPosts(next);
+    persistNotify(notifyCategories, next);
+  };
+
   if (!fontsLoaded) {
     return <View style={styles.emptyBg} />;
   }
+
+  // Категории с новым, которые текущий фильтр не показывает.
+  const hiddenUnseen =
+    filter.length === 0 ? [] : unseenCats.filter((c) => !filter.includes(c));
 
   return (
     <View style={styles.screen}>
@@ -177,37 +265,64 @@ export default function HelpScreen() {
         contentContainerStyle={styles.container}
         showsVerticalScrollIndicator={false}
       >
-        <Text style={styles.title}>Стена помощи</Text>
+        {/* Заголовок «Стена помощи» убран по решению владельца — больше
+            света; остаётся только подзаголовок. */}
         <Text style={styles.subtitle}>ВОПРОСЫ · ПРЕДЛОЖЕНИЯ</Text>
 
-        {/* Кнопка фильтра + счётчик выбранных категорий */}
-        <TouchableOpacity
-          style={styles.filterButton}
-          activeOpacity={0.8}
-          onPress={() => setFilterOpen((v) => !v)}
-        >
-          <Ionicons
-            name={filterOpen ? "options" : "options-outline"}
-            size={17}
-            color="#3F6B5B"
-          />
-          <Text style={styles.filterButtonText}>
-            {filter.length === 0
-              ? "Все категории"
-              : `Категории: ${filter.length}`}
-          </Text>
-          <Ionicons
-            name={filterOpen ? "chevron-up" : "chevron-down"}
-            size={15}
-            color="#719686"
-          />
-        </TouchableOpacity>
+        {/* Кнопка фильтра + шестерёнка уведомлений */}
+        <View style={styles.controlsRow}>
+          <TouchableOpacity
+            style={styles.filterButton}
+            activeOpacity={0.8}
+            onPress={() => {
+              setFilterOpen((v) => !v);
+              setNotifyOpen(false);
+            }}
+          >
+            <Ionicons
+              name={filterOpen ? "options" : "options-outline"}
+              size={17}
+              color="#3F6B5B"
+            />
+            <Text style={styles.filterButtonText}>
+              {filter.length === 0
+                ? "Все категории"
+                : `Категории: ${filter.length}`}
+            </Text>
+            {hiddenUnseen.length > 0 && <View style={styles.miniDot} />}
+            <Ionicons
+              name={filterOpen ? "chevron-up" : "chevron-down"}
+              size={15}
+              color="#719686"
+            />
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.gearButton, notifyOpen && styles.gearButtonActive]}
+            activeOpacity={0.8}
+            onPress={() => {
+              setNotifyOpen((v) => !v);
+              setFilterOpen(false);
+            }}
+            accessibilityLabel="Настройки уведомлений Стены"
+          >
+            <Ionicons
+              name={
+                notifyNewPosts
+                  ? "notifications-outline"
+                  : "notifications-off-outline"
+              }
+              size={18}
+              color={notifyOpen ? "#FFFFFF" : "#3F6B5B"}
+            />
+          </TouchableOpacity>
+        </View>
 
         {filterOpen && (
           <View style={styles.filterPanel}>
             <Text style={styles.filterHint}>
-              Показывать посты и присылать уведомления только по выбранным
-              категориям. Ничего не выбрано — видно всё.
+              Показывать в ленте только выбранные категории. Ничего не выбрано —
+              видно всё. На уведомления фильтр не влияет.
             </Text>
 
             <View style={styles.chipsWrap}>
@@ -226,11 +341,128 @@ export default function HelpScreen() {
                     >
                       {category}
                     </Text>
+                    {unseenCats.includes(category) && (
+                      <View
+                        style={[
+                          styles.chipDot,
+                          active && styles.chipDotOnActive,
+                        ]}
+                      />
+                    )}
                   </TouchableOpacity>
                 );
               })}
             </View>
           </View>
+        )}
+
+        {notifyOpen && (
+          <View style={styles.filterPanel}>
+            <Text style={styles.notifyTitle}>Какие посты мне важны</Text>
+            <Text style={styles.filterHint}>
+              По ним загорается точка на вкладке и приходят уведомления.
+            </Text>
+
+            <View style={styles.chipsWrap}>
+              <TouchableOpacity
+                style={[
+                  styles.chip,
+                  notifyCategories.length === 0 && styles.chipActive,
+                ]}
+                activeOpacity={0.75}
+                onPress={setNotifyAll}
+              >
+                <Text
+                  style={[
+                    styles.chipText,
+                    notifyCategories.length === 0 && styles.chipTextActive,
+                  ]}
+                >
+                  Все категории
+                </Text>
+              </TouchableOpacity>
+
+              {HELP_CATEGORIES.map((category) => {
+                const active = notifyCategories.includes(category);
+
+                return (
+                  <TouchableOpacity
+                    key={`n-${category}`}
+                    style={[styles.chip, active && styles.chipActive]}
+                    activeOpacity={0.75}
+                    onPress={() => toggleNotifyCategory(category)}
+                  >
+                    <Text
+                      style={[styles.chipText, active && styles.chipTextActive]}
+                    >
+                      {category}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+
+            <TouchableOpacity
+              style={styles.bellRow}
+              activeOpacity={0.75}
+              onPress={toggleBell}
+            >
+              <Ionicons
+                name={
+                  notifyNewPosts
+                    ? "notifications-outline"
+                    : "notifications-off-outline"
+                }
+                size={18}
+                color="#3F6B5B"
+              />
+              <View style={{ flex: 1 }}>
+                <Text style={styles.bellTitle}>
+                  {notifyNewPosts
+                    ? "Уведомления о новых постах включены"
+                    : "Уведомления о новых постах выключены"}
+                </Text>
+                <Text style={styles.bellHint}>
+                  {notifyNewPosts
+                    ? "Приходят в колокольчик, гаснут при открытии поста."
+                    : "Только точка на вкладке, колокольчик молчит."}
+                </Text>
+              </View>
+              <View
+                style={[
+                  styles.switchTrack,
+                  notifyNewPosts && styles.switchTrackOn,
+                ]}
+              >
+                <View
+                  style={[
+                    styles.switchKnob,
+                    notifyNewPosts && styles.switchKnobOn,
+                  ]}
+                />
+              </View>
+            </TouchableOpacity>
+
+            <Text style={styles.filterHint2}>
+              Ответы и комментарии к вашим постам приходят всегда.
+            </Text>
+          </View>
+        )}
+
+        {/* Новое спрятано фильтром — подсказка, где именно; нажатие
+            переключает фильтр на эти категории. */}
+        {hiddenUnseen.length > 0 && (
+          <TouchableOpacity
+            style={styles.newInRow}
+            activeOpacity={0.8}
+            onPress={showUnseen}
+          >
+            <View style={styles.newInDot} />
+            <Text style={styles.newInText} numberOfLines={2}>
+              Новое в: {hiddenUnseen.join(" · ")}
+            </Text>
+            <Ionicons name="arrow-forward" size={15} color="#3F6B5B" />
+          </TouchableOpacity>
         )}
 
         {loading && (
@@ -262,51 +494,42 @@ export default function HelpScreen() {
 
             const isClosed = post.status === "archived";
 
-            // Старость — левая цветная граница карточки, один в один
-            // приём statusLine из модерации (borderLeftWidth 3):
-            // свежий — зелёная, 3+ дня — светлый янтарь, 6+ — янтарь.
-            // Закрытый — серая граница на чисто сером фоне.
-            const ageDays =
-              (Date.now() - new Date(post.createdAt).getTime()) /
-              (24 * 60 * 60 * 1000);
+            // «Новое» — любой чужой пост новее моего прошлого захода,
+            // категория не важна (важные категории — только для точки и
+            // колокольчика). Гаснет при открытии поста или при следующем
+            // заходе на вкладку.
+            const isNew =
+              !isClosed &&
+              !post.isMine &&
+              !openedIds.includes(post.id) &&
+              (!seenRef.current ||
+                new Date(post.createdAt).getTime() >
+                  new Date(seenRef.current).getTime());
 
-            const stripeColor = isClosed
-              ? "#A8B0AB"
-              : ageDays >= 6
-                ? "#E0A33E"
-                : ageDays >= 3
-                  ? "#EBCC85"
-                  : "#69B78D";
+            // Полоска старости слева убрана по решению владельца —
+            // карточка светлая, старость видна по дате.
 
+            const openPost = () => {
+              setOpenedIds((ids) =>
+                ids.includes(post.id) ? ids : [...ids, post.id],
+              );
+              router.push({
+                pathname: "/help-post" as any,
+                params: { id: post.id },
+              });
+            };
+
+            // Карточка целиком открывает пост (решение владельца);
+            // в профиль автора ведут аватарка и имя уже внутри поста.
             return (
               <TouchableOpacity
                 key={post.id}
-                style={[
-                  styles.card,
-                  { borderLeftColor: stripeColor },
-                  isClosed && styles.cardClosed,
-                ]}
+                style={[styles.card, isClosed && styles.cardClosed]}
                 activeOpacity={0.85}
-                onPress={() =>
-                  router.push({
-                    pathname: "/help-post" as any,
-                    params: { id: post.id },
-                  })
-                }
+                onPress={openPost}
               >
                 <View style={styles.cardTop}>
-                  {/* Автор: нажатие ведёт в его профиль (как в «Людях») */}
-                  <TouchableOpacity
-                    style={styles.cardAuthor}
-                    activeOpacity={0.8}
-                    onPress={() => {
-                      if (!post.author) return;
-                      router.push({
-                        pathname: "/user-profile",
-                        params: authorProfileParams(post.author),
-                      });
-                    }}
-                  >
+                  <View style={styles.cardAuthor}>
                     <Image
                       source={
                         post.author?.avatar_path
@@ -329,7 +552,7 @@ export default function HelpScreen() {
                         {formatPostDate(post.createdAt)}
                       </Text>
                     </View>
-                  </TouchableOpacity>
+                  </View>
 
                   {isClosed ? (
                     <View style={styles.closedChip}>
@@ -364,6 +587,13 @@ export default function HelpScreen() {
                     <Text style={styles.categoryChipText}>{post.category}</Text>
                   </View>
 
+                  {isNew && (
+                    <View style={styles.newMark}>
+                      <View style={styles.newMarkDot} />
+                      <Text style={styles.newMarkText}>новое</Text>
+                    </View>
+                  )}
+
                   {post.hasHidden && (
                     <View style={styles.hiddenMark}>
                       <Ionicons name="lock-closed" size={11} color="#719686" />
@@ -377,6 +607,35 @@ export default function HelpScreen() {
                 <Text style={styles.cardBody} numberOfLines={4}>
                   {post.body}
                 </Text>
+
+                {/* Миниатюры открытых фото — как в Threads: ряд до трёх,
+                    одна — пошире, две-три — квадратные. */}
+                {post.thumbUrls.length > 0 && (
+                  <View style={styles.thumbRow}>
+                    {post.thumbUrls.map((url, i) => (
+                      <View
+                        key={`${post.id}-t${i}`}
+                        style={[
+                          styles.thumbWrap,
+                          post.thumbUrls.length === 1 && styles.thumbWrapSingle,
+                        ]}
+                      >
+                        <Image
+                          source={{ uri: url }}
+                          style={styles.thumb}
+                          resizeMode="cover"
+                        />
+                        {i === 2 && post.photoCount > 3 && (
+                          <View style={styles.thumbMore}>
+                            <Text style={styles.thumbMoreText}>
+                              +{post.photoCount - 3}
+                            </Text>
+                          </View>
+                        )}
+                      </View>
+                    ))}
+                  </View>
+                )}
 
                 <View style={styles.cardFooter}>
                   <View style={styles.footerItem}>
@@ -458,14 +717,21 @@ const styles = StyleSheet.create({
     letterSpacing: 2.5,
     color: "#719686",
     textAlign: "center",
-    marginTop: 8,
+    marginTop: 4,
     marginBottom: 16,
+  },
+
+  controlsRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    marginBottom: 14,
   },
 
   filterButton: {
     flexDirection: "row",
     alignItems: "center",
-    alignSelf: "center",
     gap: 6,
     paddingHorizontal: 16,
     paddingVertical: 9,
@@ -473,8 +739,197 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(255,255,255,0.95)",
     borderWidth: 0.75,
     borderColor: "rgba(93,140,120,0.45)",
+    ...(Platform.OS === "web" ? ({ cursor: "pointer" } as any) : {}),
+  },
+
+  gearButton: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(255,255,255,0.95)",
+    borderWidth: 0.75,
+    borderColor: "rgba(93,140,120,0.45)",
+    ...(Platform.OS === "web" ? ({ cursor: "pointer" } as any) : {}),
+  },
+
+  gearButtonActive: {
+    backgroundColor: "rgba(105,183,141,0.92)",
+    borderColor: "rgba(105,183,141,0.92)",
+  },
+
+  notifyTitle: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: "#3F6B5B",
+    marginBottom: 4,
+  },
+
+  bellRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    marginTop: 14,
+    paddingTop: 12,
+    borderTopWidth: 0.75,
+    borderTopColor: "rgba(93,140,120,0.18)",
+    ...(Platform.OS === "web" ? ({ cursor: "pointer" } as any) : {}),
+  },
+
+  bellTitle: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: "#3F6B5B",
+  },
+
+  bellHint: {
+    fontSize: 11.5,
+    color: "#7E988B",
+    marginTop: 2,
+  },
+
+  switchTrack: {
+    width: 40,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: "#D7DCD9",
+    padding: 2,
+    justifyContent: "center",
+  },
+
+  switchTrackOn: {
+    backgroundColor: "rgba(105,183,141,0.92)",
+  },
+
+  switchKnob: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: "#FFFFFF",
+  },
+
+  switchKnobOn: {
+    alignSelf: "flex-end",
+  },
+
+  miniDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: "rgba(105,183,141,1)",
+    marginLeft: 2,
+  },
+
+  chipDot: {
+    position: "absolute",
+    top: -3,
+    right: -3,
+    width: 9,
+    height: 9,
+    borderRadius: 4.5,
+    backgroundColor: "rgba(105,183,141,1)",
+    borderWidth: 1.5,
+    borderColor: "#FFFFFF",
+  },
+
+  chipDotOnActive: {
+    backgroundColor: "#3F6B5B",
+  },
+
+  newInRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    borderRadius: 16,
+    backgroundColor: "rgba(105,183,141,0.10)",
+    borderWidth: 0.75,
+    borderColor: "rgba(105,183,141,0.35)",
+    paddingHorizontal: 12,
+    paddingVertical: 10,
     marginBottom: 14,
     ...(Platform.OS === "web" ? ({ cursor: "pointer" } as any) : {}),
+  },
+
+  newInDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: "rgba(105,183,141,1)",
+  },
+
+  newInText: {
+    flex: 1,
+    fontSize: 12.5,
+    fontWeight: "600",
+    color: "#3F6B5B",
+  },
+
+  newMark: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+  },
+
+  newMarkDot: {
+    width: 7,
+    height: 7,
+    borderRadius: 3.5,
+    backgroundColor: "rgba(105,183,141,1)",
+  },
+
+  newMarkText: {
+    fontSize: 11,
+    fontWeight: "600",
+    color: "#3F6B5B",
+  },
+
+  thumbRow: {
+    flexDirection: "row",
+    gap: 6,
+    marginTop: 10,
+  },
+
+  thumbWrap: {
+    flex: 1,
+    aspectRatio: 1,
+    borderRadius: 12,
+    overflow: "hidden",
+    backgroundColor: "#EAF4EE",
+    maxWidth: "33%",
+  },
+
+  thumbWrapSingle: {
+    aspectRatio: 16 / 10,
+    maxWidth: "100%",
+  },
+
+  thumb: {
+    width: "100%",
+    height: "100%",
+  },
+
+  thumbMore: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: "rgba(47,74,60,0.45)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  thumbMoreText: {
+    color: "#FFFFFF",
+    fontSize: 16,
+    fontWeight: "700",
+  },
+
+  filterHint2: {
+    fontSize: 11.5,
+    color: "#96AC9E",
+    marginTop: 10,
   },
 
   filterButtonText: {
@@ -554,7 +1009,6 @@ const styles = StyleSheet.create({
   card: {
     borderRadius: 18,
     borderWidth: 0.75,
-    borderLeftWidth: 3,
     borderColor: "rgba(93,140,120,0.28)",
     backgroundColor: "#FFFFFF",
     padding: 14,
