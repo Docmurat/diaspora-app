@@ -14,6 +14,7 @@ import {
   Image,
   Linking,
   Modal,
+  Platform,
   ScrollView,
   StyleSheet,
   Text,
@@ -25,6 +26,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { firstCity, formatLocations } from "../components/locations";
 import { Glass, Tekmet } from "../components/mingi";
 import { supabase } from "../lib/supabase";
+import { formatPhone, whatsappDigits } from "../services/contactsService";
 import {
   addFavoriteToDb,
   isFavoriteInDb,
@@ -143,6 +145,7 @@ export default function UserProfileScreen() {
             .select(
               `
               *,
+              users_private (phone),
               invited_by:invited_by_user_id (
                 id,
                 first_name,
@@ -158,7 +161,10 @@ export default function UserProfileScreen() {
 
         if (profileResult.error) throw new Error(profileResult.error.message);
 
-        setUser(profileResult.data);
+        {
+          const raw: any = profileResult.data;
+          setUser({ ...raw, phone: raw?.users_private?.phone ?? null });
+        }
         setMe(myProfile);
         setBlockState({
           iBlockedUser: false,
@@ -176,6 +182,7 @@ export default function UserProfileScreen() {
             .select(
               `
             *,
+            users_private (phone),
             invited_by:invited_by_user_id (
               id,
               first_name,
@@ -193,7 +200,10 @@ export default function UserProfileScreen() {
 
       if (profileResult.error) throw new Error(profileResult.error.message);
 
-      setUser(profileResult.data);
+      {
+        const raw: any = profileResult.data;
+        setUser({ ...raw, phone: raw?.users_private?.phone ?? null });
+      }
       setMe(myProfile);
       setBlockState(relation);
       setIsFavorite(!!favoriteStatus);
@@ -285,6 +295,14 @@ export default function UserProfileScreen() {
   const showTelegram = isModerationMode
     ? !!user.telegram
     : !!user.telegram && (!restrictedByTargetUser || canBypassBlock);
+
+  const showInstagram = isModerationMode
+    ? !!user.instagram
+    : !!user.instagram && (!restrictedByTargetUser || canBypassBlock);
+
+  // Кнопка WhatsApp: телефон открыт по обычным правилам показа
+  // И хозяин анкеты отметил «у меня есть WhatsApp».
+  const showWhatsapp = showPhone && !!user.has_whatsapp && !!user.phone;
 
   const showEmail = isModerationMode
     ? !!user.email
@@ -491,10 +509,62 @@ export default function UserProfileScreen() {
     if (!user?.telegram) return;
 
     const username = String(user.telegram).replace("@", "");
+
+    // В браузере схема tg:// молчит, если не стоит Telegram Desktop —
+    // на вебе сразу открываем обычную ссылку.
+    if (Platform.OS === "web") {
+      await Linking.openURL(`https://t.me/${username}`);
+      return;
+    }
+
     const appUrl = `tg://resolve?domain=${username}`;
 
     const canOpenApp = await Linking.canOpenURL(appUrl);
     await Linking.openURL(canOpenApp ? appUrl : `https://t.me/${username}`);
+  };
+
+  const handleInstagramOpen = async () => {
+    if (!user?.instagram) return;
+
+    // Принимаем и «@имя», и полную ссылку — приводим к чистому имени
+    const username = String(user.instagram)
+      .trim()
+      .replace(/^https?:\/\/(www\.)?instagram\.com\//i, "")
+      .replace(/^@/, "")
+      .replace(/[/?].*$/, "");
+
+    if (!username) return;
+
+    try {
+      // В браузере схема instagram:// молчит — на вебе сразу сайт.
+      if (Platform.OS === "web") {
+        await Linking.openURL(`https://instagram.com/${username}`);
+        return;
+      }
+
+      const appUrl = `instagram://user?username=${username}`;
+      const canOpenApp = await Linking.canOpenURL(appUrl);
+      await Linking.openURL(
+        canOpenApp ? appUrl : `https://instagram.com/${username}`,
+      );
+    } catch {
+      Alert.alert("Ошибка", "Не удалось открыть Instagram");
+    }
+  };
+
+  const handleWhatsappOpen = async () => {
+    if (!user?.phone) return;
+
+    // wa.me принимает только цифры в международном виде
+    // («8 928…» превращается в «7928…» — contactsService)
+    const digits = whatsappDigits(user.phone);
+    if (!digits) return;
+
+    try {
+      await Linking.openURL(`https://wa.me/${digits}`);
+    } catch {
+      Alert.alert("Ошибка", "Не удалось открыть WhatsApp");
+    }
   };
 
   const handleOpenEmail = async () => {
@@ -1054,21 +1124,60 @@ export default function UserProfileScreen() {
               style={styles.infoBlock}
             >
               <Text style={styles.infoTitle}>ТЕЛЕФОН</Text>
-              <Text style={styles.infoText}>{user.phone || "—"}</Text>
+              <Text style={styles.infoText}>
+                {formatPhone(user.phone) || "—"}
+              </Text>
             </TouchableOpacity>
           )}
 
-          {showTelegram && (
-            <TouchableOpacity
-              style={styles.infoBlock}
-              onPress={handleTelegramOpen}
-              onLongPress={() => handleCopyText("Telegram", user.telegram)}
-              delayLongPress={300}
-              activeOpacity={0.9}
-            >
-              <Text style={styles.infoTitle}>TELEGRAM</Text>
-              <Text style={styles.linkText}>{user.telegram}</Text>
-            </TouchableOpacity>
+          {(showTelegram || showInstagram || showWhatsapp) && (
+            <View style={styles.infoBlock}>
+              <Text style={styles.infoTitle}>СВЯЗЬ</Text>
+              <View style={styles.contactRow}>
+                {showTelegram && (
+                  <TouchableOpacity
+                    style={styles.contactButton}
+                    onPress={handleTelegramOpen}
+                    onLongPress={() =>
+                      handleCopyText("Telegram", user.telegram)
+                    }
+                    delayLongPress={300}
+                    activeOpacity={0.85}
+                  >
+                    <Ionicons name="paper-plane" size={16} color="#3F6B5B" />
+                    <Text style={styles.contactButtonText}>Telegram</Text>
+                  </TouchableOpacity>
+                )}
+
+                {showInstagram && (
+                  <TouchableOpacity
+                    style={styles.contactButton}
+                    onPress={handleInstagramOpen}
+                    onLongPress={() =>
+                      handleCopyText("Instagram", user.instagram)
+                    }
+                    delayLongPress={300}
+                    activeOpacity={0.85}
+                  >
+                    <Ionicons name="logo-instagram" size={16} color="#3F6B5B" />
+                    <Text style={styles.contactButtonText}>Instagram</Text>
+                  </TouchableOpacity>
+                )}
+
+                {showWhatsapp && (
+                  <TouchableOpacity
+                    style={styles.contactButton}
+                    onPress={handleWhatsappOpen}
+                    onLongPress={() => handleCopyText("Телефон", user.phone)}
+                    delayLongPress={300}
+                    activeOpacity={0.85}
+                  >
+                    <Ionicons name="logo-whatsapp" size={16} color="#3F6B5B" />
+                    <Text style={styles.contactButtonText}>WhatsApp</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+            </View>
           )}
 
           {showAdditional && (
@@ -1116,6 +1225,30 @@ export default function UserProfileScreen() {
 }
 
 const styles = StyleSheet.create({
+  contactRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 10,
+  },
+
+  contactButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingHorizontal: 14,
+    paddingVertical: 9,
+    borderRadius: 14,
+    backgroundColor: "rgba(105,183,141,0.12)",
+    borderWidth: 1,
+    borderColor: "rgba(105,183,141,0.55)",
+  },
+
+  contactButtonText: {
+    fontSize: 13.5,
+    fontWeight: "600",
+    color: "#3F6B5B",
+  },
+
   screen: {
     flex: 1,
     backgroundColor: "#FFFFFF",

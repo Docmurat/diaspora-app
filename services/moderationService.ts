@@ -38,12 +38,12 @@ export async function getPendingUsers() {
     .select(
       `
       *,
+      users_private (phone),
       invited_by:invited_by_user_id (
         id,
         first_name,
         last_name,
-        email,
-        phone
+        email
       ),
       assigned_moderator:moderation_assigned_to (
         id,
@@ -58,7 +58,13 @@ export async function getPendingUsers() {
     .order("created_at", { ascending: true });
 
   if (error) throw new Error(error.message);
-  return data || [];
+
+  // Телефон приезжает вложенным из users_private (Веха 62) —
+  // пришиваем на прежнее место.
+  return (data || []).map((row: any) => ({
+    ...row,
+    phone: row.users_private?.phone ?? null,
+  }));
 }
 
 export async function approveUser(userId: string) {
@@ -754,7 +760,6 @@ export async function getOpenAppeals() {
         first_name,
         last_name,
         email,
-        phone,
         avatar_path,
         is_deleted,
         is_blocked,

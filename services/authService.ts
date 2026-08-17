@@ -1,4 +1,5 @@
 import { supabase } from '../lib/supabase';
+import { normalizeHandle, normalizePhone } from './contactsService';
 import { validateInviteCode, markInviteAsUsedById } from './inviteService';
 
 type RegisterUserInput = {
@@ -6,6 +7,7 @@ type RegisterUserInput = {
   password: string;
   phone: string;
   phoneVisible: boolean;
+  hasWhatsapp: boolean;
   firstName: string;
   lastName: string;
   birthDate: string;
@@ -15,6 +17,7 @@ type RegisterUserInput = {
   profession: string;
   bio: string;
   telegram?: string;
+  instagram?: string;
   extraInfo?: string;
   avatarPath?: string | null;
   inviteCode: string;
@@ -48,8 +51,8 @@ export async function registerUser(input: RegisterUserInput) {
   const { error: insertError } = await supabase.from('users').insert({
     id: authUserId,
     email: normalizedEmail,
-    phone: input.phone.trim(),
     phone_visible: input.phoneVisible,
+    has_whatsapp: input.hasWhatsapp,
     first_name: input.firstName.trim(),
     last_name: input.lastName.trim(),
     birth_date: input.birthDate,
@@ -58,7 +61,8 @@ export async function registerUser(input: RegisterUserInput) {
     category: input.category.trim(),
     profession: input.profession.trim(),
     bio: input.bio.trim(),
-    telegram: input.telegram?.trim() || null,
+    telegram: normalizeHandle(input.telegram),
+    instagram: normalizeHandle(input.instagram),
     extra_info: input.extraInfo?.trim() || null,
     avatar_path: input.avatarPath || null,
     moderation_status: 'pending',
@@ -69,6 +73,19 @@ export async function registerUser(input: RegisterUserInput) {
 
   if (insertError) {
     throw new Error(insertError.message);
+  }
+
+  // Телефон живёт в служебной таблице users_private (Веха 62):
+  // база отдаёт его чужим только при включённом «показывать телефон».
+  const { error: phoneInsertError } = await supabase
+    .from('users_private')
+    .insert({
+      user_id: authUserId,
+      phone: normalizePhone(input.phone),
+    });
+
+  if (phoneInsertError) {
+    throw new Error(phoneInsertError.message);
   }
 
   await markInviteAsUsedById({

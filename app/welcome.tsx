@@ -174,14 +174,22 @@ export default function WelcomeScreen() {
   const [memberCount, setMemberCount] = useState<number | null>(null);
   useEffect(() => {
     let alive = true;
-    supabase
-      .rpc("community_member_count")
-      .then(({ data }) => {
+
+    // try/catch вместо .catch(): у ответа Supabase по типам «обещание-
+    // лайт» без .catch — подсказчик подчёркивал красным (работало, но
+    // формально он прав).
+    const loadCount = async () => {
+      try {
+        const { data } = await supabase.rpc("community_member_count");
         if (alive && typeof data === "number" && data > 0) {
           setMemberCount(data);
         }
-      })
-      .catch(() => {});
+      } catch {
+        // счётчик — украшение: при ошибке строка просто не показывается
+      }
+    };
+
+    loadCount();
     return () => {
       alive = false;
     };

@@ -129,6 +129,7 @@ export default function RegisterScreen() {
   const [password, setPassword] = useState("");
   const [phone, setPhone] = useState("");
   const [phoneVisible, setPhoneVisible] = useState(true);
+  const [hasWhatsapp, setHasWhatsapp] = useState(false);
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
   const [birthDateInput, setBirthDateInput] = useState("");
@@ -139,6 +140,7 @@ export default function RegisterScreen() {
   const [profession, setProfession] = useState("");
   const [bio, setBio] = useState("");
   const [telegram, setTelegram] = useState("");
+  const [instagram, setInstagram] = useState("");
   const [avatarUri, setAvatarUri] = useState("");
   const [cropVisible, setCropVisible] = useState(false);
   const [cropSource, setCropSource] = useState<{
@@ -397,6 +399,7 @@ export default function RegisterScreen() {
         password,
         phone,
         phoneVisible,
+        hasWhatsapp,
         firstName,
         lastName,
         birthDate: normalizedBirthDate,
@@ -406,6 +409,7 @@ export default function RegisterScreen() {
         profession,
         bio,
         telegram,
+        instagram,
         extraInfo: "",
         avatarPath: null,
       });
@@ -544,6 +548,23 @@ export default function RegisterScreen() {
                     onValueChange={setPhoneVisible}
                     trackColor={{ false: "#D6E4DA", true: "#9FD4B4" }}
                     thumbColor={phoneVisible ? "#69B78D" : "#FFFFFF"}
+                  />
+                </View>
+              </Glass>
+
+              <Glass {...glassInputProps} style={styles.inputWrap}>
+                <View style={styles.switchRow}>
+                  <View style={styles.switchTextWrap}>
+                    <Text style={styles.switchTitle}>У меня есть WhatsApp</Text>
+                    <Text style={styles.switchHint}>
+                      При открытом номере в анкете появится кнопка WhatsApp
+                    </Text>
+                  </View>
+                  <Switch
+                    value={hasWhatsapp}
+                    onValueChange={setHasWhatsapp}
+                    trackColor={{ false: "#D6E4DA", true: "#9FD4B4" }}
+                    thumbColor={hasWhatsapp ? "#69B78D" : "#FFFFFF"}
                   />
                 </View>
               </Glass>
@@ -796,6 +817,20 @@ export default function RegisterScreen() {
                   value={telegram}
                   onChangeText={(text) => {
                     setTelegram(text);
+                    setError("");
+                  }}
+                  autoCapitalize="none"
+                />
+              </Glass>
+
+              <Glass {...glassInputProps} style={styles.inputWrap}>
+                <TextInput
+                  placeholder="Instagram (необязательно)"
+                  placeholderTextColor="#8FA79A"
+                  style={styles.input}
+                  value={instagram}
+                  onChangeText={(text) => {
+                    setInstagram(text);
                     setError("");
                   }}
                   autoCapitalize="none"

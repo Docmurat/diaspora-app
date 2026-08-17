@@ -35,6 +35,10 @@ import {
 import { Tekmet } from "../components/mingi";
 import { supabase } from "../lib/supabase";
 import {
+  normalizeHandle,
+  normalizePhone,
+} from "../services/contactsService";
+import {
   isRemoteAvatar,
   removeAllUserAvatars,
   uploadAvatar,
@@ -80,6 +84,7 @@ export default function ModerationEditProfileScreen() {
   const [lastName, setLastName] = useState("");
   const [phone, setPhone] = useState("");
   const [phoneVisible, setPhoneVisible] = useState(true);
+  const [hasWhatsapp, setHasWhatsapp] = useState(false);
   const [birthDateInput, setBirthDateInput] = useState("");
   const [locations, setLocations] = useState<LocationPair[]>([
     { country: "", city: "" },
@@ -88,6 +93,7 @@ export default function ModerationEditProfileScreen() {
   const [profession, setProfession] = useState("");
   const [bio, setBio] = useState("");
   const [telegram, setTelegram] = useState("");
+  const [instagram, setInstagram] = useState("");
   const [extraInfo, setExtraInfo] = useState("");
   const [avatarUri, setAvatarUri] = useState("");
   const [avatarMarkedForRemoval, setAvatarMarkedForRemoval] = useState(false);
@@ -105,7 +111,7 @@ export default function ModerationEditProfileScreen() {
 
       const { data, error } = await supabase
         .from("users")
-        .select("*")
+        .select("*, users_private(phone)")
         .eq("id", userId)
         .single();
 
@@ -115,14 +121,16 @@ export default function ModerationEditProfileScreen() {
 
       setFirstName(data.first_name || "");
       setLastName(data.last_name || "");
-      setPhone(data.phone || "");
+      setPhone((data as any).users_private?.phone || "");
       setPhoneVisible(data.phone_visible ?? true);
+      setHasWhatsapp(data.has_whatsapp ?? false);
       setBirthDateInput(formatBirthDateForInput(data.birth_date || ""));
       setLocations(parseLocations(data.country, data.city));
       setCategory(data.category || "");
       setProfession(data.profession || "");
       setBio(data.bio || "");
       setTelegram(data.telegram || "");
+      setInstagram(data.instagram || "");
       setExtraInfo(data.extra_info || "");
       setAvatarUri(data.avatar_path || "");
       setAvatarMarkedForRemoval(false);
@@ -225,15 +233,16 @@ export default function ModerationEditProfileScreen() {
         .update({
           first_name: firstName.trim(),
           last_name: lastName.trim(),
-          phone: phone.trim(),
           phone_visible: phoneVisible,
+          has_whatsapp: hasWhatsapp,
           birth_date: normalizedBirthDate,
           country: joinLocations(locations).country,
           city: joinLocations(locations).city,
           category: category.trim(),
           profession: profession.trim(),
           bio: bio.trim(),
-          telegram: telegram.trim() || null,
+          telegram: normalizeHandle(telegram),
+          instagram: normalizeHandle(instagram),
           extra_info: extraInfo.trim() || null,
           avatar_path: avatarToSave,
           updated_at: new Date().toISOString(),
@@ -242,6 +251,20 @@ export default function ModerationEditProfileScreen() {
 
       if (updateError) {
         throw new Error(updateError.message || "Не удалось сохранить профиль");
+      }
+
+      // Телефон — в служебной таблице users_private (Веха 62);
+      // модератору запись разрешена правилом «или admin».
+      const { error: phoneError } = await supabase
+        .from("users_private")
+        .upsert({
+          user_id: userId,
+          phone: normalizePhone(phone),
+          updated_at: new Date().toISOString(),
+        });
+
+      if (phoneError) {
+        throw new Error(phoneError.message || "Не удалось сохранить телефон");
       }
 
       Alert.alert("Готово", "Профиль обновлён");
@@ -386,6 +409,21 @@ export default function ModerationEditProfileScreen() {
             />
           </View>
 
+          <View style={styles.switchRow}>
+            <View style={styles.switchTextWrap}>
+              <Text style={styles.switchTitle}>У человека есть WhatsApp</Text>
+              <Text style={styles.switchHint}>
+                При открытом номере в анкете появится кнопка WhatsApp
+              </Text>
+            </View>
+            <Switch
+              value={hasWhatsapp}
+              onValueChange={setHasWhatsapp}
+              trackColor={{ false: "#DCE7E0", true: "#A8D8C0" }}
+              thumbColor={hasWhatsapp ? "#69B78D" : "#F4FAF4"}
+            />
+          </View>
+
           <TextInput
             placeholder="Дата рождения (ДД.ММ.ГГГГ) *"
             placeholderTextColor="#8FA79A"
@@ -472,6 +510,17 @@ export default function ModerationEditProfileScreen() {
             value={telegram}
             onChangeText={(text) => {
               setTelegram(text);
+              setError("");
+            }}
+          />
+
+          <TextInput
+            placeholder="Instagram"
+            placeholderTextColor="#8FA79A"
+            style={styles.input}
+            value={instagram}
+            onChangeText={(text) => {
+              setInstagram(text);
               setError("");
             }}
           />

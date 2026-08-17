@@ -20,6 +20,7 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { supabase } from "../lib/supabase";
+import { formatPhone } from "../services/contactsService";
 import { subscribeToChanges } from "../services/liveService";
 import {
   approveNameChangeRequest,
@@ -323,12 +324,12 @@ export default function ModerationScreen() {
       .select(
         `
         *,
+        users_private (phone),
         invited_by:invited_by_user_id (
           id,
           first_name,
           last_name,
-          email,
-          phone
+          email
         )
       `,
       )
@@ -338,7 +339,12 @@ export default function ModerationScreen() {
       .order("moderation_completed_at", { ascending: false });
 
     if (error) throw new Error(error.message);
-    return data || [];
+
+    // Телефон — из users_private (Веха 62), пришиваем на место.
+    return (data || []).map((row: any) => ({
+      ...row,
+      phone: row.users_private?.phone ?? null,
+    }));
   };
 
   const loadCompletedInviteRequests = async () => {
@@ -521,12 +527,12 @@ export default function ModerationScreen() {
       .select(
         `
         *,
+        users_private (phone),
         invited_by:invited_by_user_id (
           id,
           first_name,
           last_name,
-          email,
-          phone
+          email
         ),
         assigned_moderator:moderation_assigned_to (
           id,
@@ -541,8 +547,14 @@ export default function ModerationScreen() {
 
     if (error) throw new Error(error.message);
 
+    // Телефон — из users_private (Веха 62), пришиваем на место.
+    const fresh = {
+      ...(data as any),
+      phone: (data as any)?.users_private?.phone ?? null,
+    };
+
     setPendingUsers((prev) =>
-      prev.map((item) => (item.id === userId ? data : item)),
+      prev.map((item) => (item.id === userId ? fresh : item)),
     );
   };
 
@@ -1865,7 +1877,7 @@ export default function ModerationScreen() {
                   <>
                     <View style={styles.infoBlock}>
                       <Text style={styles.text}>
-                        Телефон: {user.phone || "Без телефона"}
+                        Телефон: {formatPhone(user.phone) || "Без телефона"}
                       </Text>
                       <Text style={styles.text}>
                         Пригласил:{" "}

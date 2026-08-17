@@ -23,6 +23,10 @@ import {
 } from "react-native";
 import AvatarCropModal, { prepareAvatarSource } from "../components/AvatarCrop";
 import {
+  normalizeHandle,
+  normalizePhone,
+} from "../services/contactsService";
+import {
   joinLocations,
   LocationFields,
   LocationPair,
@@ -86,6 +90,7 @@ export default function EditProfileScreen() {
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
   const [phoneVisible, setPhoneVisible] = useState(true);
+  const [hasWhatsapp, setHasWhatsapp] = useState(false);
   const [birthDateInput, setBirthDateInput] = useState("");
   const [locations, setLocations] = useState<LocationPair[]>([
     { country: "", city: "" },
@@ -94,6 +99,7 @@ export default function EditProfileScreen() {
   const [profession, setProfession] = useState("");
   const [bio, setBio] = useState("");
   const [telegram, setTelegram] = useState("");
+  const [instagram, setInstagram] = useState("");
   const [extraInfo, setExtraInfo] = useState("");
   const [avatarUri, setAvatarUri] = useState("");
   const [avatarMarkedForRemoval, setAvatarMarkedForRemoval] = useState(false);
@@ -127,12 +133,14 @@ export default function EditProfileScreen() {
         setEmail(profile.email || "");
         setPhone(profile.phone || "");
         setPhoneVisible(profile.phone_visible ?? true);
+        setHasWhatsapp(profile.has_whatsapp ?? false);
         setBirthDateInput(formatBirthDateForInput(profile.birth_date || ""));
         setLocations(parseLocations(profile.country, profile.city));
         setCategory(profile.category || "");
         setProfession(profile.profession || "");
         setBio(profile.bio || "");
         setTelegram(profile.telegram || "");
+        setInstagram(profile.instagram || "");
         setExtraInfo(profile.extra_info || "");
         setAvatarUri(profile.avatar_path || "");
         setAvatarMarkedForRemoval(false);
@@ -274,8 +282,8 @@ export default function EditProfileScreen() {
               }
             : {}),
           email,
-          phone,
           phone_visible: phoneVisible,
+          has_whatsapp: hasWhatsapp,
           birth_date: normalizedBirthDate,
           country: joinLocations(locations).country,
           city: joinLocations(locations).city,
@@ -289,7 +297,8 @@ export default function EditProfileScreen() {
             : {}),
           profession,
           bio,
-          telegram: telegram || null,
+          telegram: normalizeHandle(telegram),
+          instagram: normalizeHandle(instagram),
           extra_info: extraInfo || null,
           avatar_path: avatarToSave,
           updated_at: new Date().toISOString(),
@@ -300,6 +309,19 @@ export default function EditProfileScreen() {
 
       if (updateError) {
         throw new Error(updateError.message);
+      }
+
+      // Телефон — в служебной таблице users_private (Веха 62).
+      const { error: phoneError } = await supabase
+        .from("users_private")
+        .upsert({
+          user_id: user.id,
+          phone: normalizePhone(phone),
+          updated_at: new Date().toISOString(),
+        });
+
+      if (phoneError) {
+        throw new Error(phoneError.message);
       }
 
       if (needsRevision) {
@@ -535,6 +557,23 @@ export default function EditProfileScreen() {
           </Glass>
 
           <Glass {...glassInputProps} style={styles.inputWrap}>
+            <View style={styles.switchRow}>
+              <View style={styles.switchTextWrap}>
+                <Text style={styles.switchTitle}>У меня есть WhatsApp</Text>
+                <Text style={styles.switchHint}>
+                  При открытом номере в анкете появится кнопка WhatsApp
+                </Text>
+              </View>
+              <Switch
+                value={hasWhatsapp}
+                onValueChange={setHasWhatsapp}
+                trackColor={{ false: "#D6E4DA", true: "#9FD4B4" }}
+                thumbColor={hasWhatsapp ? "#69B78D" : "#FFFFFF"}
+              />
+            </View>
+          </Glass>
+
+          <Glass {...glassInputProps} style={styles.inputWrap}>
             <TextInput
               placeholder="Дата рождения (ДД.ММ.ГГГГ) *"
               placeholderTextColor="#8FA79A"
@@ -647,6 +686,20 @@ export default function EditProfileScreen() {
               value={telegram}
               onChangeText={(text) => {
                 setTelegram(text);
+                setError("");
+              }}
+              autoCapitalize="none"
+            />
+          </Glass>
+
+          <Glass {...glassInputProps} style={styles.inputWrap}>
+            <TextInput
+              placeholder="Instagram"
+              placeholderTextColor="#8FA79A"
+              style={styles.input}
+              value={instagram}
+              onChangeText={(text) => {
+                setInstagram(text);
                 setError("");
               }}
               autoCapitalize="none"

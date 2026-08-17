@@ -22,6 +22,7 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { supabase } from "../lib/supabase";
+import { formatPhone } from "../services/contactsService";
 
 type CaseKind =
   | "registration"
@@ -117,12 +118,12 @@ export default function ModerationCaseDetailsScreen() {
       .select(
         `
         *,
+        users_private (phone),
         invited_by:invited_by_user_id (
           id,
           first_name,
           last_name,
-          email,
-          phone
+          email
         )
       `,
       )
@@ -135,7 +136,11 @@ export default function ModerationCaseDetailsScreen() {
       () => [],
     );
 
-    setRecord(data);
+    // Телефон — из users_private (Веха 62), пришиваем на место.
+    setRecord({
+      ...(data as any),
+      phone: (data as any)?.users_private?.phone ?? null,
+    });
     setMessages(history);
   };
 
@@ -237,13 +242,17 @@ export default function ModerationCaseDetailsScreen() {
   const loadBlockedCase = async () => {
     const { data, error } = await supabase
       .from("users")
-      .select("*")
+      .select("*, users_private(phone)")
       .eq("id", entityId)
       .single();
 
     if (error) throw new Error(error.message);
 
-    setRecord(data);
+    // Телефон — из users_private (Веха 62), пришиваем на место.
+    setRecord({
+      ...(data as any),
+      phone: (data as any)?.users_private?.phone ?? null,
+    });
     setMessages([]);
   };
 
@@ -512,13 +521,14 @@ export default function ModerationCaseDetailsScreen() {
               label="Имя"
               value={`${record.first_name || ""} ${record.last_name || ""}`.trim()}
             />
-            <InfoRow label="Телефон" value={record.phone} />
+            <InfoRow label="Телефон" value={formatPhone(record.phone)} />
             <InfoRow label="Email" value={record.email} />
             <InfoRow label="Категория" value={record.category} />
             <InfoRow label="Профессия" value={record.profession} />
             <InfoRow label="Город" value={record.city} />
             <InfoRow label="Страна" value={record.country} />
             <InfoRow label="Telegram" value={record.telegram} />
+            <InfoRow label="Instagram" value={record.instagram} />
 
             {!!record.invited_by && (
               <InfoRow
@@ -649,7 +659,7 @@ export default function ModerationCaseDetailsScreen() {
               value={`${record.first_name || ""} ${record.last_name || ""}`.trim()}
             />
             <InfoRow label="Email" value={record.email} />
-            <InfoRow label="Телефон" value={record.phone} />
+            <InfoRow label="Телефон" value={formatPhone(record.phone)} />
             <InfoRow label="Город" value={record.city} />
             <InfoRow label="Страна" value={record.country} />
             <InfoRow

@@ -14,6 +14,7 @@ import {
   Image,
   Linking,
   Modal,
+  Platform,
   ScrollView,
   StyleSheet,
   Text,
@@ -24,6 +25,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { Glass, Tekmet } from "../../components/mingi";
+import { formatHandle, formatPhone } from "../../services/contactsService";
 import { SENSITIVE_CATEGORIES } from "../../services/helpService";
 import {
   getModerationTaskCount,
@@ -199,12 +201,48 @@ export default function ProfileScreen() {
     const raw = user.telegram.trim().replace(/^@/, "");
 
     try {
+      // В браузере схема tg:// молчит без Telegram Desktop — сразу сайт.
+      if (Platform.OS === "web") {
+        await Linking.openURL(`https://t.me/${raw}`);
+        return;
+      }
+
       const appUrl = `tg://resolve?domain=${raw}`;
       const canOpenApp = await Linking.canOpenURL(appUrl);
 
       await Linking.openURL(canOpenApp ? appUrl : `https://t.me/${raw}`);
     } catch (e) {
       Alert.alert("Ошибка", "Не удалось открыть Telegram");
+    }
+  };
+
+  const handleInstagramOpen = async () => {
+    if (!user?.instagram) return;
+
+    // Принимаем и «@имя», и полную ссылку — приводим к чистому имени
+    const username = user.instagram
+      .trim()
+      .replace(/^https?:\/\/(www\.)?instagram\.com\//i, "")
+      .replace(/^@/, "")
+      .replace(/[/?].*$/, "");
+
+    if (!username) return;
+
+    try {
+      // В браузере схема instagram:// молчит — на вебе сразу сайт.
+      if (Platform.OS === "web") {
+        await Linking.openURL(`https://instagram.com/${username}`);
+        return;
+      }
+
+      const appUrl = `instagram://user?username=${username}`;
+      const canOpenApp = await Linking.canOpenURL(appUrl);
+
+      await Linking.openURL(
+        canOpenApp ? appUrl : `https://instagram.com/${username}`,
+      );
+    } catch (e) {
+      Alert.alert("Ошибка", "Не удалось открыть Instagram");
     }
   };
 
@@ -487,15 +525,15 @@ export default function ProfileScreen() {
                 <View style={styles.qualRow}>
                   <Ionicons name="shield-checkmark" size={15} color="#69B78D" />
                   <Text style={styles.qualOkText}>
-                    Квалификация подтверждена — вам доступны скрытые
-                    материалы Стены помощи
+                    Квалификация подтверждена — вам доступны скрытые материалы
+                    Стены помощи
                   </Text>
                 </View>
               ) : (
                 <View>
                   <Text style={styles.qualHintText}>
-                    Скрытые материалы Стены помощи в категории
-                    «{user.category}» доступны подтверждённым специалистам.
+                    Скрытые материалы Стены помощи в категории «{user.category}»
+                    доступны подтверждённым специалистам.
                   </Text>
                   <TouchableOpacity
                     style={[
@@ -584,7 +622,9 @@ export default function ProfileScreen() {
             style={styles.infoBlock}
           >
             <Text style={styles.infoTitle}>ТЕЛЕФОН</Text>
-            <Text style={styles.infoText}>{user.phone || "—"}</Text>
+            <Text style={styles.infoText}>
+              {formatPhone(user.phone) || "—"}
+            </Text>
             <Text style={styles.infoHint}>
               {user.phone_visible
                 ? "Номер отображается в профиле."
@@ -601,7 +641,22 @@ export default function ProfileScreen() {
               style={styles.infoBlock}
             >
               <Text style={styles.infoTitle}>TELEGRAM</Text>
-              <Text style={styles.linkText}>{user.telegram}</Text>
+              <Text style={styles.linkText}>{formatHandle(user.telegram)}</Text>
+            </TouchableOpacity>
+          )}
+
+          {!!user.instagram && (
+            <TouchableOpacity
+              activeOpacity={0.9}
+              onPress={handleInstagramOpen}
+              onLongPress={() => handleCopyText("Instagram", user.instagram)}
+              delayLongPress={300}
+              style={styles.infoBlock}
+            >
+              <Text style={styles.infoTitle}>INSTAGRAM</Text>
+              <Text style={styles.linkText}>
+                {formatHandle(user.instagram)}
+              </Text>
             </TouchableOpacity>
           )}
 

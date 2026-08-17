@@ -6,6 +6,7 @@ export type DbUserProfile = {
   email: string | null;
   phone: string | null;
   phone_visible: boolean;
+  has_whatsapp: boolean;
   first_name: string;
   last_name: string;
   birth_date: string | null;
@@ -15,6 +16,7 @@ export type DbUserProfile = {
   profession: string | null;
   bio: string | null;
   telegram: string | null;
+  instagram: string | null;
   extra_info: string | null;
   avatar_path: string | null;
   role: 'owner' | 'moderator' | 'user';
@@ -47,7 +49,7 @@ export async function getMyProfile(): Promise<DbUserProfile | null> {
 
   const { data, error } = await supabase
     .from('users')
-    .select('*')
+    .select('*, users_private(phone)')
     .eq('id', user.id)
     .maybeSingle();
 
@@ -55,7 +57,16 @@ export async function getMyProfile(): Promise<DbUserProfile | null> {
     throw new Error(error.message);
   }
 
-  return (data as DbUserProfile | null) ?? null;
+  if (!data) return null;
+
+  // Телефон переехал в users_private (Веха 62) — пришиваем его на
+  // прежнее место, чтобы остальной код ничего не заметил.
+  const { users_private, ...profile } = data as any;
+
+  return {
+    ...profile,
+    phone: users_private?.phone ?? null,
+  } as DbUserProfile;
 }
 
 export async function syncMyEmailFromAuth(): Promise<void> {
@@ -114,6 +125,17 @@ export async function softDeleteMyAccount(): Promise<void> {
     throw new Error('Пользователь не найден');
   }
 await removeAllUserAvatars(user.id);
+
+  // Номер удаляем сразу — он в users_private (Веха 62).
+  const { error: phoneDeleteError } = await supabase
+    .from('users_private')
+    .delete()
+    .eq('user_id', user.id);
+
+  if (phoneDeleteError) {
+    throw new Error(phoneDeleteError.message);
+  }
+
   const deletedEmail = `deleted_${user.id}@deleted.local`;
 
   const { error: updateError } = await supabase
@@ -121,14 +143,15 @@ await removeAllUserAvatars(user.id);
     .update({
       is_deleted: true,
       email: deletedEmail,
-      phone: null,
       phone_visible: false,
+      has_whatsapp: false,
       country: null,
       city: null,
       category: null,
       profession: null,
       bio: null,
       telegram: null,
+      instagram: null,
       extra_info: null,
       avatar_path: null,
       updated_at: new Date().toISOString(),
