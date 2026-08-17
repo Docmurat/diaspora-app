@@ -38,6 +38,8 @@ export default function RootLayout() {
           <Stack.Screen name="chat" />
           <Stack.Screen name="help-post" />
           <Stack.Screen name="help-archive" />
+          <Stack.Screen name="my-help-posts" />
+          <Stack.Screen name="about-project" />
           <Stack.Screen name="new-help-post" />
           <Stack.Screen name="notifications" />
           <Stack.Screen name="settings" />

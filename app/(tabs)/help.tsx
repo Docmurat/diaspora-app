@@ -10,6 +10,11 @@
 // зелёной точкой; если фильтр их прячет — точка на кнопке фильтра, точки
 // на чипах и строка «Новое в: …» (нажатие переключает фильтр). Точка на
 // вкладке гаснет ТОЛЬКО когда лента с текущим фильтром показала новое.
+// Веха 60 (пойманная ошибка): точки на чипах категорий гасли ВСЕ разом
+// при первом нажатии на чип — потому что пересчитывались от только что
+// записанного help_seen_at. Теперь считаются от замороженного момента
+// визита (seenRef) и гаснут ПО ОДНОЙ: какую категорию лента показала
+// (viewedCats), та и погасла. markHelpSeen уходит, когда показаны все.
 // Веха 56: карточка вынесена в components/HelpPostCard (общая с архивом);
 // справа от колокольчика — кнопка архива → /help-archive (поиск).
 
@@ -63,6 +68,9 @@ export default function HelpScreen() {
   // постами. seenRef держит момент до тех пор, пока не погасим точку —
   // иначе после markHelpSeen карточки мгновенно перестали бы быть «новыми».
   const [unseenCats, setUnseenCats] = useState<string[]>([]);
+  // Категории с новым, которые лента УЖЕ показала за этот визит:
+  // их точки погашены по одной (Веха 60).
+  const [viewedCats, setViewedCats] = useState<string[]>([]);
   const seenRef = useRef<string | null>(null);
   const seenLoadedRef = useRef(false);
   // Открытые на этой вкладке посты — у них метка «новое» гаснет сразу.
@@ -84,7 +92,11 @@ export default function HelpScreen() {
 
       // Где новое (по важным категориям), затем — умное гашение точки:
       // гасим только если текущий фильтр показывает ВСЕ категории с новым.
-      const info = await getUnseenHelpInfo();
+      // Точки считаем от ЗАМОРОЖЕННОГО момента визита, а не от базы:
+      // база после markHelpSeen уже «всё прочитано» (Веха 60).
+      const info = await getUnseenHelpInfo(
+        seenLoadedRef.current ? seenRef.current : undefined,
+      );
       if (!seenLoadedRef.current) {
         // Момент прошлого захода запоминаем ОДИН раз за визит; при живых
         // обновлениях (и после markHelpSeen) не трогаем — иначе метка
@@ -94,14 +106,26 @@ export default function HelpScreen() {
       }
       setUnseenCats(info.categories);
 
+      // Какие категории с новым лента сейчас показывает — их точки
+      // гаснут (по одной). Пустой фильтр показывает все.
+      const shownNow =
+        categories.length === 0
+          ? info.categories
+          : info.categories.filter((c) => categories.includes(c));
+
+      let viewedNow: string[] = [];
+      setViewedCats((prev) => {
+        viewedNow = Array.from(new Set([...prev, ...shownNow]));
+        return viewedNow;
+      });
+
       const shownAll =
         info.categories.length > 0 &&
-        (categories.length === 0 ||
-          info.categories.every((c) => categories.includes(c)));
+        info.categories.every((c) => viewedNow.includes(c));
 
       if (shownAll) {
-        // Точка на вкладке гаснет; карточки остаются «новыми» до ухода
-        // с вкладки (seenRef не трогаем).
+        // Все категории с новым показаны за визит — точка на вкладке
+        // гаснет в базе; карточки остаются «новыми» (seenRef не трогаем).
         markHelpSeen();
       }
     } catch (e) {
@@ -143,14 +167,15 @@ export default function HelpScreen() {
         // Ушёл с вкладки — при следующем заходе «новизна» считается заново.
         seenLoadedRef.current = false;
         setOpenedIds([]);
+        setViewedCats([]);
       };
     }, [filterLoaded, loadFeed]),
   );
 
   // Переключить фильтр на категории с новым (нажатие на строку «Новое в»).
   const showUnseen = () => {
-    if (unseenCats.length === 0) return;
-    const next = [...unseenCats];
+    if (liveUnseen.length === 0) return;
+    const next = [...liveUnseen];
     setFilter(next);
     setLoading(true);
     loadFeed(next);
@@ -214,8 +239,12 @@ export default function HelpScreen() {
   }
 
   // Категории с новым, которые текущий фильтр не показывает.
+  // Живые (непогашенные) точки категорий: новое есть и лента их ещё
+  // не показывала за этот визит (Веха 60).
+  const liveUnseen = unseenCats.filter((c) => !viewedCats.includes(c));
+
   const hiddenUnseen =
-    filter.length === 0 ? [] : unseenCats.filter((c) => !filter.includes(c));
+    filter.length === 0 ? [] : liveUnseen.filter((c) => !filter.includes(c));
 
   return (
     <View style={styles.screen}>
@@ -312,7 +341,7 @@ export default function HelpScreen() {
                     >
                       {category}
                     </Text>
-                    {unseenCats.includes(category) && (
+                    {liveUnseen.includes(category) && (
                       <View
                         style={[
                           styles.chipDot,

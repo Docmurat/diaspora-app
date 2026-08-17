@@ -178,11 +178,21 @@ export async function getMyInvitedUsers() {
 
   // В списке «Пришли» показываем только тех, чью анкету модератор
   // уже одобрил: пока человек в очереди, он ещё не участник.
+  // Удалённые (сами ушли или удалены модерацией) в списке не нужны —
+  // решение владельца (Веха 59): показываем только живых участников.
+  // Поля — полный набор для мгновенного открытия профиля:
+  // тот же список, что у авторов Стены (authorProfileParams).
   const { data: users, error: usersError } = await supabase
     .from("users")
-    .select("id, first_name, last_name")
+    .select(
+      // ВАЖНО: строка полей — одним куском, без склейки «+»: со склейкой
+      // подсказчик типов Supabase не может разобрать список колонок и
+      // подсвечивает поля красным (урок Вехи 59).
+      "id, first_name, last_name, avatar_path, profession, category, city, country, birth_date, telegram, bio, extra_info",
+    )
     .in("id", usedUserIds)
-    .eq("moderation_status", "approved");
+    .eq("moderation_status", "approved")
+    .eq("is_deleted", false);
 
   if (usersError) {
     throw new Error(usersError.message);
@@ -203,7 +213,9 @@ export async function getMyInvitedUsers() {
         invite_id: invite.id,
         user_id: invite.used_by_user_id,
         name: name || "Без имени",
+        avatar_path: user?.avatar_path || null,
         used_at: invite.used_at || null,
+        user, // целиком — для authorProfileParams при открытии профиля
       };
     });
 }

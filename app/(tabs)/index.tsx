@@ -178,11 +178,10 @@ export default function HomeScreen() {
     });
   };
 
+  // Кнопка «Помочь проекту» ведёт на экран «О проекте» (Веха 60):
+  // там и рассказ, и идеи/замечания, и добровольная поддержка.
   const handleSupport = () => {
-    Alert.alert(
-      "Скоро",
-      "Здесь появится страница о проекте и способ поддержать его.",
-    );
+    router.push("/about-project" as any);
   };
 
   const handleSearch = () => {

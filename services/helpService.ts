@@ -328,6 +328,37 @@ export async function getHelpArchive(
 }
 
 // ─────────────────────────────────────────────────────────────────────
+// МОИ ПОСТЫ (Веха 59): все свои посты для экрана «Мои посты» в кабинете —
+// открытые (вместе с заблокированными, чтобы автор их не терял) и архив.
+// Карточки те же, что в ленте (enrichFeedItems).
+export async function getMyHelpPosts(): Promise<{
+  open: HelpFeedItem[];
+  archived: HelpFeedItem[];
+}> {
+  const myUserId = await getCurrentUserId();
+
+  const { data, error } = await supabase
+    .from("help_posts")
+    .select(
+      "id, author_id, category, post_type, body, status, has_hidden, " +
+        "comments_hidden, created_at, archived_at",
+    )
+    .eq("author_id", myUserId)
+    .order("created_at", { ascending: false });
+
+  if (error) throw new Error(error.message);
+
+  const posts = data || [];
+  if (posts.length === 0) return { open: [], archived: [] };
+
+  const items = await enrichFeedItems(posts, myUserId);
+  return {
+    open: items.filter((p) => p.status !== "archived"),
+    archived: items.filter((p) => p.status === "archived"),
+  };
+}
+
+// ─────────────────────────────────────────────────────────────────────
 // ФИЛЬТР, УВЕДОМЛЕНИЯ И ТОЧКА (Веха 54). Всё лежит в своей строке users.
 // Три независимые вещи:
 //  • help_filter_categories — фильтр ЛЕНТЫ. Просто фильтр, запоминается,
@@ -474,7 +505,12 @@ export type UnseenHelpInfo = {
   categories: string[]; // где есть новое (пусто = нового нет)
 };
 
-export async function getUnseenHelpInfo(): Promise<UnseenHelpInfo> {
+// sinceOverride — замороженный момент визита (Веха 60): после markHelpSeen
+// серверный help_seen_at уже «сегодняшний», и без заморозки точки категорий
+// гасли все разом при первом же нажатии на чип (пойманная ошибка).
+export async function getUnseenHelpInfo(
+  sinceOverride?: string | null,
+): Promise<UnseenHelpInfo> {
   try {
     const myUserId = await getCurrentUserId();
 
@@ -487,7 +523,8 @@ export async function getUnseenHelpInfo(): Promise<UnseenHelpInfo> {
     if (meError) return { seenAt: null, categories: [] };
 
     const my = me as any;
-    const seenAt: string | null = my?.help_seen_at || null;
+    const seenAt: string | null =
+      sinceOverride !== undefined ? sinceOverride : my?.help_seen_at || null;
 
     let query = supabase
       .from("help_posts")

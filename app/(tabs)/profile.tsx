@@ -403,6 +403,20 @@ export default function ProfileScreen() {
           <Tekmet style={styles.tekmet} />
 
           <View style={styles.sectionCard}>
+            {/* Красным с сердечком — по решению владельца (Веха 60) */}
+            <SectionRow
+              icon="heart"
+              label="О проекте и поддержка"
+              danger
+              onPress={() => router.push("/about-project" as any)}
+            />
+
+            <SectionRow
+              icon="reader-outline"
+              label="Мои посты"
+              onPress={() => router.push("/my-help-posts" as any)}
+            />
+
             <SectionRow
               icon="mail-open-outline"
               label="Мои инвайты"

@@ -10,7 +10,9 @@ import { useCallback, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
+  Image,
   Linking,
+  Platform,
   ScrollView,
   StyleSheet,
   Text,
@@ -19,6 +21,7 @@ import {
 } from "react-native";
 
 import { Glass, Tekmet } from "../components/mingi";
+import { authorProfileParams } from "../services/helpService";
 import {
   createInvite,
   disableInvite,
@@ -401,9 +404,41 @@ export default function Invites() {
             </Text>
           ) : (
             invitedUsers.map((item) => (
-              <View key={item.invite_id} style={styles.invitedRow}>
-                <Text style={styles.invitedName}>{item.name}</Text>
-              </View>
+              // Пришедший человек — живая строка (Веха 59): аватарка, ФИО,
+              // дата прихода; нажатие открывает профиль (как в «Людях»).
+              <TouchableOpacity
+                key={item.invite_id}
+                style={styles.invitedRow}
+                activeOpacity={0.8}
+                disabled={!item.user}
+                onPress={() => {
+                  if (!item.user) return;
+                  router.push({
+                    pathname: "/user-profile" as any,
+                    params: authorProfileParams(item.user),
+                  });
+                }}
+              >
+                <Image
+                  source={
+                    item.avatar_path
+                      ? { uri: item.avatar_path }
+                      : require("../assets/default-avatar.png")
+                  }
+                  style={styles.invitedAvatar}
+                />
+                <View style={styles.invitedInfo}>
+                  <Text style={styles.invitedName} numberOfLines={1}>
+                    {item.name}
+                  </Text>
+                  {!!item.used_at && (
+                    <Text style={styles.invitedDate}>
+                      пришёл(ла) {new Date(item.used_at).toLocaleDateString("ru-RU")}
+                    </Text>
+                  )}
+                </View>
+                <Text style={styles.invitedArrow}>›</Text>
+              </TouchableOpacity>
             ))
           ))}
       </ScrollView>
@@ -619,18 +654,47 @@ const styles = StyleSheet.create({
   },
 
   invitedRow: {
+    flexDirection: "row",
+    alignItems: "center",
     backgroundColor: "#FFFFFF",
     borderRadius: 18,
     borderWidth: 0.75,
     borderColor: "rgba(93,140,120,0.28)",
-    paddingHorizontal: 16,
-    paddingVertical: 14,
+    paddingHorizontal: 14,
+    paddingVertical: 11,
     marginBottom: 8,
+    ...(Platform.OS === "web" ? ({ cursor: "pointer" } as any) : {}),
+  },
+
+  invitedAvatar: {
+    width: 42,
+    height: 42,
+    borderRadius: 14,
+    marginRight: 12,
+    backgroundColor: "#EAF4EE",
+  },
+
+  invitedInfo: {
+    flex: 1,
+    minWidth: 0,
   },
 
   invitedName: {
     fontSize: 15,
+    fontWeight: "600",
     color: "#2F4A3C",
+  },
+
+  invitedDate: {
+    fontSize: 12,
+    color: "#96AC9E",
+    marginTop: 1,
+  },
+
+  invitedArrow: {
+    fontSize: 22,
+    color: "#96AC9E",
+    marginLeft: 8,
   },
 
   emptyText: {

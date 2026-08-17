@@ -7,7 +7,7 @@ import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { BlurView } from "expo-blur";
 import { router } from "expo-router";
 import { StatusBar } from "expo-status-bar";
-import { ReactNode, useEffect, useRef } from "react";
+import { ReactNode, useEffect, useRef, useState } from "react";
 import {
   Animated,
   Easing,
@@ -26,6 +26,8 @@ import Svg, {
   RadialGradient,
   Stop,
 } from "react-native-svg";
+
+import { supabase } from "../lib/supabase";
 
 function useDrift(duration: number, delay = 0) {
   const v = useRef(new Animated.Value(0)).current;
@@ -165,6 +167,25 @@ export default function WelcomeScreen() {
 
   const logoWidth = Math.min(width * 0.62, 280);
   const logoHeight = logoWidth * 0.62;
+
+  // «Нас уже N» (Веха 60): число одобренных участников с порога — функция
+  // базы community_member_count отдаёт наружу ТОЛЬКО число. Пока не
+  // загрузилось (или ошибка) — строка просто не показывается.
+  const [memberCount, setMemberCount] = useState<number | null>(null);
+  useEffect(() => {
+    let alive = true;
+    supabase
+      .rpc("community_member_count")
+      .then(({ data }) => {
+        if (alive && typeof data === "number" && data > 0) {
+          setMemberCount(data);
+        }
+      })
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, []);
 
   if (!fontsLoaded) {
     return <View style={styles.container} />;
@@ -350,7 +371,10 @@ export default function WelcomeScreen() {
           </Glass>
         </TouchableOpacity>
 
-        <Text style={styles.footer}>Только по приглашению</Text>
+        <Text style={styles.footer}>
+          Только по приглашению
+          {memberCount !== null ? ` · нас уже ${memberCount}` : ""}
+        </Text>
 
         <View style={styles.linksRow}>
           <TouchableOpacity onPress={() => router.push("/privacy" as any)}>
