@@ -51,11 +51,12 @@ import {
 } from "../services/userBlockService";
 import { getAgeFromBirthDate } from "../store/user";
 
+import { t, useLanguage } from "../services/i18nService";
 function formatCreatedAt(dateString?: string | null) {
-  if (!dateString) return "Неизвестно";
+  if (!dateString) return t("profile.unknownDate");
 
   const date = new Date(dateString);
-  if (Number.isNaN(date.getTime())) return "Неизвестно";
+  if (Number.isNaN(date.getTime())) return t("profile.unknownDate");
 
   return date.toLocaleDateString("ru-RU", {
     day: "2-digit",
@@ -102,6 +103,14 @@ function buildOpenableLink(value: string) {
 }
 
 export default function UserProfileScreen() {
+  const lang = useLanguage(); // перерисовка при смене языка
+
+  // Подпись поля для алерта копирования: перевод заголовка блока,
+  // приведённый из КАПСА к обычному регистру («ПРОФЕССИЯ» → «Профессия»).
+  const copyLabel = (key: string) => {
+    const s = t(key);
+    return s.charAt(0) + s.slice(1).toLowerCase();
+  };
   const insets = useSafeAreaInsets();
   const [fontsLoaded] = useFonts({
     Philosopher_400Regular,
@@ -244,10 +253,10 @@ export default function UserProfileScreen() {
       <View style={styles.centerState}>
         <StatusBar style="dark" />
 
-        <Text style={styles.stateTitle}>Участник не найден</Text>
+        <Text style={styles.stateTitle}>{t("common.notFound.member")}</Text>
 
         <TouchableOpacity onPress={() => router.back()} activeOpacity={0.8}>
-          <Text style={styles.backLinkText}>← Назад</Text>
+          <Text style={styles.backLinkText}>{t("common.backArrow")}</Text>
         </TouchableOpacity>
       </View>
     );
@@ -316,15 +325,15 @@ export default function UserProfileScreen() {
     const text = value?.trim();
 
     if (!text) {
-      Alert.alert("Нечего копировать");
+      Alert.alert(t("profile.copy.nothing"));
       return;
     }
 
     try {
       await Clipboard.setStringAsync(text);
-      Alert.alert("Скопировано", `${label} скопировано`);
+      Alert.alert(t("profile.copy.done"), t("profile.copy.doneText", { label }));
     } catch {
-      Alert.alert("Ошибка", "Не удалось скопировать текст");
+      Alert.alert(t("common.error"), t("profile.copy.fail"));
     }
   };
 
@@ -333,10 +342,10 @@ export default function UserProfileScreen() {
       await assignModerator(user.id);
       setShowMenu(false);
       await loadProfile();
-      Alert.alert("Готово", "Участник назначен модератором.");
+      Alert.alert(t("common.done"), "Участник назначен модератором.");
     } catch (e) {
       Alert.alert(
-        "Ошибка",
+        t("common.error"),
         e instanceof Error ? e.message : "Ошибка назначения модератора",
       );
     }
@@ -347,10 +356,10 @@ export default function UserProfileScreen() {
       await removeModerator(user.id);
       setShowMenu(false);
       await loadProfile();
-      Alert.alert("Готово", "Модератор снят.");
+      Alert.alert(t("common.done"), "Модератор снят.");
     } catch (e) {
       Alert.alert(
-        "Ошибка",
+        t("common.error"),
         e instanceof Error ? e.message : "Ошибка снятия модератора",
       );
     }
@@ -375,7 +384,7 @@ export default function UserProfileScreen() {
       await loadProfile();
     } catch (e) {
       Alert.alert(
-        "Ошибка",
+        t("common.error"),
         e instanceof Error ? e.message : "Ошибка подтверждения квалификации",
       );
     }
@@ -385,11 +394,11 @@ export default function UserProfileScreen() {
     try {
       await blockUser(user.id);
       setShowMenu(false);
-      Alert.alert("Готово", "Участник заблокирован.");
+      Alert.alert(t("common.done"), "Участник заблокирован.");
       router.back();
     } catch (e) {
       Alert.alert(
-        "Ошибка",
+        t("common.error"),
         e instanceof Error ? e.message : "Ошибка блокировки",
       );
     }
@@ -400,10 +409,10 @@ export default function UserProfileScreen() {
       await unblockUser(user.id);
       setShowMenu(false);
       await loadProfile();
-      Alert.alert("Готово", "Блокировка снята.");
+      Alert.alert(t("common.done"), "Блокировка снята.");
     } catch (e) {
       Alert.alert(
-        "Ошибка",
+        t("common.error"),
         e instanceof Error ? e.message : "Ошибка снятия блокировки",
       );
     }
@@ -417,10 +426,10 @@ export default function UserProfileScreen() {
       setRestoring(true);
       await restoreUser(user.id);
       await loadProfile();
-      Alert.alert("Готово", "Профиль восстановлен.");
+      Alert.alert(t("common.done"), "Профиль восстановлен.");
     } catch (e) {
       Alert.alert(
-        "Ошибка",
+        t("common.error"),
         e instanceof Error ? e.message : "Ошибка восстановления профиля",
       );
     } finally {
@@ -438,11 +447,11 @@ export default function UserProfileScreen() {
       await softDeleteUser(user.id);
       setConfirmDelete(false);
       setShowMenu(false);
-      Alert.alert("Готово", "Профиль помечен как удалённый.");
+      Alert.alert(t("common.done"), "Профиль помечен как удалённый.");
       router.back();
     } catch (e) {
       Alert.alert(
-        "Ошибка",
+        t("common.error"),
         e instanceof Error ? e.message : "Ошибка удаления профиля",
       );
     }
@@ -458,7 +467,7 @@ export default function UserProfileScreen() {
           isAnyBlocked: blockState.userBlockedMe,
         });
         setShowMenu(false);
-        Alert.alert("Готово", "Участник снова доступен для общения.");
+        Alert.alert(t("common.done"), t("profile.unblocked.text"));
       } else {
         await blockUserForMe(user.id);
         setBlockState({
@@ -468,13 +477,13 @@ export default function UserProfileScreen() {
         });
         setShowMenu(false);
         Alert.alert(
-          "Участник заблокирован",
-          "Теперь он не сможет вам писать и не увидит ваши контакты.",
+          t("profile.blockedLine"),
+          t("profile.blocked.text"),
         );
       }
     } catch (e) {
       Alert.alert(
-        "Ошибка",
+        t("common.error"),
         e instanceof Error ? e.message : "Ошибка блокировки",
       );
     }
@@ -499,7 +508,7 @@ export default function UserProfileScreen() {
       }
     } catch (e) {
       Alert.alert(
-        "Ошибка",
+        t("common.error"),
         e instanceof Error ? e.message : "Ошибка изменения избранного",
       );
     }
@@ -548,7 +557,7 @@ export default function UserProfileScreen() {
         canOpenApp ? appUrl : `https://instagram.com/${username}`,
       );
     } catch {
-      Alert.alert("Ошибка", "Не удалось открыть Instagram");
+      Alert.alert(t("common.error"), t("profile.open.instagram"));
     }
   };
 
@@ -563,7 +572,7 @@ export default function UserProfileScreen() {
     try {
       await Linking.openURL(`https://wa.me/${digits}`);
     } catch {
-      Alert.alert("Ошибка", "Не удалось открыть WhatsApp");
+      Alert.alert(t("common.error"), t("profile.open.whatsapp"));
     }
   };
 
@@ -577,10 +586,10 @@ export default function UserProfileScreen() {
       if (canOpen) {
         await Linking.openURL(emailUrl);
       } else {
-        Alert.alert("Ошибка", "Не удалось открыть почту");
+        Alert.alert(t("common.error"), t("profile.open.mail"));
       }
     } catch {
-      Alert.alert("Ошибка", "Не удалось открыть почту");
+      Alert.alert(t("common.error"), t("profile.open.mail"));
     }
   };
 
@@ -592,10 +601,10 @@ export default function UserProfileScreen() {
       if (canOpen) {
         await Linking.openURL(url);
       } else {
-        Alert.alert("Ошибка", "Не удалось открыть ссылку");
+        Alert.alert(t("common.error"), t("profile.open.link"));
       }
     } catch {
-      Alert.alert("Ошибка", "Не удалось открыть ссылку");
+      Alert.alert(t("common.error"), t("profile.open.link"));
     }
   };
 
@@ -658,16 +667,16 @@ export default function UserProfileScreen() {
           {showMenu && (
             <View style={styles.menuDropdown}>
               <View style={styles.menuInfoBlock}>
-                <Text style={styles.menuInfoLabel}>ДАТА РЕГИСТРАЦИИ</Text>
+                <Text style={styles.menuInfoLabel}>{t("profile.h.regDate")}</Text>
                 <Text style={styles.menuInfoText}>
                   {formatCreatedAt(user.created_at)}
                 </Text>
               </View>
 
               <View style={styles.menuInfoBlock}>
-                <Text style={styles.menuInfoLabel}>ПРИГЛАСИЛ</Text>
+                <Text style={styles.menuInfoLabel}>{t("profile.h.invitedBy")}</Text>
                 <Text style={styles.menuInfoText}>
-                  {invitedByName || user.invited_by?.email || "Не указано"}
+                  {invitedByName || user.invited_by?.email || t("profile.notSpecified")}
                 </Text>
               </View>
             </View>
@@ -691,16 +700,16 @@ export default function UserProfileScreen() {
             {isAdmin && (
               <>
                 <View style={styles.menuInfoBlock}>
-                  <Text style={styles.menuInfoLabel}>ДАТА РЕГИСТРАЦИИ</Text>
+                  <Text style={styles.menuInfoLabel}>{t("profile.h.regDate")}</Text>
                   <Text style={styles.menuInfoText}>
                     {formatCreatedAt(user.created_at)}
                   </Text>
                 </View>
 
                 <View style={styles.menuInfoBlock}>
-                  <Text style={styles.menuInfoLabel}>ПРИГЛАСИЛ</Text>
+                  <Text style={styles.menuInfoLabel}>{t("profile.h.invitedBy")}</Text>
                   <Text style={styles.menuInfoText}>
-                    {invitedByName || user.invited_by?.email || "Не указано"}
+                    {invitedByName || user.invited_by?.email || t("profile.notSpecified")}
                   </Text>
                 </View>
 
@@ -733,8 +742,8 @@ export default function UserProfileScreen() {
               >
                 <Text style={[styles.menuItemText, styles.dangerText]}>
                   {confirmDelete
-                    ? "Нажмите ещё раз, чтобы удалить"
-                    : "Удалить профиль"}
+                    ? t("set.deleteConfirm")
+                    : t("set.delete")}
                 </Text>
 
                 {confirmDelete && (
@@ -800,7 +809,7 @@ export default function UserProfileScreen() {
                   style={styles.menuItem}
                   onPress={handleReport}
                 >
-                  <Text style={styles.menuItemText}>Пожаловаться</Text>
+                  <Text style={styles.menuItemText}>{t("profile.report")}</Text>
                 </TouchableOpacity>
 
                 <TouchableOpacity
@@ -808,7 +817,7 @@ export default function UserProfileScreen() {
                   onPress={handleTogglePersonalBlock}
                 >
                   <Text style={[styles.menuItemText, styles.dangerText]}>
-                    {iBlockedThisUser ? "Снять блокировку" : "Заблокировать"}
+                    {iBlockedThisUser ? t("profile.unblock") : t("profile.block")}
                   </Text>
                 </TouchableOpacity>
               </>
@@ -873,7 +882,7 @@ export default function UserProfileScreen() {
               borderWidth={0.75}
             >
               <View style={styles.buttonInner}>
-                <Text style={styles.secondaryButtonText}>Редактировать</Text>
+                <Text style={styles.secondaryButtonText}>{t("profile.edit")}</Text>
               </View>
             </Glass>
           </TouchableOpacity>
@@ -913,7 +922,7 @@ export default function UserProfileScreen() {
               borderWidth={0.75}
             >
               <View style={styles.buttonInner}>
-                <Text style={styles.secondaryButtonText}>Инвайты</Text>
+                <Text style={styles.secondaryButtonText}>{t("profile.invites")}</Text>
               </View>
             </Glass>
           </TouchableOpacity>
@@ -930,7 +939,7 @@ export default function UserProfileScreen() {
               borderWidth={0.75}
             >
               <View style={styles.buttonInner}>
-                <Text style={styles.secondaryButtonText}>Редактировать</Text>
+                <Text style={styles.secondaryButtonText}>{t("profile.edit")}</Text>
               </View>
             </Glass>
           </TouchableOpacity>
@@ -961,7 +970,7 @@ export default function UserProfileScreen() {
             borderColor="rgba(255,255,255,0.85)"
           >
             <View style={styles.buttonInner}>
-              <Text style={styles.primaryButtonText}>Написать</Text>
+              <Text style={styles.primaryButtonText}>{t("profile.write")}</Text>
             </View>
           </Glass>
         </TouchableOpacity>
@@ -995,7 +1004,7 @@ export default function UserProfileScreen() {
         >
           <View style={styles.topRow}>
             <TouchableOpacity onPress={() => router.back()} activeOpacity={0.8}>
-              <Text style={styles.backLinkText}>← Назад</Text>
+              <Text style={styles.backLinkText}>{t("common.backArrow")}</Text>
             </TouchableOpacity>
 
             {renderMenu()}
@@ -1028,7 +1037,7 @@ export default function UserProfileScreen() {
           </TouchableOpacity>
 
           <Text style={styles.name} numberOfLines={2}>
-            {fullName || "Без имени"}
+            {fullName || t("profile.noName")}
           </Text>
 
           <Text style={styles.subInfo}>
@@ -1036,7 +1045,7 @@ export default function UserProfileScreen() {
               "—"}
           </Text>
 
-          {!!age && <Text style={styles.age}>{age} лет</Text>}
+          {!!age && <Text style={styles.age}>{t("common.ageSuffix", { возраст: age })}</Text>}
 
           {isModerationMode && (
             <View style={styles.modeBadge}>
@@ -1058,7 +1067,7 @@ export default function UserProfileScreen() {
 
           {iBlockedThisUser && !isOwnProfile && !isModerationMode && (
             <View style={styles.blockLine}>
-              <Text style={styles.blockLineText}>Участник заблокирован</Text>
+              <Text style={styles.blockLineText}>{t("profile.blockedLine")}</Text>
             </View>
           )}
 
@@ -1068,17 +1077,17 @@ export default function UserProfileScreen() {
 
           <TouchableOpacity
             activeOpacity={0.9}
-            onLongPress={() => handleCopyText("Профессия", user.profession)}
+            onLongPress={() => handleCopyText(copyLabel("profile.h.profession"), user.profession)}
             delayLongPress={300}
             style={styles.infoBlock}
           >
-            <Text style={styles.infoTitle}>ПРОФЕССИЯ</Text>
+            <Text style={styles.infoTitle}>{t("profile.h.profession")}</Text>
             <Text style={styles.infoText}>{user.profession || "—"}</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
             activeOpacity={0.95}
-            onLongPress={() => handleCopyText("Описание", user.bio)}
+            onLongPress={() => handleCopyText(t("profile.h.copyBio"), user.bio)}
             delayLongPress={300}
             style={styles.quoteBlock}
           >
@@ -1090,14 +1099,14 @@ export default function UserProfileScreen() {
             activeOpacity={0.9}
             onLongPress={() =>
               handleCopyText(
-                "Локация",
+                copyLabel("profile.h.location"),
                 formatLocations(user.country, user.city),
               )
             }
             delayLongPress={300}
             style={styles.infoBlock}
           >
-            <Text style={styles.infoTitle}>ЛОКАЦИЯ</Text>
+            <Text style={styles.infoTitle}>{t("profile.h.location")}</Text>
             <Text style={styles.infoText}>
               {formatLocations(user.country, user.city) || "—"}
             </Text>
@@ -1107,11 +1116,11 @@ export default function UserProfileScreen() {
             <TouchableOpacity
               style={styles.infoBlock}
               onPress={handleOpenEmail}
-              onLongPress={() => handleCopyText("Почта", user.email)}
+              onLongPress={() => handleCopyText(copyLabel("profile.h.email"), user.email)}
               delayLongPress={300}
               activeOpacity={0.9}
             >
-              <Text style={styles.infoTitle}>ПОЧТА</Text>
+              <Text style={styles.infoTitle}>{t("profile.h.email")}</Text>
               <Text style={styles.linkText}>{user.email}</Text>
             </TouchableOpacity>
           )}
@@ -1119,11 +1128,11 @@ export default function UserProfileScreen() {
           {showPhone && (
             <TouchableOpacity
               activeOpacity={0.9}
-              onLongPress={() => handleCopyText("Телефон", user.phone)}
+              onLongPress={() => handleCopyText(copyLabel("profile.h.phone"), user.phone)}
               delayLongPress={300}
               style={styles.infoBlock}
             >
-              <Text style={styles.infoTitle}>ТЕЛЕФОН</Text>
+              <Text style={styles.infoTitle}>{t("profile.h.phone")}</Text>
               <Text style={styles.infoText}>
                 {formatPhone(user.phone) || "—"}
               </Text>
@@ -1132,7 +1141,7 @@ export default function UserProfileScreen() {
 
           {(showTelegram || showInstagram || showWhatsapp) && (
             <View style={styles.infoBlock}>
-              <Text style={styles.infoTitle}>СВЯЗЬ</Text>
+              <Text style={styles.infoTitle}>{t("profile.h.contacts")}</Text>
               <View style={styles.contactRow}>
                 {showTelegram && (
                   <TouchableOpacity
@@ -1168,7 +1177,7 @@ export default function UserProfileScreen() {
                   <TouchableOpacity
                     style={styles.contactButton}
                     onPress={handleWhatsappOpen}
-                    onLongPress={() => handleCopyText("Телефон", user.phone)}
+                    onLongPress={() => handleCopyText(copyLabel("profile.h.phone"), user.phone)}
                     delayLongPress={300}
                     activeOpacity={0.85}
                   >
@@ -1184,12 +1193,12 @@ export default function UserProfileScreen() {
             <TouchableOpacity
               style={styles.infoBlock}
               onLongPress={() =>
-                handleCopyText("Дополнительно", user.extra_info)
+                handleCopyText(copyLabel("profile.h.extra"), user.extra_info)
               }
               delayLongPress={300}
               activeOpacity={1}
             >
-              <Text style={styles.infoTitle}>ДОПОЛНИТЕЛЬНО</Text>
+              <Text style={styles.infoTitle}>{t("profile.h.extra")}</Text>
               {renderTextWithLinks(user.extra_info)}
             </TouchableOpacity>
           )}

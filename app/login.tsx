@@ -19,6 +19,7 @@ import { Glass, Tekmet } from "../components/mingi";
 import { translateAuthError } from "../services/errorService";
 import { getCurrentProfile, signInUser } from "../services/sessionService";
 
+import { t, useLanguage } from "../services/i18nService";
 const glassInputProps = {
   radius: 16,
   tintColor: "rgba(255,255,255,0.95)",
@@ -27,6 +28,7 @@ const glassInputProps = {
 } as const;
 
 export default function LoginScreen() {
+  const lang = useLanguage(); // перерисовка при смене языка
   const [fontsLoaded] = useFonts({
     Philosopher_400Regular,
     Philosopher_700Bold,
@@ -38,7 +40,7 @@ export default function LoginScreen() {
 
   const handleLogin = async () => {
     if (!email.trim() || !password.trim()) {
-      setError("Введите email и пароль");
+      setError(t("login.error.empty"));
       return;
     }
 
@@ -47,7 +49,7 @@ export default function LoginScreen() {
       const profile = await getCurrentProfile();
 
       if (!profile) {
-        setError("Профиль пользователя не найден");
+        setError(t("login.error.noProfile"));
         return;
       }
 
@@ -78,7 +80,7 @@ export default function LoginScreen() {
         return;
       }
 
-      setError("Доступ к аккаунту ограничен");
+      setError(t("login.error.restricted"));
     } catch (e) {
       setError(translateAuthError(e));
     }
@@ -97,14 +99,14 @@ export default function LoginScreen() {
         behavior={Platform.OS === "ios" ? "padding" : undefined}
       >
         <View style={styles.content}>
-          <Text style={styles.title}>Вход</Text>
-          <Text style={styles.subtitle}>МИНГИ·ТАУ</Text>
+          <Text style={styles.title}>{t("login.title")}</Text>
+          <Text style={styles.subtitle}>{t("common.brandCaps")}</Text>
 
           <Tekmet style={styles.tekmet} />
 
           <Glass {...glassInputProps} style={styles.inputWrap}>
             <TextInput
-              placeholder="Электронная почта"
+              placeholder={t("login.email")}
               placeholderTextColor="#8FA79A"
               style={styles.input}
               value={email}
@@ -119,7 +121,7 @@ export default function LoginScreen() {
 
           <Glass {...glassInputProps} style={styles.inputWrap}>
             <TextInput
-              placeholder="Пароль"
+              placeholder={t("login.password")}
               placeholderTextColor="#8FA79A"
               style={styles.input}
               value={password}
@@ -144,13 +146,13 @@ export default function LoginScreen() {
               borderColor="rgba(255,255,255,0.85)"
             >
               <View style={styles.buttonInner}>
-                <Text style={styles.primaryButtonText}>Продолжить</Text>
+                <Text style={styles.primaryButtonText}>{t("common.continue")}</Text>
               </View>
             </Glass>
           </TouchableOpacity>
 
           <TouchableOpacity onPress={() => router.push("/invite")}>
-            <Text style={styles.link}>Нет аккаунта? Ввести инвайт-код</Text>
+            <Text style={styles.link}>{t("login.noAccountLink")}</Text>
           </TouchableOpacity>
         </View>
       </KeyboardAvoidingView>

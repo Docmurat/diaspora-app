@@ -36,6 +36,7 @@ import { supabase } from "../lib/supabase";
 import { getTotalUnread } from "../services/chatService";
 import { hasUnseenHelpPosts } from "../services/helpService";
 import { subscribeToChanges } from "../services/liveService";
+import { t, useLanguage } from "../services/i18nService";
 
 const ACTIVE_COLOR = "#3F6B5B";
 const INACTIVE_COLOR = "#A8BDB1";
@@ -52,31 +53,32 @@ type TabDef = {
 const TABS: TabDef[] = [
   {
     name: "index",
-    label: "Люди",
+    label: "tab.people",
     icon: "people-outline",
     iconActive: "people",
   },
   {
     name: "help",
-    label: "Помощь",
+    label: "tab.help",
     icon: "megaphone-outline",
     iconActive: "megaphone",
   },
   {
     name: "knowledge",
-    label: "Знания",
+    label: "tab.knowledge",
     icon: "book-outline",
     iconActive: "book",
   },
   {
     name: "chats",
-    label: "Чаты",
+    label: "tab.chats",
     icon: "chatbubbles-outline",
     iconActive: "chatbubbles",
   },
 ];
 
 export default function MingiTabBar({ state, navigation }: BottomTabBarProps) {
+  const lang = useLanguage(); // перерисовка при смене языка
   const insets = useSafeAreaInsets();
 
   const activeRouteName = state.routes[state.index]?.name;
@@ -201,10 +203,10 @@ export default function MingiTabBar({ state, navigation }: BottomTabBarProps) {
               accessibilityRole="button"
               accessibilityLabel={
                 showBadge
-                  ? `${tab.label}, непрочитанных: ${unreadTotal}`
+                  ? t("a11y.tabUnread", { вкладка: t(tab.label), N: unreadTotal })
                   : showDot
-                    ? `${tab.label}, есть новые посты`
-                    : tab.label
+                    ? t("a11y.tabNewPosts", { вкладка: t(tab.label) })
+                    : t(tab.label)
               }
               accessibilityState={{ selected: isActive }}
             >

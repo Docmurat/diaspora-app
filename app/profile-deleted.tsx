@@ -12,7 +12,9 @@ import { subscribeToChanges } from "../services/liveService";
 import { getMyProfile } from "../services/profileService";
 import { signOutUser } from "../services/sessionService";
 
+import { t, useLanguage } from "../services/i18nService";
 export default function ProfileDeletedScreen() {
+  const lang = useLanguage(); // перерисовка при смене языка
   const [fontsLoaded] = useFonts({
     Philosopher_400Regular,
     Philosopher_700Bold,
@@ -86,19 +88,14 @@ export default function ProfileDeletedScreen() {
   return (
     <MingiBackground idPrefix="del">
       <View style={styles.content}>
-        <Text style={styles.title}>Профиль удалён</Text>
-        <Text style={styles.subtitle}>МИНГИ·ТАУ</Text>
+        <Text style={styles.title}>{t("deleted.title")}</Text>
+        <Text style={styles.subtitle}>{t("common.brandCaps")}</Text>
 
         <Tekmet style={styles.tekmet} />
 
-        <Text style={styles.text}>
-          Ваш профиль удалён администрацией и больше недоступен в сообществе.
-        </Text>
+        <Text style={styles.text}>{t("deleted.text")}</Text>
 
-        <Text style={styles.hint}>
-          Если вы считаете, что произошла ошибка, напишите администрации — мы
-          разберёмся.
-        </Text>
+        <Text style={styles.hint}>{t("common.errorHint")}</Text>
 
         <TouchableOpacity
           activeOpacity={0.85}
@@ -111,9 +108,7 @@ export default function ProfileDeletedScreen() {
             borderColor="rgba(255,255,255,0.85)"
           >
             <View style={styles.buttonInner}>
-              <Text style={styles.primaryButtonText}>
-                Связаться с администрацией
-              </Text>
+              <Text style={styles.primaryButtonText}>{t("deleted.contactAdmin")}</Text>
             </View>
           </Glass>
         </TouchableOpacity>
@@ -130,7 +125,7 @@ export default function ProfileDeletedScreen() {
             borderWidth={0.75}
           >
             <View style={styles.buttonInner}>
-              <Text style={styles.secondaryButtonText}>Выйти</Text>
+              <Text style={styles.secondaryButtonText}>{t("common.logout")}</Text>
             </View>
           </Glass>
         </TouchableOpacity>

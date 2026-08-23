@@ -52,7 +52,9 @@ import {
 } from "../../services/helpService";
 import { subscribeToChanges } from "../../services/liveService";
 
+import { t, tCategory, useLanguage } from "../../services/i18nService";
 export default function HelpScreen() {
+  const lang = useLanguage(); // перерисовка при смене языка
   const [fontsLoaded] = useFonts({
     Philosopher_400Regular,
     Philosopher_700Bold,
@@ -257,7 +259,7 @@ export default function HelpScreen() {
       >
         {/* Заголовок «Стена помощи» убран по решению владельца — больше
             света; остаётся только подзаголовок. */}
-        <Text style={styles.subtitle}>ВОПРОСЫ · ПРЕДЛОЖЕНИЯ</Text>
+        <Text style={styles.subtitle}>{t("wall.subtitle")}</Text>
 
         {/* Кнопка фильтра + шестерёнка уведомлений */}
         <View style={styles.controlsRow}>
@@ -276,8 +278,8 @@ export default function HelpScreen() {
             />
             <Text style={styles.filterButtonText}>
               {filter.length === 0
-                ? "Все категории"
-                : `Категории: ${filter.length}`}
+                ? t("wall.allCategories")
+                : t("wall.categoriesCount", { N: filter.length })}
             </Text>
             {hiddenUnseen.length > 0 && <View style={styles.miniDot} />}
             <Ionicons
@@ -294,7 +296,7 @@ export default function HelpScreen() {
               setNotifyOpen((v) => !v);
               setFilterOpen(false);
             }}
-            accessibilityLabel="Настройки уведомлений Стены"
+            accessibilityLabel={t("a11y.wallNotify")}
           >
             <Ionicons
               name={
@@ -312,7 +314,7 @@ export default function HelpScreen() {
             style={styles.gearButton}
             activeOpacity={0.8}
             onPress={() => router.push("/help-archive" as any)}
-            accessibilityLabel="Архив Стены"
+            accessibilityLabel={t("a11y.wallArchive")}
           >
             <Ionicons name="search-outline" size={18} color="#3F6B5B" />
           </TouchableOpacity>
@@ -320,10 +322,7 @@ export default function HelpScreen() {
 
         {filterOpen && (
           <View style={styles.filterPanel}>
-            <Text style={styles.filterHint}>
-              Показывать в ленте только выбранные категории. Ничего не выбрано —
-              видно всё. На уведомления фильтр не влияет.
-            </Text>
+            <Text style={styles.filterHint}>{t("wall.filterHint")}</Text>
 
             <View style={styles.chipsWrap}>
               {HELP_CATEGORIES.map((category) => {
@@ -339,7 +338,7 @@ export default function HelpScreen() {
                     <Text
                       style={[styles.chipText, active && styles.chipTextActive]}
                     >
-                      {category}
+                      {tCategory(category)}
                     </Text>
                     {liveUnseen.includes(category) && (
                       <View
@@ -358,10 +357,8 @@ export default function HelpScreen() {
 
         {notifyOpen && (
           <View style={styles.filterPanel}>
-            <Text style={styles.notifyTitle}>Какие посты мне важны</Text>
-            <Text style={styles.filterHint}>
-              По ним загорается точка на вкладке и приходят уведомления.
-            </Text>
+            <Text style={styles.notifyTitle}>{t("wall.notifyTitle")}</Text>
+            <Text style={styles.filterHint}>{t("wall.notifyHint")}</Text>
 
             <View style={styles.chipsWrap}>
               <TouchableOpacity
@@ -377,9 +374,7 @@ export default function HelpScreen() {
                     styles.chipText,
                     notifyCategories.length === 0 && styles.chipTextActive,
                   ]}
-                >
-                  Все категории
-                </Text>
+                >{t("wall.allCategories")}</Text>
               </TouchableOpacity>
 
               {HELP_CATEGORIES.map((category) => {
@@ -395,7 +390,7 @@ export default function HelpScreen() {
                     <Text
                       style={[styles.chipText, active && styles.chipTextActive]}
                     >
-                      {category}
+                      {tCategory(category)}
                     </Text>
                   </TouchableOpacity>
                 );
@@ -419,13 +414,13 @@ export default function HelpScreen() {
               <View style={{ flex: 1 }}>
                 <Text style={styles.bellTitle}>
                   {notifyNewPosts
-                    ? "Уведомления о новых постах включены"
-                    : "Уведомления о новых постах выключены"}
+                    ? t("wall.notifyOn")
+                    : t("wall.notifyOff")}
                 </Text>
                 <Text style={styles.bellHint}>
                   {notifyNewPosts
-                    ? "Приходят в колокольчик, гаснут при открытии поста."
-                    : "Только точка на вкладке, колокольчик молчит."}
+                    ? t("wall.notifyOnHint")
+                    : t("wall.notifyOffHint")}
                 </Text>
               </View>
               <View
@@ -443,9 +438,7 @@ export default function HelpScreen() {
               </View>
             </TouchableOpacity>
 
-            <Text style={styles.filterHint2}>
-              Ответы и комментарии к вашим постам приходят всегда.
-            </Text>
+            <Text style={styles.filterHint2}>{t("wall.repliesAlways")}</Text>
           </View>
         )}
 
@@ -459,7 +452,7 @@ export default function HelpScreen() {
           >
             <View style={styles.newInDot} />
             <Text style={styles.newInText} numberOfLines={2}>
-              Новое в: {hiddenUnseen.join(" · ")}
+              {t("wall.newIn", { категории: hiddenUnseen.map(tCategory).join(" · ") })}
             </Text>
             <Ionicons name="arrow-forward" size={15} color="#3F6B5B" />
           </TouchableOpacity>
@@ -478,8 +471,8 @@ export default function HelpScreen() {
             <Tekmet style={styles.emptyTekmet} />
             <Text style={styles.emptyText}>
               {filter.length > 0
-                ? "По выбранным категориям пока нет постов. Ослабьте фильтр или создайте пост первым."
-                : "Пока пусто. Создайте первый пост — задайте вопрос сообществу или предложите свою помощь."}
+                ? t("wall.empty.filtered")
+                : t("wall.empty.all")}
             </Text>
           </View>
         )}

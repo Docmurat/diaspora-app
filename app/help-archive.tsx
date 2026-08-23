@@ -28,6 +28,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import HelpPostCard from "../components/HelpPostCard";
 import { Tekmet } from "../components/mingi";
+import { t, tCategory, useLanguage } from "../services/i18nService";
 import {
   HELP_CATEGORIES,
   HelpFeedItem,
@@ -35,6 +36,7 @@ import {
 } from "../services/helpService";
 
 export default function HelpArchiveScreen() {
+  const lang = useLanguage(); // перерисовка при смене языка
   const insets = useSafeAreaInsets();
   const [fontsLoaded] = useFonts({
     Philosopher_400Regular,
@@ -62,7 +64,7 @@ export default function HelpArchiveScreen() {
       console.log("Архив не загрузился:", e);
       if (myRequest !== requestRef.current) return;
       setPosts([]);
-      setError("Не удалось загрузить архив. Попробуйте ещё раз.");
+      setError(t("archive.error"));
     } finally {
       if (myRequest === requestRef.current) setLoading(false);
     }
@@ -103,7 +105,7 @@ export default function HelpArchiveScreen() {
           <Ionicons name="chevron-back" size={26} color="#3F6B5B" />
         </TouchableOpacity>
 
-        <Text style={styles.headerTitle}>Архив</Text>
+        <Text style={styles.headerTitle}>{t("archive.title")}</Text>
 
         <View style={styles.backButton} />
       </View>
@@ -114,7 +116,7 @@ export default function HelpArchiveScreen() {
           <Ionicons name="search-outline" size={17} color="#8FA79A" />
           <TextInput
             style={styles.searchInput}
-            placeholder="Поиск по завершённым постам…"
+            placeholder={t("archive.searchPh")}
             placeholderTextColor="#8FA79A"
             value={query}
             onChangeText={setQuery}
@@ -138,7 +140,7 @@ export default function HelpArchiveScreen() {
           ]}
           activeOpacity={0.8}
           onPress={() => setFilterOpen((v) => !v)}
-          accessibilityLabel="Категории"
+          accessibilityLabel={t("a11y.categories")}
         >
           <Ionicons
             name="options-outline"
@@ -168,7 +170,7 @@ export default function HelpArchiveScreen() {
                     <Text
                       style={[styles.chipText, active && styles.chipTextActive]}
                     >
-                      {category}
+                      {tCategory(category)}
                     </Text>
                   </TouchableOpacity>
                 );
@@ -179,7 +181,7 @@ export default function HelpArchiveScreen() {
                 onPress={() => setFilter([])}
                 hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
               >
-                <Text style={styles.resetText}>Сбросить категории</Text>
+                <Text style={styles.resetText}>{t("archive.resetCats")}</Text>
               </TouchableOpacity>
             )}
           </View>
@@ -187,8 +189,8 @@ export default function HelpArchiveScreen() {
 
         <Text style={styles.hint}>
           {searching
-            ? `Найдено: ${loading ? "…" : posts.length}`
-            : "Завершённые посты. Ищите по словам — опечатки не помеха."}
+            ? t("archive.found", { N: loading ? "…" : posts.length })
+            : t("archive.hint")}
         </Text>
 
         {loading && (
@@ -206,10 +208,10 @@ export default function HelpArchiveScreen() {
             <Tekmet style={styles.emptyTekmet} />
             <Text style={styles.emptyText}>
               {searching
-                ? "Ничего не нашлось. Попробуйте другое слово."
+                ? t("archive.empty.search")
                 : filter.length > 0
-                  ? "В этих категориях завершённых постов пока нет."
-                  : "Архив пока пуст — завершённые посты появятся здесь."}
+                  ? t("archive.empty.filtered")
+                  : t("archive.empty.all")}
             </Text>
           </View>
         )}

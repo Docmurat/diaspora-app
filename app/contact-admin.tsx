@@ -24,6 +24,7 @@ import { subscribeToChanges } from "../services/liveService";
 import { sendAppealMessage } from "../services/moderationService";
 import { getMyProfile } from "../services/profileService";
 
+import { t, useLanguage } from "../services/i18nService";
 const glassInputProps = {
   radius: 16,
   tintColor: "rgba(255,255,255,0.95)",
@@ -32,6 +33,7 @@ const glassInputProps = {
 } as const;
 
 export default function ContactAdminScreen() {
+  const lang = useLanguage(); // перерисовка при смене языка
   const [fontsLoaded] = useFonts({
     Philosopher_400Regular,
     Philosopher_700Bold,
@@ -191,12 +193,12 @@ export default function ContactAdminScreen() {
 
   const handleSend = async () => {
     if (!formValid) {
-      setError("Заполните все поля");
+      setError(t("feedback.error.fill"));
       return;
     }
 
     if (!profile?.id) {
-      setError("Не удалось определить пользователя");
+      setError(t("feedback.error.noUser"));
       return;
     }
 
@@ -269,9 +271,9 @@ export default function ContactAdminScreen() {
       loadThread();
     } catch (e) {
       const msg =
-        e instanceof Error ? e.message : "Не удалось отправить сообщение";
+        e instanceof Error ? e.message : t("feedback.error.send");
       setError(msg);
-      Alert.alert("Ошибка", msg);
+      Alert.alert(t("common.error"), msg);
     } finally {
       setSending(false);
     }
@@ -311,17 +313,17 @@ export default function ContactAdminScreen() {
         <StatusBar style="dark" />
 
         <View style={styles.successContent}>
-          <Text style={styles.title}>Отправлено</Text>
-          <Text style={styles.subtitle}>МИНГИ·ТАУ</Text>
+          <Text style={styles.title}>{t("feedback.sent.title")}</Text>
+          <Text style={styles.subtitle}>{t("common.brandCaps")}</Text>
 
           <Tekmet style={styles.tekmet} />
 
           <Text style={styles.text}>
             {isPendingApplicant
-              ? "Ваше сообщение передано администратору. Ожидайте ответа — оно появится на экране ожидания."
+              ? t("feedback.ok.pending")
               : isDeletedUser
-                ? "Ваше обращение передано администрации. Модератор свяжется с вами по указанному телефону."
-                : "Ваше обращение передано администрации. Ответ придёт уведомлением — следите за колокольчиком вверху экрана."}
+                ? t("feedback.ok.blocked")
+                : t("feedback.ok.default")}
           </Text>
 
           <TouchableOpacity
@@ -335,7 +337,7 @@ export default function ContactAdminScreen() {
               borderColor="rgba(255,255,255,0.85)"
             >
               <View style={styles.buttonInner}>
-                <Text style={styles.primaryButtonText}>Вернуться</Text>
+                <Text style={styles.primaryButtonText}>{t("report.return")}</Text>
               </View>
             </Glass>
           </TouchableOpacity>
@@ -358,19 +360,19 @@ export default function ContactAdminScreen() {
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
-          <Text style={styles.title}>Обратная связь</Text>
-          <Text style={styles.subtitle}>МИНГИ·ТАУ</Text>
+          <Text style={styles.title}>{t("feedback.title")}</Text>
+          <Text style={styles.subtitle}>{t("common.brandCaps")}</Text>
 
           <Tekmet style={styles.tekmet} />
 
           <Text style={styles.text}>
             {isPendingApplicant
-              ? "Напишите администратору — сообщение попадёт к модерации вместе с вашей анкетой."
+              ? t("feedback.desc.pending")
               : isDeletedUser
-                ? "Напишите администрации — модератор свяжется с вами по указанному телефону."
+                ? t("feedback.desc.blocked")
                 : hasOpenThread
-                  ? "У вас есть открытое обращение — переписка ниже. Новое сообщение добавится в него же."
-                  : "Напишите администрации — обращение попадёт к модераторам, ответ придёт уведомлением."}
+                  ? t("feedback.desc.openCase")
+                  : t("feedback.desc.default")}
           </Text>
 
           {hasOpenThread && (
@@ -393,7 +395,7 @@ export default function ContactAdminScreen() {
                       ]}
                     >
                       <Text style={styles.bubbleAuthor}>
-                        {isMine ? "Вы" : "Администрация"}
+                        {isMine ? t("feedback.you") : t("feedback.admin")}
                         {"  ·  "}
                         {formatMessageDate(msg.created_at)}
                       </Text>
@@ -415,15 +417,13 @@ export default function ContactAdminScreen() {
                     setPhone(text);
                     setError("");
                   }}
-                  placeholder="Телефон для связи *"
+                  placeholder={t("feedback.phonePh")}
                   placeholderTextColor="#8FA79A"
                   keyboardType="phone-pad"
                 />
               </Glass>
 
-              <Text style={styles.hint}>
-                По умолчанию подставлен номер из анкеты — его можно изменить
-              </Text>
+              <Text style={styles.hint}>{t("feedback.phoneHint")}</Text>
             </>
           )}
 
@@ -437,8 +437,8 @@ export default function ContactAdminScreen() {
               }}
               placeholder={
                 hasOpenThread
-                  ? "Ваше сообщение *"
-                  : "Опишите проблему или вопрос *"
+                  ? t("feedback.msgPh.pending")
+                  : t("feedback.msgPh.default")
               }
               placeholderTextColor="#8FA79A"
               multiline
@@ -464,14 +464,14 @@ export default function ContactAdminScreen() {
             >
               <View style={styles.buttonInner}>
                 <Text style={styles.primaryButtonText}>
-                  {sending ? "Отправка..." : "Отправить"}
+                  {sending ? t("common.sending") : t("feedback.submit")}
                 </Text>
               </View>
             </Glass>
           </TouchableOpacity>
 
           <TouchableOpacity onPress={() => router.back()} activeOpacity={0.8}>
-            <Text style={styles.link}>Назад</Text>
+            <Text style={styles.link}>{t("common.back")}</Text>
           </TouchableOpacity>
         </ScrollView>
       </KeyboardAvoidingView>

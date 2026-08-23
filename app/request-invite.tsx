@@ -20,6 +20,7 @@ import { StatusBar } from "expo-status-bar";
 import { Glass, Tekmet } from "../components/mingi";
 import { createInviteRequest } from "../services/inviteRequestService";
 
+import { t, useLanguage } from "../services/i18nService";
 const glassInputProps = {
   radius: 16,
   tintColor: "rgba(255,255,255,0.95)",
@@ -28,6 +29,7 @@ const glassInputProps = {
 } as const;
 
 export default function RequestInviteScreen() {
+  const lang = useLanguage(); // перерисовка при смене языка
   const [fontsLoaded] = useFonts({
     Philosopher_400Regular,
     Philosopher_700Bold,
@@ -52,12 +54,12 @@ export default function RequestInviteScreen() {
         about,
       });
 
-      Alert.alert("Заявка отправлена", "Мы рассмотрим её и свяжемся с вами.");
+      Alert.alert(t("request.success.title"), t("request.success.text"));
 
       router.back();
     } catch (e) {
       const message =
-        e instanceof Error ? e.message : "Не удалось отправить заявку";
+        e instanceof Error ? e.message : t("request.error.send");
       setError(message);
     } finally {
       setSubmitting(false);
@@ -81,19 +83,16 @@ export default function RequestInviteScreen() {
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
-          <Text style={styles.title}>Заявка</Text>
-          <Text style={styles.subtitle}>МИНГИ·ТАУ</Text>
+          <Text style={styles.title}>{t("request.title")}</Text>
+          <Text style={styles.subtitle}>{t("common.brandCaps")}</Text>
 
           <Tekmet style={styles.tekmet} />
 
-          <Text style={styles.description}>
-            Если у вас нет приглашения, оставьте заявку. Укажите имя и один
-            способ связи: телефон или Telegram.
-          </Text>
+          <Text style={styles.description}>{t("request.description")}</Text>
 
           <Glass {...glassInputProps} style={styles.inputWrap}>
             <TextInput
-              placeholder="Ваше имя"
+              placeholder={t("request.name")}
               placeholderTextColor="#8FA79A"
               style={styles.input}
               value={fullName}
@@ -106,7 +105,7 @@ export default function RequestInviteScreen() {
 
           <Glass {...glassInputProps} style={styles.inputWrap}>
             <TextInput
-              placeholder="Телефон или Telegram"
+              placeholder={t("request.contact")}
               placeholderTextColor="#8FA79A"
               style={styles.input}
               value={contact}
@@ -120,7 +119,7 @@ export default function RequestInviteScreen() {
 
           <Glass {...glassInputProps} style={styles.inputWrap}>
             <TextInput
-              placeholder="Кто вы и чем можете быть полезны (необязательно)"
+              placeholder={t("request.about")}
               placeholderTextColor="#8FA79A"
               style={[styles.input, styles.textArea]}
               value={about}
@@ -147,14 +146,14 @@ export default function RequestInviteScreen() {
             >
               <View style={styles.buttonInner}>
                 <Text style={styles.primaryButtonText}>
-                  {submitting ? "Отправка..." : "Отправить заявку"}
+                  {submitting ? t("common.sending") : t("request.submit")}
                 </Text>
               </View>
             </Glass>
           </TouchableOpacity>
 
           <TouchableOpacity onPress={() => router.back()} activeOpacity={0.8}>
-            <Text style={styles.link}>Назад</Text>
+            <Text style={styles.link}>{t("common.back")}</Text>
           </TouchableOpacity>
         </ScrollView>
       </KeyboardAvoidingView>

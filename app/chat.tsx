@@ -48,6 +48,7 @@ import {
 import { getMyProfile } from "../services/profileService";
 import { hasMutualBlock } from "../services/userBlockService";
 
+import { dateLocale, t, useLanguage } from "../services/i18nService";
 type OtherProfile = {
   id: string;
   first_name: string | null;
@@ -61,12 +62,13 @@ type OtherProfile = {
 function formatSize(bytes?: number | null) {
   if (!bytes || bytes <= 0) return "";
   if (bytes < 1024 * 1024) {
-    return `${Math.max(1, Math.round(bytes / 1024))} КБ`;
+    return `${Math.max(1, Math.round(bytes / 1024))} ${t("chat.unit.kb")}`;
   }
-  return `${(bytes / (1024 * 1024)).toFixed(1)} МБ`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} ${t("chat.unit.mb")}`;
 }
 
 export default function ChatScreen() {
+  const lang = useLanguage(); // перерисовка при смене языка
   const params = useLocalSearchParams();
   const paramName = String(params.name || "");
   const otherUserId = String(params.userId || "");
@@ -130,8 +132,8 @@ export default function ChatScreen() {
 
     if (full) return full;
     if (paramName) return paramName;
-    return "Удалённый участник";
-  }, [otherProfile, paramName]);
+    return t("chats.deletedMember");
+  }, [otherProfile, paramName, lang]);
 
   const groupedMessages = useMemo(() => {
     return messages.map((message) => ({
@@ -152,13 +154,15 @@ export default function ChatScreen() {
     const now = new Date();
     const diffMs = now.getTime() - seen.getTime();
 
-    if (diffMs < 3 * 60 * 1000) return "в сети";
+    if (diffMs < 3 * 60 * 1000) return t("chat.status.online");
 
     if (diffMs <= 6 * 60 * 60 * 1000) {
-      return `был(а) в ${seen.toLocaleTimeString("ru-RU", {
-        hour: "2-digit",
-        minute: "2-digit",
-      })}`;
+      return t("chat.status.seenAt", {
+        "ЧЧ:ММ": seen.toLocaleTimeString(dateLocale(), {
+          hour: "2-digit",
+          minute: "2-digit",
+        }),
+      });
     }
 
     const startOfDay = (d: Date) =>
@@ -167,11 +171,11 @@ export default function ChatScreen() {
       (startOfDay(now) - startOfDay(seen)) / (24 * 60 * 60 * 1000),
     );
 
-    if (dayDiff === 0) return "был(а) сегодня";
-    if (dayDiff === 1) return "был(а) вчера";
-    if (dayDiff <= 7) return "был(а) на неделе";
-    return "был(а) давно";
-  }, [otherProfile, presenceTick]);
+    if (dayDiff === 0) return t("chat.status.seenToday");
+    if (dayDiff === 1) return t("chat.status.seenYesterday");
+    if (dayDiff <= 7) return t("chat.status.seenWeek");
+    return t("chat.status.seenLongAgo");
+  }, [otherProfile, presenceTick, lang]);
 
   // Тихо перечитать last_seen_at собеседника (живое событие или таймер).
   const refreshOtherPresence = async () => {
@@ -210,7 +214,7 @@ export default function ChatScreen() {
   const formatTime = (dateString: string) => {
     const date = new Date(dateString);
 
-    return date.toLocaleTimeString("ru-RU", {
+    return date.toLocaleTimeString(dateLocale(), {
       hour: "2-digit",
       minute: "2-digit",
     });
@@ -306,7 +310,7 @@ export default function ChatScreen() {
         setScreenError("");
 
         if (!otherUserId) {
-          throw new Error("Не передан собеседник");
+          throw new Error(t("chat.error.noPeer"));
         }
 
         const {
@@ -315,7 +319,7 @@ export default function ChatScreen() {
         } = await supabase.auth.getUser();
 
         if (authError || !user?.id) {
-          throw new Error("Пользователь не авторизован");
+          throw new Error(t("chat.error.noAuth"));
         }
 
         myUserIdRef.current = user.id;
@@ -413,7 +417,7 @@ export default function ChatScreen() {
         );
       } catch (e) {
         const message =
-          e instanceof Error ? e.message : "Не удалось открыть чат";
+          e instanceof Error ? e.message : t("chat.error.open");
         setScreenError(message);
       } finally {
         setLoading(false);
@@ -522,7 +526,7 @@ export default function ChatScreen() {
       await reloadMessages();
     } catch (e) {
       const message =
-        e instanceof Error ? e.message : "Не удалось отправить вложение";
+        e instanceof Error ? e.message : t("chat.error.attach");
       setAttachError(message);
     } finally {
       setUploading(false);
@@ -588,7 +592,7 @@ export default function ChatScreen() {
         webFile: null,
       });
     } catch {
-      setAttachError("Не удалось открыть выбор фото");
+      setAttachError(t("chat.error.pickPhoto"));
     }
   };
 
@@ -612,7 +616,7 @@ export default function ChatScreen() {
         webFile: (asset as any).file ?? null,
       });
     } catch {
-      setAttachError("Не удалось открыть выбор файла");
+      setAttachError(t("chat.error.pickFile"));
     }
   };
 
@@ -644,7 +648,7 @@ export default function ChatScreen() {
     return (
       <View style={styles.errorContainer}>
         <StatusBar style="dark" />
-        <Text style={styles.errorTitle}>Не удалось открыть чат</Text>
+        <Text style={styles.errorTitle}>{t("chat.error.open")}</Text>
         <Text style={styles.errorText}>{screenError}</Text>
 
         <TouchableOpacity
@@ -652,7 +656,7 @@ export default function ChatScreen() {
           onPress={() => router.back()}
           activeOpacity={0.85}
         >
-          <Text style={styles.errorButtonText}>Назад</Text>
+          <Text style={styles.errorButtonText}>{t("common.back")}</Text>
         </TouchableOpacity>
       </View>
     );
@@ -711,8 +715,8 @@ export default function ChatScreen() {
           </Text>
           <Text style={styles.headerStatus}>
             {otherUnavailable
-              ? "диалог недоступен"
-              : lastSeenLabel || "личный чат"}
+              ? t("chat.status.unavailable")
+              : lastSeenLabel || t("chat.status.private")}
           </Text>
         </TouchableOpacity>
 
@@ -751,7 +755,7 @@ export default function ChatScreen() {
                     });
                   }}
                 >
-                  <Text style={styles.menuItemText}>Открыть профиль</Text>
+                  <Text style={styles.menuItemText}>{t("chat.menu.openProfile")}</Text>
                 </TouchableOpacity>
 
                 <View style={styles.menuDivider} />
@@ -771,9 +775,7 @@ export default function ChatScreen() {
                     });
                   }}
                 >
-                  <Text style={[styles.menuItemText, styles.menuItemDanger]}>
-                    Пожаловаться
-                  </Text>
+                  <Text style={[styles.menuItemText, styles.menuItemDanger]}>{t("profile.report")}</Text>
                 </TouchableOpacity>
 
                 <View style={styles.menuDivider} />
@@ -793,8 +795,8 @@ export default function ChatScreen() {
             >
               <Text style={[styles.menuItemText, styles.menuItemDanger]}>
                 {clearArmed
-                  ? "Точно очистить? Нажмите ещё раз"
-                  : "Очистить чат"}
+                  ? t("chat.menu.clearConfirm")
+                  : t("chat.menu.clear")}
               </Text>
             </TouchableOpacity>
           </View>
@@ -881,10 +883,8 @@ export default function ChatScreen() {
 
           {groupedMessages.length === 0 ? (
             <View style={styles.emptyWrap}>
-              <Text style={styles.emptyTitle}>Сообщений пока нет</Text>
-              <Text style={styles.emptySubtext}>
-                Напишите первое сообщение, чтобы начать диалог
-              </Text>
+              <Text style={styles.emptyTitle}>{t("chats.noMessagesPreview")}</Text>
+              <Text style={styles.emptySubtext}>{t("chat.empty.hint")}</Text>
             </View>
           ) : (
             groupedMessages.map((message) => (
@@ -910,9 +910,7 @@ export default function ChatScreen() {
                         message.mine && styles.myMessageText,
                         styles.deletedText,
                       ]}
-                    >
-                      Сообщение удалено
-                    </Text>
+                    >{t("chat.msg.deleted")}</Text>
                   ) : message.attachment_type === "image" ? (
                     // Фото: предпросмотр в пузырьке, нажатие — полный размер.
                     message.attachmentUrl ? (
@@ -933,9 +931,7 @@ export default function ChatScreen() {
                           message.mine && styles.myMessageText,
                           styles.deletedText,
                         ]}
-                      >
-                        Фото недоступно
-                      </Text>
+                      >{t("chat.attach.photoGone")}</Text>
                     )
                   ) : message.attachment_type === "file" ? (
                     // Документ: строка с именем и размером, нажатие — скачать.
@@ -966,7 +962,7 @@ export default function ChatScreen() {
                           ]}
                           numberOfLines={2}
                         >
-                          {message.attachment_name || "Файл"}
+                          {message.attachment_name || t("chat.attach.file")}
                         </Text>
                         <Text
                           style={[
@@ -975,10 +971,10 @@ export default function ChatScreen() {
                           ]}
                         >
                           {message.attachmentUrl
-                            ? [formatSize(message.attachment_size), "скачать"]
+                            ? [formatSize(message.attachment_size), t("chat.attach.download")]
                                 .filter(Boolean)
                                 .join(" · ")
-                            : "файл недоступен"}
+                            : t("chat.attach.fileGone")}
                         </Text>
                       </View>
                     </TouchableOpacity>
@@ -1062,7 +1058,7 @@ export default function ChatScreen() {
                 onPress={handlePickImage}
               >
                 <Ionicons name="image-outline" size={20} color="#3F6B5B" />
-                <Text style={styles.attachMenuItemText}>Фото</Text>
+                <Text style={styles.attachMenuItemText}>{t("chat.attach.photo")}</Text>
               </TouchableOpacity>
 
               <View style={styles.menuDivider} />
@@ -1077,7 +1073,7 @@ export default function ChatScreen() {
                   size={20}
                   color="#3F6B5B"
                 />
-                <Text style={styles.attachMenuItemText}>Документ</Text>
+                <Text style={styles.attachMenuItemText}>{t("chat.attach.doc")}</Text>
               </TouchableOpacity>
             </View>
           )}
@@ -1098,7 +1094,7 @@ export default function ChatScreen() {
             </TouchableOpacity>
 
             <TextInput
-              placeholder="Введите сообщение…"
+              placeholder={t("chat.inputPh")}
               placeholderTextColor="#8FA79A"
               style={styles.input}
               value={input}

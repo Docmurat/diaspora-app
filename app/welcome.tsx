@@ -28,6 +28,7 @@ import Svg, {
 } from "react-native-svg";
 
 import { supabase } from "../lib/supabase";
+import { setLanguage, t, useLanguage } from "../services/i18nService";
 
 function useDrift(duration: number, delay = 0) {
   const v = useRef(new Animated.Value(0)).current;
@@ -149,6 +150,9 @@ function Glass({
 export default function WelcomeScreen() {
   const { width, height } = useWindowDimensions();
 
+  // Текущий язык: экран сам перерисуется при переключении.
+  const lang = useLanguage();
+
   const [fontsLoaded] = useFonts({
     Philosopher_400Regular,
     Philosopher_700Bold,
@@ -269,9 +273,9 @@ export default function WelcomeScreen() {
           }}
         />
 
-        <Text style={styles.title}>Минги-Тау</Text>
-        <Text style={styles.tagline}>КАРАЧАЕВО·БАЛКАРСКОЕ</Text>
-        <Text style={styles.taglineSecond}>СООБЩЕСТВО</Text>
+        <Text style={styles.title}>{t("common.appName")}</Text>
+        <Text style={styles.tagline}>{t("welcome.tagline1")}</Text>
+        <Text style={styles.taglineSecond}>{t("welcome.tagline2")}</Text>
 
         <Svg width={120} height={24} viewBox="0 0 120 24" style={styles.tekmet}>
           <Path d="M4 12 L44 12" stroke="#CBE2D3" strokeWidth={1.5} />
@@ -305,7 +309,7 @@ export default function WelcomeScreen() {
             >
               <View style={styles.chipInner}>
                 <Ionicons name="people-outline" size={16} color="#4E7364" />
-                <Text style={styles.chipText}>Свои люди</Text>
+                <Text style={styles.chipText}>{t("welcome.chip.people")}</Text>
               </View>
             </Glass>
             <Glass
@@ -321,7 +325,9 @@ export default function WelcomeScreen() {
                   size={16}
                   color="#4E7364"
                 />
-                <Text style={styles.chipText}>Взаимопомощь</Text>
+                <Text style={styles.chipText}>
+                  {t("welcome.chip.mutualHelp")}
+                </Text>
               </View>
             </Glass>
           </View>
@@ -338,7 +344,9 @@ export default function WelcomeScreen() {
                   size={16}
                   color="#4E7364"
                 />
-                <Text style={styles.chipText}>Закрытый круг</Text>
+                <Text style={styles.chipText}>
+                  {t("welcome.chip.closedCircle")}
+                </Text>
               </View>
             </Glass>
           </View>
@@ -357,7 +365,9 @@ export default function WelcomeScreen() {
             borderColor="rgba(255,255,255,0.85)"
           >
             <View style={styles.buttonInner}>
-              <Text style={styles.primaryButtonText}>Войти</Text>
+              <Text style={styles.primaryButtonText}>
+                {t("welcome.signIn")}
+              </Text>
             </View>
           </Glass>
         </TouchableOpacity>
@@ -374,27 +384,57 @@ export default function WelcomeScreen() {
             borderWidth={0.75}
           >
             <View style={styles.buttonInner}>
-              <Text style={styles.secondaryButtonText}>Регистрация</Text>
+              <Text style={styles.secondaryButtonText}>
+                {t("welcome.signUp")}
+              </Text>
             </View>
           </Glass>
         </TouchableOpacity>
 
         <Text style={styles.footer}>
-          Только по приглашению
-          {memberCount !== null ? ` · нас уже ${memberCount}` : ""}
+          {t("welcome.inviteOnly")}
+          {memberCount !== null
+            ? " " + t("welcome.memberCount", { N: memberCount })
+            : ""}
         </Text>
 
         <View style={styles.linksRow}>
           <TouchableOpacity onPress={() => router.push("/privacy" as any)}>
-            <Text style={styles.linkText}>Конфиденциальность</Text>
+            <Text style={styles.linkText}>{t("welcome.privacyLink")}</Text>
           </TouchableOpacity>
           <Text style={styles.dot}>•</Text>
           <TouchableOpacity onPress={() => router.push("/terms" as any)}>
-            <Text style={styles.linkText}>Соглашение</Text>
+            <Text style={styles.linkText}>{t("welcome.termsLink")}</Text>
           </TouchableOpacity>
         </View>
 
-        <Text style={styles.founder}>Основатель — Мурат Курджиев</Text>
+        {/* Переключатель языка (Веха 64): выбор запоминается */}
+        <View style={styles.langRow}>
+          {(
+            [
+              ["ru", "Рус"],
+              ["en", "Eng"],
+              ["kb", "Къарачай"],
+            ] as const
+          ).map(([code, label]) => (
+            <TouchableOpacity
+              key={code}
+              onPress={() => setLanguage(code)}
+              hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}
+            >
+              <Text
+                style={[
+                  styles.langText,
+                  lang === code && styles.langTextActive,
+                ]}
+              >
+                {label}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+
+        <Text style={styles.founder}>{t("welcome.founder")}</Text>
       </View>
     </View>
   );
@@ -537,6 +577,24 @@ const styles = StyleSheet.create({
     marginHorizontal: 6,
     color: "#96AC9E",
     fontSize: 11.5,
+  },
+
+  langRow: {
+    flexDirection: "row",
+    justifyContent: "center",
+    alignItems: "center",
+    gap: 18,
+    marginTop: 14,
+  },
+
+  langText: {
+    fontSize: 12.5,
+    color: "#96AC9E",
+  },
+
+  langTextActive: {
+    color: "#3F6B5B",
+    fontWeight: "700",
   },
 
   founder: {

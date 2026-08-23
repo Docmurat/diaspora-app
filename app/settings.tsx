@@ -18,6 +18,7 @@ import {
 
 import { Tekmet } from "../components/mingi";
 import { softDeleteMyAccount } from "../services/profileService";
+import { setLanguage, t, useLanguage } from "../services/i18nService";
 
 type RowProps = {
   icon: keyof typeof Ionicons.glyphMap;
@@ -55,6 +56,7 @@ function SettingsRow({ icon, label, hint, danger, onPress, last }: RowProps) {
 }
 
 export default function SettingsScreen() {
+  const lang = useLanguage(); // перерисовка при смене языка
   const [fontsLoaded] = useFonts({
     Philosopher_400Regular,
     Philosopher_700Bold,
@@ -79,8 +81,8 @@ export default function SettingsScreen() {
       router.replace("/profile-deleted" as any);
     } catch (e) {
       const message =
-        e instanceof Error ? e.message : "Не удалось удалить профиль";
-      Alert.alert("Ошибка", message);
+        e instanceof Error ? e.message : t("set.deleteError");
+      Alert.alert(t("common.error"), message);
       setConfirmDelete(false);
     } finally {
       setBusy(false);
@@ -104,62 +106,85 @@ export default function SettingsScreen() {
           activeOpacity={0.8}
           style={styles.backLink}
         >
-          <Text style={styles.backLinkText}>← Назад</Text>
+          <Text style={styles.backLinkText}>{t("common.backArrow")}</Text>
         </TouchableOpacity>
 
-        <Text style={styles.title}>Настройки</Text>
-        <Text style={styles.subtitle}>МИНГИ·ТАУ</Text>
+        <Text style={styles.title}>{t("cab.menu.settings")}</Text>
+        <Text style={styles.subtitle}>{t("common.brandCaps")}</Text>
 
         <Tekmet style={styles.tekmet} />
 
-        <Text style={styles.blockLabel}>ВХОД И СВЯЗЬ</Text>
+        <Text style={styles.blockLabel}>{t("set.block.language")}</Text>
+
+        <View style={styles.sectionCard}>
+          <SettingsRow
+            icon={lang === "ru" ? "radio-button-on" : "radio-button-off"}
+            label="Русский"
+            onPress={() => setLanguage("ru")}
+          />
+
+          <SettingsRow
+            icon={lang === "en" ? "radio-button-on" : "radio-button-off"}
+            label="English"
+            onPress={() => setLanguage("en")}
+          />
+
+          <SettingsRow
+            icon={lang === "kb" ? "radio-button-on" : "radio-button-off"}
+            label="Къарачай тил"
+            onPress={() => setLanguage("kb")}
+            last
+          />
+        </View>
+
+        <Text style={styles.blockLabel}>{t("set.block.login")}</Text>
 
         <View style={styles.sectionCard}>
           <SettingsRow
             icon="mail-outline"
-            label="Сменить почту"
+            label={t("edit.changeEmail")}
             onPress={() => router.push("/change-email")}
           />
 
           <SettingsRow
             icon="key-outline"
-            label="Сменить пароль"
+            label={t("edit.changePassword")}
             onPress={() => router.push("/change-password")}
           />
 
           <SettingsRow
             icon="person-outline"
-            label="Изменить имя или фамилию"
-            hint="Через заявку модератору"
+            label={t("set.changeName")}
+            hint={t("set.changeNameHint")}
             onPress={() => router.push("/request-name-change")}
             last
           />
         </View>
 
-        <Text style={styles.blockLabel}>ПОМОЩЬ</Text>
+        <Text style={styles.blockLabel}>{t("set.block.help")}</Text>
 
         <View style={styles.sectionCard}>
           <SettingsRow
             icon="chatbubble-ellipses-outline"
-            label="Написать администрации"
+            label={t("restricted.writeAdmin")}
             onPress={() => router.push("/contact-admin")}
             last
           />
         </View>
 
-        <Text style={styles.blockLabel}>АККАУНТ</Text>
+        <Text style={styles.blockLabel}>{t("set.block.account")}</Text>
 
         <View style={styles.sectionCard}>
           <SettingsRow
             icon="trash-outline"
             label={
               confirmDelete
-                ? "Нажмите ещё раз, чтобы удалить"
-                : "Удалить профиль"
+                ? t("set.deleteConfirm")
+                : t("set.delete")
             }
             hint={
               confirmDelete
-                ? "Профиль скроется из сообщества. Отменить нельзя."
+                ? t("set.deleteHint")
                 : undefined
             }
             danger
@@ -173,7 +198,7 @@ export default function SettingsScreen() {
             onPress={() => setConfirmDelete(false)}
             activeOpacity={0.8}
           >
-            <Text style={styles.cancelLink}>Не удалять</Text>
+            <Text style={styles.cancelLink}>{t("set.dontDelete")}</Text>
           </TouchableOpacity>
         )}
       </ScrollView>

@@ -4,6 +4,7 @@
 
 import { supabase } from "../lib/supabase";
 
+import { t } from "./i18nService";
 // ─────────────────────────────────────────────────────────────────────
 // Категории. Источник истины — список categories в app/register.tsx:
 // при изменении там НЕ ЗАБЫТЬ поправить здесь (и наоборот).
@@ -33,8 +34,8 @@ export const SENSITIVE_CATEGORIES = ["Медицина", "Юриспруденц
 export type HelpPostType = "question" | "offer";
 
 export const POST_TYPE_LABELS: Record<HelpPostType, string> = {
-  question: "Вопрос",
-  offer: "Предложение",
+  question: t("newPost.type.question"),
+  offer: t("newPost.type.offer"),
 };
 
 export type HelpAuthor = {
@@ -110,7 +111,7 @@ async function getCurrentUserId(): Promise<string> {
   } = await supabase.auth.getUser();
 
   if (error || !user?.id) {
-    throw new Error("Пользователь не авторизован");
+    throw new Error(t("chat.error.noAuth"));
   }
 
   return user.id;
@@ -588,9 +589,9 @@ export function checkHelpFileLimits(files: NewHelpFile[]): string | null {
     ).length;
 
   if (count(false, true) > MAX_PHOTOS_PER_BLOCK)
-    return `В открытом блоке — не больше ${MAX_PHOTOS_PER_BLOCK} фото`;
+    return t("wallSvc.limit.photosOpen", { N: MAX_PHOTOS_PER_BLOCK });
   if (count(false, false) > MAX_FILES_PER_BLOCK)
-    return `В открытом блоке — не больше ${MAX_FILES_PER_BLOCK} файлов`;
+    return t("wallSvc.limit.filesOpen", { N: MAX_FILES_PER_BLOCK });
   if (count(true, true) > MAX_PHOTOS_PER_BLOCK)
     return `В скрытом блоке — не больше ${MAX_PHOTOS_PER_BLOCK} фото`;
   if (count(true, false) > MAX_FILES_PER_BLOCK)
@@ -599,7 +600,7 @@ export function checkHelpFileLimits(files: NewHelpFile[]): string | null {
   const tooBig = files.find(
     (f) => (f.size || 0) > MAX_FILE_MB * 1024 * 1024,
   );
-  if (tooBig) return `Файл «${tooBig.name}» больше ${MAX_FILE_MB} МБ`;
+  if (tooBig) return t("wallSvc.limit.fileBigName", { имя: tooBig.name, N: MAX_FILE_MB });
 
   return null;
 }
@@ -639,7 +640,7 @@ export async function createHelpPost(input: {
     .single();
 
   if (postError || !post?.id) {
-    throw new Error(postError?.message || "Не удалось создать пост");
+    throw new Error(postError?.message || t("wallSvc.error.create"));
   }
 
   const postId = post.id as string;
@@ -742,7 +743,7 @@ export type HelpPostDetails = {
 export function authorProfileParams(author: HelpAuthor) {
   const fullName =
     `${author.first_name || ""} ${author.last_name || ""}`.trim() ||
-    "Участник";
+    t("post.member");
 
   return {
     id: author.id,
@@ -772,7 +773,7 @@ export async function getHelpPost(postId: string): Promise<HelpPostDetails> {
     .single();
 
   if (error || !post) {
-    throw new Error(error?.message || "Пост не найден");
+    throw new Error(error?.message || t("post.error.notFound"));
   }
 
   // Мостик для проверщика типов: список полей собран из двух строчек,
@@ -938,7 +939,7 @@ export async function addHelpComment(
 
   const text = body.trim();
   if (!text) {
-    throw new Error("Пустой комментарий");
+    throw new Error(t("wallSvc.error.emptyComment"));
   }
 
   const { error } = await supabase.from("help_comments").insert({
@@ -1157,7 +1158,7 @@ export async function reportHelpPost(
 ): Promise<void> {
   const myUserId = await getCurrentUserId();
   const text = reason.trim();
-  if (!text) throw new Error("Опишите, что не так с постом");
+  if (!text) throw new Error(t("wallSvc.error.reportEmpty"));
 
   const { error } = await supabase.from("complaints").insert({
     reporter_user_id: myUserId,

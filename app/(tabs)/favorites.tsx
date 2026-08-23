@@ -24,7 +24,9 @@ import {
 } from "../../services/favoritesService";
 import { getAgeFromBirthDate } from "../../store/user";
 
+import { t, useLanguage } from "../../services/i18nService";
 export default function FavoritesScreen() {
+  const lang = useLanguage(); // перерисовка при смене языка
   const [fontsLoaded] = useFonts({
     Philosopher_400Regular,
     Philosopher_700Bold,
@@ -84,16 +86,13 @@ export default function FavoritesScreen() {
         contentContainerStyle={styles.container}
         showsVerticalScrollIndicator={false}
       >
-        <Text style={styles.title}>Избранное</Text>
-        <Text style={styles.subtitle}>МИНГИ·ТАУ</Text>
+        <Text style={styles.title}>{t("fav.title")}</Text>
+        <Text style={styles.subtitle}>{t("common.brandCaps")}</Text>
 
         <Tekmet style={styles.tekmet} />
 
         {favorites.length === 0 ? (
-          <Text style={styles.emptyText}>
-            Пока никого нет в избранном. Отмечайте людей закладкой в поиске — они
-            появятся здесь.
-          </Text>
+          <Text style={styles.emptyText}>{t("fav.empty")}</Text>
         ) : (
           favorites.map((item) => {
             const user = item.favorite_user;
@@ -143,7 +142,7 @@ export default function FavoritesScreen() {
                         {fullName}
                       </Text>
 
-                      {!!age && <Text style={styles.age}>{age} лет</Text>}
+                      {!!age && <Text style={styles.age}>{t("common.ageSuffix", { возраст: age })}</Text>}
 
                       <Text style={styles.profession}>
                         {user.profession || "—"}

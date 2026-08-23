@@ -12,7 +12,9 @@ import { subscribeToChanges } from "../services/liveService";
 import { getMyProfile } from "../services/profileService";
 import { signOutUser } from "../services/sessionService";
 
+import { t, useLanguage } from "../services/i18nService";
 export default function AccessRestrictedScreen() {
+  const lang = useLanguage(); // перерисовка при смене языка
   const [fontsLoaded] = useFonts({
     Philosopher_400Regular,
     Philosopher_700Bold,
@@ -86,19 +88,14 @@ export default function AccessRestrictedScreen() {
   return (
     <MingiBackground idPrefix="restricted">
       <View style={styles.content}>
-        <Text style={styles.title}>Доступ ограничен</Text>
-        <Text style={styles.subtitle}>МИНГИ·ТАУ</Text>
+        <Text style={styles.title}>{t("restricted.title")}</Text>
+        <Text style={styles.subtitle}>{t("common.brandCaps")}</Text>
 
         <Tekmet style={styles.tekmet} />
 
-        <Text style={styles.text}>
-          Ваш доступ к сообществу временно ограничен.
-        </Text>
+        <Text style={styles.text}>{t("restricted.text")}</Text>
 
-        <Text style={styles.hint}>
-          Если вы считаете, что произошла ошибка, напишите администрации — мы
-          разберёмся.
-        </Text>
+        <Text style={styles.hint}>{t("common.errorHint")}</Text>
 
         <TouchableOpacity
           style={styles.primaryShadow}
@@ -111,9 +108,7 @@ export default function AccessRestrictedScreen() {
             borderColor="rgba(255,255,255,0.85)"
           >
             <View style={styles.buttonInner}>
-              <Text style={styles.primaryButtonText}>
-                Написать администрации
-              </Text>
+              <Text style={styles.primaryButtonText}>{t("restricted.writeAdmin")}</Text>
             </View>
           </Glass>
         </TouchableOpacity>
@@ -130,7 +125,7 @@ export default function AccessRestrictedScreen() {
             borderWidth={0.75}
           >
             <View style={styles.buttonInner}>
-              <Text style={styles.secondaryButtonText}>Выйти из аккаунта</Text>
+              <Text style={styles.secondaryButtonText}>{t("restricted.logoutFull")}</Text>
             </View>
           </Glass>
         </TouchableOpacity>

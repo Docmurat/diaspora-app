@@ -19,6 +19,7 @@ import { supabase } from "../lib/supabase";
 import { getMyProfile } from "../services/profileService";
 import { signOutUser } from "../services/sessionService";
 
+import { t, useLanguage } from "../services/i18nService";
 const glassCardProps = {
   radius: 18,
   tintColor: "rgba(255,255,255,0.55)",
@@ -34,6 +35,7 @@ const glassInputProps = {
 } as const;
 
 export default function PendingApprovalScreen() {
+  const lang = useLanguage(); // перерисовка при смене языка
   const [fontsLoaded] = useFonts({
     Philosopher_400Regular,
     Philosopher_700Bold,
@@ -218,7 +220,7 @@ export default function PendingApprovalScreen() {
 
   const handleSubmitAgain = async () => {
     if (!profile?.id) {
-      setSubmitError("Профиль не найден");
+      setSubmitError(t("pending.error.noProfile"));
       return;
     }
 
@@ -292,7 +294,7 @@ export default function PendingApprovalScreen() {
       await loadData();
     } catch (e) {
       const message =
-        e instanceof Error ? e.message : "Не удалось отправить анкету повторно";
+        e instanceof Error ? e.message : t("pending.error.resubmit");
       setSubmitError(message);
     } finally {
       setSendingAgain(false);
@@ -316,29 +318,27 @@ export default function PendingApprovalScreen() {
       >
         <Text style={styles.title}>
           {isRejected
-            ? "Анкета отклонена"
+            ? t("pending.title.rejected")
             : showRevisionActions
-              ? "Нужна доработка"
-              : "На рассмотрении"}
+              ? t("pending.title.revision")
+              : t("pending.title.waiting")}
         </Text>
-        <Text style={styles.subtitle}>МИНГИ·ТАУ</Text>
+        <Text style={styles.subtitle}>{t("common.brandCaps")}</Text>
 
         <Tekmet style={styles.tekmet} />
 
         <Text style={styles.text}>
           {isRejected
-            ? "Модератор отклонил вашу анкету. Ознакомьтесь с комментарием ниже. Вы можете исправить анкету и подать заявку повторно."
+            ? t("pending.text.rejected")
             : showRevisionActions
-              ? "Исправьте данные, затем отправьте анкету на повторное рассмотрение."
+              ? t("pending.text.revision")
               : hasUserResubmittedAfterRevision
-                ? "Исправления отправлены модератору. Как только он проверит анкету, экран обновится сам."
-                : "Спасибо за регистрацию. Сейчас ваша анкета проверяется модератором."}
+                ? t("pending.text.resubmitted")
+                : t("pending.text.waiting")}
         </Text>
 
         {!isRejected && !showRevisionActions && (
-          <Text style={styles.autoHint}>
-            Как только анкету одобрят, экран обновится сам
-          </Text>
+          <Text style={styles.autoHint}>{t("pending.autoHint")}</Text>
         )}
 
         {(showRevisionActions || isRejected) && lastModeratorMessage && (
@@ -346,8 +346,8 @@ export default function PendingApprovalScreen() {
             <View style={styles.messageInner}>
               <Text style={styles.messageAuthor}>
                 {lastModeratorMessage.author_role === "moderator"
-                  ? "СООБЩЕНИЕ МОДЕРАТОРА"
-                  : "СИСТЕМНОЕ СООБЩЕНИЕ"}
+                  ? t("pending.moderatorMsg")
+                  : t("pending.systemMsg")}
               </Text>
               <Text style={styles.messageText}>
                 {lastModeratorMessage.message}
@@ -370,16 +370,12 @@ export default function PendingApprovalScreen() {
                 borderWidth={0.75}
               >
                 <View style={styles.buttonInner}>
-                  <Text style={styles.secondaryButtonText}>
-                    Исправить анкету
-                  </Text>
+                  <Text style={styles.secondaryButtonText}>{t("pending.fixProfile")}</Text>
                 </View>
               </Glass>
             </TouchableOpacity>
 
-            <Text style={styles.inputLabel}>
-              Сообщение модератору (необязательно)
-            </Text>
+            <Text style={styles.inputLabel}>{t("pending.msgLabel")}</Text>
 
             <Glass {...glassInputProps} style={styles.inputWrap}>
               <TextInput
@@ -388,8 +384,8 @@ export default function PendingApprovalScreen() {
                 onChangeText={setResubmitMessage}
                 placeholder={
                   isRejected
-                    ? "Например: объясните, почему заявку стоит пересмотреть"
-                    : "Например: исправил город и профессию"
+                    ? t("pending.msgPh.rejected")
+                    : t("pending.msgPh.revision")
                 }
                 placeholderTextColor="#8FA79A"
                 multiline
@@ -415,10 +411,10 @@ export default function PendingApprovalScreen() {
                 <View style={styles.buttonInner}>
                   <Text style={styles.primaryButtonText}>
                     {sendingAgain
-                      ? "Отправка..."
+                      ? t("common.sending")
                       : isRejected
-                        ? "Подать заявку повторно"
-                        : "Отправить повторно"}
+                        ? t("pending.resubmit.rejected")
+                        : t("pending.resubmit.revision")}
                   </Text>
                 </View>
               </Glass>
@@ -436,9 +432,7 @@ export default function PendingApprovalScreen() {
               borderColor="rgba(255,255,255,0.85)"
             >
               <View style={styles.buttonInner}>
-                <Text style={styles.primaryButtonText}>
-                  Связаться с администратором
-                </Text>
+                <Text style={styles.primaryButtonText}>{t("pending.contactAdmin")}</Text>
               </View>
             </Glass>
           </TouchableOpacity>
@@ -451,7 +445,7 @@ export default function PendingApprovalScreen() {
           }}
           activeOpacity={0.8}
         >
-          <Text style={styles.link}>Выйти</Text>
+          <Text style={styles.link}>{t("common.logout")}</Text>
         </TouchableOpacity>
       </ScrollView>
     </MingiBackground>

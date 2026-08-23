@@ -9,26 +9,28 @@ import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
 
 import TopBar from "../../components/TopBar";
 import { Tekmet } from "../../components/mingi";
+import { t, useLanguage } from "../../services/i18nService";
 
 const SECTIONS = [
   {
     key: "articles",
-    label: "Статьи",
-    text: "Материалы о традициях, фамилиях и истории народа, а также профессиональные советы от участников сообщества.",
+    label: "know.articles",
+    text: "know.articlesText",
   },
   {
     key: "events",
-    label: "Афиша",
-    text: "Мероприятия, посвящённые народу: концерты, встречи, праздники и памятные даты.",
+    label: "know.events",
+    text: "know.eventsText",
   },
   {
     key: "resources",
-    label: "Ресурсы",
-    text: "Подборка полезных сайтов, книг и приложений, связанных с карачаево-балкарской культурой и языком.",
+    label: "know.resources",
+    text: "know.resourcesText",
   },
 ];
 
 export default function KnowledgeScreen() {
+  const lang = useLanguage(); // перерисовка при смене языка
   const [fontsLoaded] = useFonts({
     Philosopher_400Regular,
     Philosopher_700Bold,
@@ -61,7 +63,7 @@ export default function KnowledgeScreen() {
               <Text
                 style={[styles.pillText, isActive && styles.pillTextActive]}
               >
-                {section.label}
+                {t(section.label)}
               </Text>
             </TouchableOpacity>
           );
@@ -69,12 +71,12 @@ export default function KnowledgeScreen() {
       </View>
 
       <View style={styles.center}>
-        <Text style={styles.title}>{current.label}</Text>
-        <Text style={styles.subtitle}>СКОРО</Text>
+        <Text style={styles.title}>{t(current.label)}</Text>
+        <Text style={styles.subtitle}>{t("know.soon")}</Text>
 
         <Tekmet style={styles.tekmet} />
 
-        <Text style={styles.text}>{current.text}</Text>
+        <Text style={styles.text}>{t(current.text)}</Text>
       </View>
     </View>
   );

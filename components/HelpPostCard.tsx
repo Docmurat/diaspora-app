@@ -7,8 +7,9 @@
 import { Ionicons } from "@expo/vector-icons";
 import { Image, Platform, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 
-import { HelpFeedItem, POST_TYPE_LABELS } from "../services/helpService";
+import { HelpFeedItem } from "../services/helpService";
 
+import { t, tCategory } from "../services/i18nService";
 // «сегодня 14:05», «вчера», «12 авг»
 export function formatPostDate(iso: string): string {
   const date = new Date(iso);
@@ -23,25 +24,13 @@ export function formatPostDate(iso: string): string {
   if (sameDay) {
     const hh = String(date.getHours()).padStart(2, "0");
     const mm = String(date.getMinutes()).padStart(2, "0");
-    return `сегодня ${hh}:${mm}`;
+    return t("card.today", { "ЧЧ:ММ": `${hh}:${mm}` });
   }
 
-  if (wasYesterday) return "вчера";
+  if (wasYesterday) return t("card.yesterday");
 
-  const months = [
-    "янв",
-    "фев",
-    "мар",
-    "апр",
-    "мая",
-    "июн",
-    "июл",
-    "авг",
-    "сен",
-    "окт",
-    "ноя",
-    "дек",
-  ];
+  // Сокращения месяцев из словаря (в карачаевском — русские, решение владельца)
+  const months = t("card.months").split(" · ");
 
   const suffix =
     date.getFullYear() !== now.getFullYear() ? ` ${date.getFullYear()}` : "";
@@ -60,8 +49,8 @@ export default function HelpPostCard({
 }) {
   const authorName = post.author
     ? `${post.author.first_name || ""} ${post.author.last_name || ""}`.trim() ||
-      "Участник"
-    : "Участник";
+      t("post.member")
+    : t("post.member");
 
   const isClosed = post.status === "archived";
   const isBlocked = post.status === "blocked"; // только у автора (Веха 57)
@@ -103,12 +92,12 @@ export default function HelpPostCard({
         {isBlocked ? (
           <View style={styles.blockedChip}>
             <Ionicons name="hand-left" size={12} color="#A2543F" />
-            <Text style={styles.blockedChipText}>Заблокирован</Text>
+            <Text style={styles.blockedChipText}>{t("card.blocked")}</Text>
           </View>
         ) : isClosed ? (
           <View style={styles.closedChip}>
             <Ionicons name="checkmark-circle" size={13} color="#7E988B" />
-            <Text style={styles.closedChipText}>Завершено</Text>
+            <Text style={styles.closedChipText}>{t("card.done")}</Text>
           </View>
         ) : (
           <View
@@ -123,7 +112,7 @@ export default function HelpPostCard({
                 post.postType === "offer" && styles.typeChipTextOffer,
               ]}
             >
-              {POST_TYPE_LABELS[post.postType]}
+              {t(post.postType === "offer" ? "newPost.type.offer" : "newPost.type.question")}
             </Text>
           </View>
         )}
@@ -131,20 +120,20 @@ export default function HelpPostCard({
 
       <View style={styles.categoryRow}>
         <View style={styles.categoryChip}>
-          <Text style={styles.categoryChipText}>{post.category}</Text>
+          <Text style={styles.categoryChipText}>{tCategory(post.category)}</Text>
         </View>
 
         {isNew && (
           <View style={styles.newMark}>
             <View style={styles.newMarkDot} />
-            <Text style={styles.newMarkText}>новое</Text>
+            <Text style={styles.newMarkText}>{t("card.new")}</Text>
           </View>
         )}
 
         {post.hasHidden && (
           <View style={styles.hiddenMark}>
             <Ionicons name="lock-closed" size={11} color="#719686" />
-            <Text style={styles.hiddenMarkText}>скрытый материал</Text>
+            <Text style={styles.hiddenMarkText}>{t("card.hiddenMark")}</Text>
           </View>
         )}
       </View>

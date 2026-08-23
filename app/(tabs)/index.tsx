@@ -44,6 +44,7 @@ import {
 } from "../../services/userDirectoryService";
 import { getAgeFromBirthDate } from "../../store/user";
 
+import { t, useLanguage } from "../../services/i18nService";
 type PreparedUser = DirectoryUser & {
   fullName: string;
 };
@@ -65,6 +66,7 @@ function ScreenBackground({
 }
 
 export default function HomeScreen() {
+  const lang = useLanguage(); // перерисовка при смене языка
   const insets = useSafeAreaInsets();
   const [fontsLoaded] = useFonts({
     Philosopher_400Regular,
@@ -264,7 +266,7 @@ export default function HomeScreen() {
         <View style={[styles.inputPlain, styles.inputWrap]}>
           <View style={styles.inputInner}>
             <TextInput
-              placeholder="Например: стоматолог Москва"
+              placeholder={t("people.searchPh")}
               placeholderTextColor="#8FA79A"
               style={styles.input}
               value={query}
@@ -321,9 +323,7 @@ export default function HomeScreen() {
                 styles.modeTabText,
                 mode === "all" && styles.modeTabTextActive,
               ]}
-            >
-              Все
-            </Text>
+            >{t("people.tab.all")}</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
@@ -340,9 +340,7 @@ export default function HomeScreen() {
                 styles.modeTabText,
                 mode === "saved" && styles.modeTabTextActive,
               ]}
-            >
-              Избранные
-            </Text>
+            >{t("people.tab.saved")}</Text>
           </TouchableOpacity>
 
           <Animated.View
@@ -375,16 +373,14 @@ export default function HomeScreen() {
           >
             <View style={styles.supportInner}>
               <Ionicons name="heart-outline" size={16} color="#A85A72" />
-              <Text style={styles.supportText}>Помочь проекту</Text>
+              <Text style={styles.supportText}>{t("people.support")}</Text>
             </View>
           </Glass>
         </TouchableOpacity>
       )}
 
       {!showList && (
-        <Text style={styles.supportHint}>
-          Идеи, замечания, поддержка проекта
-        </Text>
+        <Text style={styles.supportHint}>{t("people.supportHint")}</Text>
       )}
 
       {showList && <View style={styles.listHeader}>{searchBar}</View>}
@@ -399,8 +395,8 @@ export default function HomeScreen() {
       >
         {!showList && (
           <View style={styles.halfTop}>
-            <Text style={styles.title}>Поиск</Text>
-            <Text style={styles.subtitle}>МИНГИ·ТАУ</Text>
+            <Text style={styles.title}>{t("people.title")}</Text>
+            <Text style={styles.subtitle}>{t("common.brandCaps")}</Text>
 
             <Tekmet style={styles.tekmet} />
           </View>
@@ -411,7 +407,7 @@ export default function HomeScreen() {
         <View style={!showList && styles.halfBottom}>
           {!showList && users.length > 0 && (
             <View style={styles.counterRow}>
-              <Text style={styles.counterLabel}>Нас уже</Text>
+              <Text style={styles.counterLabel}>{t("people.counterLabel")}</Text>
               <Text style={styles.counterValue}>{users.length}</Text>
             </View>
           )}
@@ -443,7 +439,7 @@ export default function HomeScreen() {
                         <Text style={styles.name} numberOfLines={2}>
                           {user.fullName}
                         </Text>
-                        {!!age && <Text style={styles.age}>{age} лет</Text>}
+                        {!!age && <Text style={styles.age}>{t("common.ageSuffix", { возраст: age })}</Text>}
                         <Text style={styles.profession}>
                           {user.profession || "—"}
                         </Text>
@@ -477,17 +473,15 @@ export default function HomeScreen() {
           {showList && visibleResults.length === 0 && (
             <Text style={styles.emptyText}>
               {mode === "saved" && !isSearching
-                ? "В избранных пока никого нет. Отмечайте людей закладкой — они появятся здесь."
-                : "Ничего не найдено"}
+                ? t("people.empty.saved")
+                : t("people.empty.search")}
             </Text>
           )}
 
           {showList && <Tekmet style={styles.footerTekmet} />}
 
           {!showList && (
-            <Text style={styles.founder}>
-              Основатель — Мурат Курджиев
-            </Text>
+            <Text style={styles.founder}>{t("welcome.founder")}</Text>
           )}
         </View>
       </ScrollView>

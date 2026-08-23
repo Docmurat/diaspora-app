@@ -28,6 +28,7 @@ import {
   markNotificationRead,
 } from "../services/notificationService";
 import { getMyProfile } from "../services/profileService";
+import { t, useLanguage } from "../services/i18nService";
 
 const ICONS: Record<string, keyof typeof Ionicons.glyphMap> = {
   message: "chatbubble-ellipses-outline",
@@ -99,11 +100,11 @@ function groupLabel(dateString: string): string {
   const startOf30Days = new Date(startOfToday);
   startOf30Days.setDate(startOfToday.getDate() - 30);
 
-  if (date >= startOfToday) return "Сегодня";
-  if (date >= startOfYesterday) return "Вчера";
-  if (date >= startOf7Days) return "Последние 7 дней";
-  if (date >= startOf30Days) return "Последние 30 дней";
-  return "Ранее";
+  if (date >= startOfToday) return t("notif.group.today");
+  if (date >= startOfYesterday) return t("notif.group.yesterday");
+  if (date >= startOf7Days) return t("notif.group.7days");
+  if (date >= startOf30Days) return t("notif.group.30days");
+  return t("notif.group.earlier");
 }
 
 // Часть ссылок ведёт в закрытые разделы: например, уведомления о заявке
@@ -119,6 +120,7 @@ function canOpenLink(link: string | null, isModerator: boolean) {
 }
 
 export default function NotificationsScreen() {
+  const lang = useLanguage(); // перерисовка при смене языка
   const [fontsLoaded] = useFonts({
     Philosopher_400Regular,
     Philosopher_700Bold,
@@ -152,7 +154,7 @@ export default function NotificationsScreen() {
     } catch (e) {
       if (!silent) {
         const message =
-          e instanceof Error ? e.message : "Не удалось загрузить уведомления";
+          e instanceof Error ? e.message : t("notif.loadError");
         setError(message);
         setItems([]);
       }
@@ -286,11 +288,11 @@ export default function NotificationsScreen() {
           activeOpacity={0.8}
           style={styles.backLink}
         >
-          <Text style={styles.backLinkText}>← Назад</Text>
+          <Text style={styles.backLinkText}>{t("common.backArrow")}</Text>
         </TouchableOpacity>
 
-        <Text style={styles.title}>Уведомления</Text>
-        <Text style={styles.subtitle}>МИНГИ·ТАУ</Text>
+        <Text style={styles.title}>{t("a11y.bell")}</Text>
+        <Text style={styles.subtitle}>{t("common.brandCaps")}</Text>
 
         <Tekmet style={styles.tekmet} />
 
@@ -300,7 +302,7 @@ export default function NotificationsScreen() {
             activeOpacity={0.8}
             style={styles.markAll}
           >
-            <Text style={styles.markAllText}>Отметить все прочитанными</Text>
+            <Text style={styles.markAllText}>{t("notif.markAll")}</Text>
           </TouchableOpacity>
         )}
 
@@ -315,14 +317,11 @@ export default function NotificationsScreen() {
             <Text style={styles.emptyText}>{error}</Text>
 
             <TouchableOpacity onPress={() => load()} activeOpacity={0.8}>
-              <Text style={styles.markAllText}>Повторить</Text>
+              <Text style={styles.markAllText}>{t("chats.retry")}</Text>
             </TouchableOpacity>
           </>
         ) : items.length === 0 ? (
-          <Text style={styles.emptyText}>
-            Пока пусто. Здесь появятся новые сообщения, решения по заявкам и
-            события сообщества.
-          </Text>
+          <Text style={styles.emptyText}>{t("notif.empty")}</Text>
         ) : (
           groups.map((group) => (
             <View key={group.label}>
@@ -382,7 +381,7 @@ export default function NotificationsScreen() {
                       activeOpacity={0.7}
                       hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                       style={styles.deleteBtn}
-                      accessibilityLabel="Удалить уведомление"
+                      accessibilityLabel={t("a11y.deleteNotif")}
                     >
                       <Ionicons name="close" size={16} color="#A8BDB1" />
                     </TouchableOpacity>

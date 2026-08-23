@@ -17,39 +17,40 @@ import {
 } from "react-native";
 import { Glass, Tekmet } from "../components/mingi";
 import { supabase } from "../lib/supabase";
+import { t, useLanguage } from "../services/i18nService";
 
 function getPasswordErrorMessage(message?: string) {
   if (!message) {
-    return "Не удалось изменить пароль.";
+    return t("pass.error.change");
   }
 
   const normalized = message.toLowerCase();
 
   if (normalized.includes("same password")) {
-    return "Новый пароль должен отличаться от текущего.";
+    return t("pass.error.same");
   }
 
   if (normalized.includes("weak password")) {
-    return "Пароль слишком слабый.";
+    return t("pass.error.weak");
   }
 
   if (normalized.includes("password should be at least")) {
-    return "Пароль слишком короткий.";
+    return t("pass.error.short");
   }
 
   if (normalized.includes("reauthentication")) {
-    return "Для смены пароля нужно подтвердить личность повторно.";
+    return t("pass.error.reauth");
   }
 
   if (normalized.includes("nonce")) {
-    return "Не пройдена повторная проверка безопасности.";
+    return t("pass.error.nonce");
   }
 
   if (normalized.includes("current password")) {
-    return "Текущий пароль указан неверно.";
+    return t("pass.error.current");
   }
 
-  return "Не удалось изменить пароль.";
+  return t("pass.error.change");
 }
 
 const glassInputProps = {
@@ -60,6 +61,7 @@ const glassInputProps = {
 } as const;
 
 export default function ChangePasswordScreen() {
+  const lang = useLanguage(); // перерисовка при смене языка
   const [fontsLoaded] = useFonts({
     Philosopher_400Regular,
     Philosopher_700Bold,
@@ -76,17 +78,17 @@ export default function ChangePasswordScreen() {
 
   const handleChangePassword = async () => {
     if (!newPassword.trim()) {
-      setError("Введите новый пароль.");
+      setError(t("pass.error.empty"));
       return;
     }
 
     if (newPassword.length < 6) {
-      setError("Новый пароль должен содержать минимум 6 символов.");
+      setError(t("pass.error.short6"));
       return;
     }
 
     if (newPassword !== repeatPassword) {
-      setError("Новый пароль и подтверждение не совпадают.");
+      setError(t("pass.error.mismatch"));
       return;
     }
 
@@ -113,7 +115,7 @@ export default function ChangePasswordScreen() {
         return;
       }
 
-      setSuccessMessage("Пароль успешно изменён.");
+      setSuccessMessage(t("pass.success"));
       setCurrentPassword("");
       setNewPassword("");
       setRepeatPassword("");
@@ -139,18 +141,16 @@ export default function ChangePasswordScreen() {
         keyboardVerticalOffset={Platform.OS === "ios" ? 20 : 0}
       >
         <View style={styles.content}>
-          <Text style={styles.title}>Смена пароля</Text>
-          <Text style={styles.subtitle}>МИНГИ·ТАУ</Text>
+          <Text style={styles.title}>{t("pass.title")}</Text>
+          <Text style={styles.subtitle}>{t("common.brandCaps")}</Text>
 
           <Tekmet style={styles.tekmet} />
 
-          <Text style={styles.description}>
-            Придумайте новый пароль — не короче 6 символов.
-          </Text>
+          <Text style={styles.description}>{t("pass.desc")}</Text>
 
           <Glass {...glassInputProps} style={styles.inputWrap}>
             <TextInput
-              placeholder="Текущий пароль"
+              placeholder={t("pass.current")}
               placeholderTextColor="#8FA79A"
               style={styles.input}
               value={currentPassword}
@@ -166,7 +166,7 @@ export default function ChangePasswordScreen() {
 
           <Glass {...glassInputProps} style={styles.inputWrap}>
             <TextInput
-              placeholder="Новый пароль *"
+              placeholder={t("pass.new")}
               placeholderTextColor="#8FA79A"
               style={styles.input}
               value={newPassword}
@@ -182,7 +182,7 @@ export default function ChangePasswordScreen() {
 
           <Glass {...glassInputProps} style={styles.inputWrap}>
             <TextInput
-              placeholder="Повторите новый пароль *"
+              placeholder={t("pass.repeat")}
               placeholderTextColor="#8FA79A"
               style={styles.input}
               value={repeatPassword}
@@ -217,14 +217,14 @@ export default function ChangePasswordScreen() {
             >
               <View style={styles.buttonInner}>
                 <Text style={styles.primaryButtonText}>
-                  {loading ? "Сохранение..." : "Сменить пароль"}
+                  {loading ? t("edit.saving") : t("edit.changePassword")}
                 </Text>
               </View>
             </Glass>
           </TouchableOpacity>
 
           <TouchableOpacity onPress={() => router.back()} activeOpacity={0.8}>
-            <Text style={styles.link}>Назад</Text>
+            <Text style={styles.link}>{t("common.back")}</Text>
           </TouchableOpacity>
         </View>
       </KeyboardAvoidingView>

@@ -14,6 +14,7 @@ import {
 } from "react-native";
 import { MingiBackground, Tekmet } from "../components/mingi";
 
+import { t } from "../services/i18nService";
 const SPLASH_DURATION_MS = 3000;
 
 export default function SplashScreen() {
@@ -49,7 +50,7 @@ export default function SplashScreen() {
 
         {fontsLoaded && (
           <>
-            <Text style={styles.title}>Минги-Тау</Text>
+            <Text style={styles.title}>{t("common.appName")}</Text>
             <Tekmet style={styles.tekmet} />
           </>
         )}

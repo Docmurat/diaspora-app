@@ -21,6 +21,7 @@ import { Glass, Tekmet } from "../../components/mingi";
 import { ChatListItem, getMyChats } from "../../services/chatService";
 import { subscribeToChanges } from "../../services/liveService";
 
+import { dateLocale, t, useLanguage } from "../../services/i18nService";
 function formatChatTime(dateString?: string | null) {
   if (!dateString) return "";
 
@@ -33,7 +34,7 @@ function formatChatTime(dateString?: string | null) {
     date.getFullYear() === now.getFullYear();
 
   if (isToday) {
-    return date.toLocaleTimeString("ru-RU", {
+    return date.toLocaleTimeString(dateLocale(), {
       hour: "2-digit",
       minute: "2-digit",
     });
@@ -48,10 +49,10 @@ function formatChatTime(dateString?: string | null) {
     date.getFullYear() === yesterday.getFullYear();
 
   if (isYesterday) {
-    return "Вчера";
+    return t("chats.yesterday");
   }
 
-  return date.toLocaleDateString("ru-RU", {
+  return date.toLocaleDateString(dateLocale(), {
     day: "2-digit",
     month: "2-digit",
   });
@@ -64,7 +65,7 @@ function getFullName(chat: ChatListItem) {
 
   // Анкета скрыта правилами базы (вычищен чистильщиком или отключён
   // администрацией) — переписка остаётся, собеседник обезличен.
-  return fullName || "Удалённый участник";
+  return fullName || t("chats.deletedMember");
 }
 
 function getAvatarLetter(chat: ChatListItem) {
@@ -73,6 +74,7 @@ function getAvatarLetter(chat: ChatListItem) {
 }
 
 export default function ChatsScreen() {
+  const lang = useLanguage(); // перерисовка при смене языка
   const [fontsLoaded] = useFonts({
     Philosopher_400Regular,
     Philosopher_700Bold,
@@ -98,7 +100,7 @@ export default function ChatsScreen() {
       loadedOnceRef.current = true;
     } catch (e) {
       const message =
-        e instanceof Error ? e.message : "Не удалось загрузить список чатов";
+        e instanceof Error ? e.message : t("chats.loadError");
       setScreenError(message);
       if (!loadedOnceRef.current) {
         setChats([]);
@@ -149,10 +151,10 @@ export default function ChatsScreen() {
         timeLabel: formatChatTime(
           chat.lastMessageAt || chat.updatedAt || chat.createdAt,
         ),
-        previewText: chat.lastMessageText?.trim() || "Сообщений пока нет",
+        previewText: chat.lastMessageText?.trim() || t("chats.noMessagesPreview"),
       };
     });
-  }, [chats]);
+  }, [chats, lang]);
 
   if (!fontsLoaded) {
     return <View style={styles.emptyBg} />;
@@ -173,14 +175,14 @@ export default function ChatsScreen() {
       <TopBar />
 
       <View style={styles.header}>
-        <Text style={styles.title}>Чаты</Text>
-        <Text style={styles.subtitle}>МИНГИ·ТАУ</Text>
+        <Text style={styles.title}>{t("chats.title")}</Text>
+        <Text style={styles.subtitle}>{t("common.brandCaps")}</Text>
         <Tekmet style={styles.tekmet} />
       </View>
 
       {screenError ? (
         <View style={styles.centerState}>
-          <Text style={styles.stateTitle}>Не удалось загрузить чаты</Text>
+          <Text style={styles.stateTitle}>{t("chats.loadError")}</Text>
           <Text style={styles.stateText}>{screenError}</Text>
 
           <TouchableOpacity
@@ -194,17 +196,15 @@ export default function ChatsScreen() {
               borderColor="rgba(255,255,255,0.85)"
             >
               <View style={styles.buttonInner}>
-                <Text style={styles.primaryButtonText}>Повторить</Text>
+                <Text style={styles.primaryButtonText}>{t("chats.retry")}</Text>
               </View>
             </Glass>
           </TouchableOpacity>
         </View>
       ) : preparedChats.length === 0 ? (
         <View style={styles.centerState}>
-          <Text style={styles.stateTitle}>Пока нет чатов</Text>
-          <Text style={styles.stateText}>
-            Когда вы начнёте диалог с человеком из сообщества, он появится здесь.
-          </Text>
+          <Text style={styles.stateTitle}>{t("chats.empty.title")}</Text>
+          <Text style={styles.stateText}>{t("chats.empty.text")}</Text>
         </View>
       ) : (
         <ScrollView
@@ -241,7 +241,7 @@ export default function ChatsScreen() {
                     <View
                       style={[
                         styles.avatar,
-                        chat.fullName === "Удалённый участник" &&
+                        chat.fullName === t("chats.deletedMember") &&
                           styles.avatarMuted,
                       ]}
                     >

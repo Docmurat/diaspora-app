@@ -16,6 +16,7 @@ import { supabase } from "../lib/supabase";
 import { subscribeToChanges } from "../services/liveService";
 import { getUnreadCount } from "../services/notificationService";
 import { getMyProfile } from "../services/profileService";
+import { t, useLanguage } from "../services/i18nService";
 
 export default function TopBar({
   transparent = false,
@@ -24,6 +25,7 @@ export default function TopBar({
   transparent?: boolean;
   centerContent?: ReactNode;
 }) {
+  const lang = useLanguage(); // перерисовка при смене языка
   const insets = useSafeAreaInsets();
   const [avatarPath, setAvatarPath] = useState<string | null>(null);
   const [unreadCount, setUnreadCount] = useState(0);
@@ -113,7 +115,7 @@ export default function TopBar({
       <TouchableOpacity
         activeOpacity={0.8}
         onPress={() => router.push("/profile" as any)}
-        accessibilityLabel="Мой профиль"
+        accessibilityLabel={t("a11y.myProfile")}
       >
         <Image
           source={
@@ -133,7 +135,7 @@ export default function TopBar({
         activeOpacity={0.8}
         onPress={() => router.push("/notifications" as any)}
         style={styles.bellButton}
-        accessibilityLabel="Уведомления"
+        accessibilityLabel={t("a11y.bell")}
       >
         <Ionicons name="notifications-outline" size={24} color="#3F6B5B" />
 

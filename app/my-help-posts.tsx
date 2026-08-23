@@ -26,7 +26,9 @@ import HelpPostCard from "../components/HelpPostCard";
 import { Tekmet } from "../components/mingi";
 import { HelpFeedItem, getMyHelpPosts } from "../services/helpService";
 
+import { t, useLanguage } from "../services/i18nService";
 export default function MyHelpPostsScreen() {
+  const lang = useLanguage(); // перерисовка при смене языка
   const insets = useSafeAreaInsets();
   const [fontsLoaded] = useFonts({
     Philosopher_400Regular,
@@ -53,7 +55,7 @@ export default function MyHelpPostsScreen() {
           setArchivedPosts(archived);
         } catch (e) {
           console.log("Мои посты не загрузились:", e);
-          if (alive) setError("Не удалось загрузить посты. Попробуйте ещё раз.");
+          if (alive) setError(t("myPosts.loadError"));
         } finally {
           if (alive) setLoading(false);
         }
@@ -83,7 +85,7 @@ export default function MyHelpPostsScreen() {
           <Ionicons name="chevron-back" size={26} color="#3F6B5B" />
         </TouchableOpacity>
 
-        <Text style={styles.headerTitle}>Мои посты</Text>
+        <Text style={styles.headerTitle}>{t("myPosts.title")}</Text>
 
         <View style={styles.backButton} />
       </View>
@@ -96,7 +98,7 @@ export default function MyHelpPostsScreen() {
           onPress={() => setTab("open")}
         >
           <Text style={[styles.tabText, tab === "open" && styles.tabTextActive]}>
-            Открытые{openPosts.length > 0 ? ` · ${openPosts.length}` : ""}
+            {t("myPosts.tab.open")}{openPosts.length > 0 ? ` · ${openPosts.length}` : ""}
           </Text>
         </TouchableOpacity>
 
@@ -108,7 +110,7 @@ export default function MyHelpPostsScreen() {
           <Text
             style={[styles.tabText, tab === "archived" && styles.tabTextActive]}
           >
-            В архиве{archivedPosts.length > 0 ? ` · ${archivedPosts.length}` : ""}
+            {t("myPosts.tab.archived")}{archivedPosts.length > 0 ? ` · ${archivedPosts.length}` : ""}
           </Text>
         </TouchableOpacity>
       </View>
@@ -132,8 +134,8 @@ export default function MyHelpPostsScreen() {
             <Tekmet style={styles.emptyTekmet} />
             <Text style={styles.emptyText}>
               {tab === "open"
-                ? "Открытых постов пока нет. Создайте первый на вкладке «Помощь»."
-                : "В архиве пока пусто — сюда попадают завершённые посты."}
+                ? t("myPosts.empty.open")
+                : t("myPosts.empty.archived")}
             </Text>
           </View>
         )}

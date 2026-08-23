@@ -21,6 +21,7 @@ import {
 import { Glass, Tekmet } from "../components/mingi";
 import { createNameChangeRequest } from "../services/nameChangeService";
 import { DbUserProfile, getMyProfile } from "../services/profileService";
+import { t, useLanguage } from "../services/i18nService";
 
 const glassInputProps = {
   radius: 16,
@@ -30,6 +31,7 @@ const glassInputProps = {
 } as const;
 
 export default function RequestNameChangeScreen() {
+  const lang = useLanguage(); // перерисовка при смене языка
   const [fontsLoaded] = useFonts({
     Philosopher_400Regular,
     Philosopher_700Bold,
@@ -72,7 +74,7 @@ export default function RequestNameChangeScreen() {
       !requestedLastName.trim() ||
       !reason.trim()
     ) {
-      setError("Заполните все поля");
+      setError(t("feedback.error.fill"));
       return;
     }
 
@@ -89,7 +91,7 @@ export default function RequestNameChangeScreen() {
       setSuccess(true);
     } catch (e) {
       const message =
-        e instanceof Error ? e.message : "Ошибка отправки запроса";
+        e instanceof Error ? e.message : t("name.error");
       setError(message);
     } finally {
       setSending(false);
@@ -114,10 +116,8 @@ export default function RequestNameChangeScreen() {
       <View style={styles.centerState}>
         <StatusBar style="dark" />
 
-        <Text style={styles.stateTitle}>Профиль не найден</Text>
-        <Text style={styles.stateText}>
-          Войдите в аккаунт и попробуйте ещё раз.
-        </Text>
+        <Text style={styles.stateTitle}>{t("common.notFound.member")}</Text>
+        <Text style={styles.stateText}>{t("name.signInRetry")}</Text>
 
         <TouchableOpacity
           style={styles.primaryShadow}
@@ -130,7 +130,7 @@ export default function RequestNameChangeScreen() {
             borderColor="rgba(255,255,255,0.85)"
           >
             <View style={styles.buttonInner}>
-              <Text style={styles.primaryButtonText}>Назад</Text>
+              <Text style={styles.primaryButtonText}>{t("common.back")}</Text>
             </View>
           </Glass>
         </TouchableOpacity>
@@ -147,10 +147,7 @@ export default function RequestNameChangeScreen() {
 
         <Tekmet style={styles.tekmetSuccess} />
 
-        <Text style={styles.stateText}>
-          Модератор рассмотрит запрос на изменение имени и фамилии. Ответ придёт
-          в уведомления.
-        </Text>
+        <Text style={styles.stateText}>{t("name.sentText")}</Text>
 
         <TouchableOpacity
           style={styles.primaryShadow}
@@ -163,7 +160,7 @@ export default function RequestNameChangeScreen() {
             borderColor="rgba(255,255,255,0.85)"
           >
             <View style={styles.buttonInner}>
-              <Text style={styles.primaryButtonText}>Вернуться в профиль</Text>
+              <Text style={styles.primaryButtonText}>{t("name.backToProfile")}</Text>
             </View>
           </Glass>
         </TouchableOpacity>
@@ -192,27 +189,24 @@ export default function RequestNameChangeScreen() {
             activeOpacity={0.8}
             style={styles.backLink}
           >
-            <Text style={styles.backLinkText}>← Назад</Text>
+            <Text style={styles.backLinkText}>{t("common.backArrow")}</Text>
           </TouchableOpacity>
 
-          <Text style={styles.title}>Изменение имени</Text>
-          <Text style={styles.subtitle}>МИНГИ·ТАУ</Text>
+          <Text style={styles.title}>{t("name.title")}</Text>
+          <Text style={styles.subtitle}>{t("common.brandCaps")}</Text>
 
           <Tekmet style={styles.tekmet} />
 
           <View style={styles.infoBlock}>
-            <Text style={styles.infoTitle}>СЕЙЧАС В ПРОФИЛЕ</Text>
+            <Text style={styles.infoTitle}>{t("name.current")}</Text>
             <Text style={styles.infoText}>{currentName}</Text>
           </View>
 
-          <Text style={styles.hint}>
-            Имя и фамилия меняются через заявку: модератор проверит запрос и
-            обновит профиль.
-          </Text>
+          <Text style={styles.hint}>{t("name.hint")}</Text>
 
           <Glass {...glassInputProps} style={styles.inputWrap}>
             <TextInput
-              placeholder="Новое имя *"
+              placeholder={t("name.first")}
               placeholderTextColor="#8FA79A"
               style={styles.input}
               value={requestedFirstName}
@@ -225,7 +219,7 @@ export default function RequestNameChangeScreen() {
 
           <Glass {...glassInputProps} style={styles.inputWrap}>
             <TextInput
-              placeholder="Новая фамилия *"
+              placeholder={t("name.last")}
               placeholderTextColor="#8FA79A"
               style={styles.input}
               value={requestedLastName}
@@ -238,7 +232,7 @@ export default function RequestNameChangeScreen() {
 
           <Glass {...glassInputProps} style={styles.inputWrap}>
             <TextInput
-              placeholder="Причина: например, опечатка при регистрации или смена фамилии *"
+              placeholder={t("name.reasonPh")}
               placeholderTextColor="#8FA79A"
               style={[styles.input, styles.textArea]}
               value={reason}
@@ -265,7 +259,7 @@ export default function RequestNameChangeScreen() {
                 borderWidth={0.75}
               >
                 <View style={styles.buttonInner}>
-                  <Text style={styles.secondaryButtonText}>Отмена</Text>
+                  <Text style={styles.secondaryButtonText}>{t("common.cancel")}</Text>
                 </View>
               </Glass>
             </TouchableOpacity>
@@ -287,7 +281,7 @@ export default function RequestNameChangeScreen() {
               >
                 <View style={styles.buttonInner}>
                   <Text style={styles.primaryButtonText}>
-                    {sending ? "Отправка..." : "Отправить"}
+                    {sending ? t("common.sending") : t("feedback.submit")}
                   </Text>
                 </View>
               </Glass>

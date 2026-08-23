@@ -1,3 +1,5 @@
+import { t } from "./i18nService";
+
 export function normalizeErrorMessage(error: unknown): string {
   if (error instanceof Error) {
     return error.message;
@@ -7,7 +9,7 @@ export function normalizeErrorMessage(error: unknown): string {
     return error;
   }
 
-  return 'Неизвестная ошибка';
+  return t("err.unknown");
 }
 
 export function translateAuthError(error: unknown): string {
@@ -19,28 +21,28 @@ export function translateAuthError(error: unknown): string {
     raw.includes('already been registered') ||
     raw.includes('email address is already registered')
   ) {
-    return 'Аккаунт с этой почтой уже существует';
+    return t("err.emailExists");
   }
 
   if (
     raw.includes('invalid login credentials') ||
     raw.includes('invalid credentials')
   ) {
-    return 'Неверная почта или пароль';
+    return t("err.badCredentials");
   }
 
   if (
     raw.includes('email not confirmed') ||
     raw.includes('confirm your email')
   ) {
-    return 'Подтвердите email перед входом';
+    return t("err.confirmEmail");
   }
 
   if (
     raw.includes('invalid email') ||
     raw.includes('email format is invalid')
   ) {
-    return 'Некорректный email';
+    return t("err.badEmail");
   }
 
   if (
@@ -48,7 +50,7 @@ export function translateAuthError(error: unknown): string {
     raw.includes('password is too weak') ||
     raw.includes('weak password')
   ) {
-    return 'Пароль слишком слабый';
+    return t("pass.error.weak");
   }
 
   if (
@@ -56,17 +58,17 @@ export function translateAuthError(error: unknown): string {
     raw.includes('network error') ||
     raw.includes('failed to fetch')
   ) {
-    return 'Проблема с интернет-соединением';
+    return t("err.network");
   }
 
   if (
     raw.includes('signup is disabled') ||
     raw.includes('signups not allowed')
   ) {
-    return 'Регистрация сейчас недоступна';
+    return t("err.signupDisabled");
   }
 
-  return message || 'Ошибка авторизации';
+  return message || t("err.auth");
 }
 
 export function translateInviteError(error: unknown): string {
@@ -77,14 +79,14 @@ export function translateInviteError(error: unknown): string {
     raw.includes('инвайт не найден') ||
     raw.includes('invite not found')
   ) {
-    return 'Инвайт-код не найден';
+    return t("err.inviteNotFound");
   }
 
   if (
     raw.includes('инвайт уже использован') ||
     raw.includes('invite already used')
   ) {
-    return 'Этот инвайт уже использован';
+    return t("err.inviteUsed");
   }
 
   if (
@@ -92,7 +94,7 @@ export function translateInviteError(error: unknown): string {
     raw.includes('invite is invalid') ||
     raw.includes('invite invalid')
   ) {
-    return 'Этот инвайт недействителен';
+    return t("err.inviteInvalid");
   }
 
   if (
@@ -100,8 +102,8 @@ export function translateInviteError(error: unknown): string {
     raw.includes('permission denied') ||
     raw.includes('not allowed')
   ) {
-    return 'Нет доступа к проверке инвайта';
+    return t("err.inviteNoAccess");
   }
 
-  return message || 'Ошибка проверки инвайта';
+  return message || t("err.inviteCheck");
 }

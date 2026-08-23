@@ -35,6 +35,7 @@ import {
 } from "../components/locations";
 import { Glass, Tekmet } from "../components/mingi";
 import { supabase } from "../lib/supabase";
+import { t, tCategory, useLanguage } from "../services/i18nService";
 import {
   DbUserProfile,
   getMyProfile,
@@ -77,6 +78,7 @@ const glassInputProps = {
 } as const;
 
 export default function EditProfileScreen() {
+  const lang = useLanguage(); // перерисовка при смене языка
   const [fontsLoaded] = useFonts({
     Philosopher_400Regular,
     Philosopher_700Bold,
@@ -184,7 +186,7 @@ export default function EditProfileScreen() {
     const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
 
     if (!permission.granted) {
-      setError("Нужно разрешение на доступ к галерее.");
+      setError(t("register.gallery.text"));
       return;
     }
 
@@ -226,12 +228,12 @@ export default function EditProfileScreen() {
       !profession.trim() ||
       !bio.trim()
     ) {
-      setError("Заполните все обязательные поля");
+      setError(t("register.error.fillAll"));
       return;
     }
 
     if (canEditNameDirectly && (!firstName.trim() || !lastName.trim())) {
-      setError("Имя и фамилия не могут быть пустыми");
+      setError(t("edit.error.emptyName"));
       return;
     }
 
@@ -240,18 +242,18 @@ export default function EditProfileScreen() {
     );
 
     if (!matchedCategory) {
-      setError("Выберите сферу деятельности из списка");
+      setError(t("register.error.categoryFromList"));
       return;
     }
 
     const normalizedBirthDate = normalizeBirthDate(birthDateInput);
     if (!normalizedBirthDate) {
-      setError("Дата рождения должна быть в формате ДД.ММ.ГГГГ");
+      setError(t("register.error.birthFormat"));
       return;
     }
 
     if (!user) {
-      setError("Профиль не найден");
+      setError(t("pending.error.noProfile"));
       return;
     }
 
@@ -328,8 +330,8 @@ export default function EditProfileScreen() {
         // Возвращаем на экран ожидания: там человек допишет сопроводительное
         // письмо (по желанию) и сам отправит анкету повторно.
         Alert.alert(
-          "Изменения сохранены",
-          "Теперь отправьте анкету повторно — при желании добавьте сообщение модератору.",
+          t("edit.saved.title"),
+          t("edit.saved.text"),
         );
 
         router.replace("/pending-approval");
@@ -339,7 +341,7 @@ export default function EditProfileScreen() {
       router.back();
     } catch (e) {
       const msg =
-        e instanceof Error ? e.message : "Не удалось сохранить изменения";
+        e instanceof Error ? e.message : t("edit.error.save");
       setError(msg);
     } finally {
       setSaving(false);
@@ -365,7 +367,7 @@ export default function EditProfileScreen() {
     return (
       <View style={styles.screen}>
         <View style={styles.emptyContainer}>
-          <Text style={styles.title}>Профиль не найден</Text>
+          <Text style={styles.title}>{t("pending.error.noProfile")}</Text>
         </View>
       </View>
     );
@@ -386,14 +388,12 @@ export default function EditProfileScreen() {
           keyboardDismissMode="on-drag"
           showsVerticalScrollIndicator={false}
         >
-          <Text style={styles.title}>Редактирование</Text>
-          <Text style={styles.subtitle}>МИНГИ·ТАУ</Text>
+          <Text style={styles.title}>{t("edit.title")}</Text>
+          <Text style={styles.subtitle}>{t("common.brandCaps")}</Text>
 
           <Tekmet style={styles.tekmet} />
 
-          <Text style={styles.requiredHint}>
-            Поля со звёздочкой (*) обязательны
-          </Text>
+          <Text style={styles.requiredHint}>{t("register.requiredHint")}</Text>
 
           <View style={styles.avatarWrapper}>
             <TouchableOpacity onPress={handlePickImage} activeOpacity={0.85}>
@@ -414,13 +414,11 @@ export default function EditProfileScreen() {
             )}
           </View>
 
-          <Text style={styles.avatarHint}>
-            Нажмите, чтобы изменить фото профиля
-          </Text>
+          <Text style={styles.avatarHint}>{t("edit.changePhoto")}</Text>
 
           <Glass {...glassInputProps} style={styles.inputWrap}>
             <TextInput
-              placeholder={canEditNameDirectly ? "Имя *" : "Имя"}
+              placeholder={canEditNameDirectly ? t("register.ph.firstName") : "Имя"}
               placeholderTextColor="#8FA79A"
               style={[styles.input, !canEditNameDirectly && styles.inputMuted]}
               value={firstName}
@@ -434,7 +432,7 @@ export default function EditProfileScreen() {
 
           <Glass {...glassInputProps} style={styles.inputWrap}>
             <TextInput
-              placeholder={canEditNameDirectly ? "Фамилия *" : "Фамилия"}
+              placeholder={canEditNameDirectly ? t("register.ph.lastName") : "Фамилия"}
               placeholderTextColor="#8FA79A"
               style={[styles.input, !canEditNameDirectly && styles.inputMuted]}
               value={lastName}
@@ -448,9 +446,7 @@ export default function EditProfileScreen() {
 
           {!canEditNameDirectly && (
             <>
-              <Text style={styles.hint}>
-                Имя и фамилия меняются только после модерации администрацией
-              </Text>
+              <Text style={styles.hint}>{t("edit.nameHint")}</Text>
 
               <TouchableOpacity
                 activeOpacity={0.85}
@@ -464,9 +460,7 @@ export default function EditProfileScreen() {
                   borderWidth={0.75}
                 >
                   <View style={styles.smallButtonInner}>
-                    <Text style={styles.smallButtonText}>
-                      Запросить изменение
-                    </Text>
+                    <Text style={styles.smallButtonText}>{t("edit.requestChange")}</Text>
                   </View>
                 </Glass>
               </TouchableOpacity>
@@ -475,7 +469,7 @@ export default function EditProfileScreen() {
 
           <Glass {...glassInputProps} style={styles.inputWrap}>
             <TextInput
-              placeholder="Электронная почта"
+              placeholder={t("login.email")}
               placeholderTextColor="#8FA79A"
               style={[styles.input, styles.inputMuted]}
               value={email}
@@ -483,9 +477,7 @@ export default function EditProfileScreen() {
             />
           </Glass>
 
-          <Text style={styles.hint}>
-            Смена почты подтверждается письмом на новый адрес
-          </Text>
+          <Text style={styles.hint}>{t("edit.emailHint")}</Text>
 
           <View style={styles.smallButtonsRow}>
             <TouchableOpacity
@@ -500,7 +492,7 @@ export default function EditProfileScreen() {
                 borderWidth={0.75}
               >
                 <View style={styles.smallButtonInner}>
-                  <Text style={styles.smallButtonText}>Сменить почту</Text>
+                  <Text style={styles.smallButtonText}>{t("edit.changeEmail")}</Text>
                 </View>
               </Glass>
             </TouchableOpacity>
@@ -517,7 +509,7 @@ export default function EditProfileScreen() {
                 borderWidth={0.75}
               >
                 <View style={styles.smallButtonInner}>
-                  <Text style={styles.smallButtonText}>Сменить пароль</Text>
+                  <Text style={styles.smallButtonText}>{t("edit.changePassword")}</Text>
                 </View>
               </Glass>
             </TouchableOpacity>
@@ -525,7 +517,7 @@ export default function EditProfileScreen() {
 
           <Glass {...glassInputProps} style={styles.inputWrap}>
             <TextInput
-              placeholder="Номер телефона *"
+              placeholder={t("register.ph.phone")}
               placeholderTextColor="#8FA79A"
               style={styles.input}
               value={phone}
@@ -540,12 +532,8 @@ export default function EditProfileScreen() {
           <Glass {...glassInputProps} style={styles.inputWrap}>
             <View style={styles.switchRow}>
               <View style={styles.switchTextWrap}>
-                <Text style={styles.switchTitle}>
-                  Показывать номер в профиле
-                </Text>
-                <Text style={styles.switchHint}>
-                  Выключите, чтобы номер был доступен только администрации
-                </Text>
+                <Text style={styles.switchTitle}>{t("register.phoneVisible.title")}</Text>
+                <Text style={styles.switchHint}>{t("register.phoneVisible.hint")}</Text>
               </View>
               <Switch
                 value={phoneVisible}
@@ -559,10 +547,8 @@ export default function EditProfileScreen() {
           <Glass {...glassInputProps} style={styles.inputWrap}>
             <View style={styles.switchRow}>
               <View style={styles.switchTextWrap}>
-                <Text style={styles.switchTitle}>У меня есть WhatsApp</Text>
-                <Text style={styles.switchHint}>
-                  При открытом номере в анкете появится кнопка WhatsApp
-                </Text>
+                <Text style={styles.switchTitle}>{t("register.whatsapp.title")}</Text>
+                <Text style={styles.switchHint}>{t("register.whatsapp.hint")}</Text>
               </View>
               <Switch
                 value={hasWhatsapp}
@@ -575,7 +561,7 @@ export default function EditProfileScreen() {
 
           <Glass {...glassInputProps} style={styles.inputWrap}>
             <TextInput
-              placeholder="Дата рождения (ДД.ММ.ГГГГ) *"
+              placeholder={t("register.ph.birthDate")}
               placeholderTextColor="#8FA79A"
               style={styles.input}
               value={birthDateInput}
@@ -612,7 +598,7 @@ export default function EditProfileScreen() {
                   ]}
                   numberOfLines={1}
                 >
-                  {category || "Сфера деятельности *"}
+                  {category ? tCategory(category) : t("register.ph.category")}
                 </Text>
                 <Text style={styles.selectChevron}>
                   {showCategoryOptions ? "▴" : "▾"}
@@ -644,7 +630,7 @@ export default function EditProfileScreen() {
                     ]}
                   >
                     {item === category ? "✓ " : ""}
-                    {item}
+                    {tCategory(item)}
                   </Text>
                 </TouchableOpacity>
               ))}
@@ -653,7 +639,7 @@ export default function EditProfileScreen() {
 
           <Glass {...glassInputProps} style={styles.inputWrap}>
             <TextInput
-              placeholder="Профессия *"
+              placeholder={t("register.ph.profession")}
               placeholderTextColor="#8FA79A"
               style={styles.input}
               value={profession}
@@ -666,7 +652,7 @@ export default function EditProfileScreen() {
 
           <Glass {...glassInputProps} style={styles.inputWrap}>
             <TextInput
-              placeholder="Чем могу быть полезен *"
+              placeholder={t("register.ph.bio")}
               placeholderTextColor="#8FA79A"
               style={[styles.input, styles.textArea]}
               value={bio}
@@ -708,7 +694,7 @@ export default function EditProfileScreen() {
 
           <Glass {...glassInputProps} style={styles.inputWrap}>
             <TextInput
-              placeholder="Дополнительные сведения (портфолио, отзывы, ссылки)"
+              placeholder={t("edit.ph.extra")}
               placeholderTextColor="#8FA79A"
               style={[styles.input, styles.textArea]}
               value={extraInfo}
@@ -735,7 +721,7 @@ export default function EditProfileScreen() {
                 borderWidth={0.75}
               >
                 <View style={styles.buttonInner}>
-                  <Text style={styles.secondaryButtonText}>Отмена</Text>
+                  <Text style={styles.secondaryButtonText}>{t("common.cancel")}</Text>
                 </View>
               </Glass>
             </TouchableOpacity>
@@ -757,7 +743,7 @@ export default function EditProfileScreen() {
               >
                 <View style={styles.buttonInner}>
                   <Text style={styles.primaryButtonText}>
-                    {saving ? "Сохранение..." : "Сохранить"}
+                    {saving ? t("edit.saving") : t("edit.save")}
                   </Text>
                 </View>
               </Glass>

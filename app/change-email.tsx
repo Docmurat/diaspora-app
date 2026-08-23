@@ -17,10 +17,11 @@ import {
 } from "react-native";
 import { Glass, Tekmet } from "../components/mingi";
 import { supabase } from "../lib/supabase";
+import { t, useLanguage } from "../services/i18nService";
 
 function getChangeEmailErrorMessage(message?: string) {
   if (!message) {
-    return "Не удалось изменить почту";
+    return t("mail.error.change");
   }
 
   const normalized = message.toLowerCase();
@@ -30,26 +31,26 @@ function getChangeEmailErrorMessage(message?: string) {
       "a user with this email address has already been registered",
     )
   ) {
-    return "Пользователь с такой электронной почтой уже зарегистрирован.";
+    return t("mail.error.taken");
   }
 
   if (normalized.includes("unable to validate email address")) {
-    return "Введите корректную электронную почту.";
+    return t("mail.error.invalid");
   }
 
   if (normalized.includes("email rate limit exceeded")) {
-    return "Слишком много попыток. Попробуйте немного позже.";
+    return t("mail.error.rate");
   }
 
   if (normalized.includes("same email")) {
-    return "Вы указали текущую электронную почту.";
+    return t("mail.error.same");
   }
 
   if (normalized.includes("for security purposes")) {
-    return "Из соображений безопасности попробуйте выполнить действие позже.";
+    return t("mail.error.security");
   }
 
-  return "Не удалось отправить запрос на смену почты.";
+  return t("mail.error.request");
 }
 
 const glassInputProps = {
@@ -60,6 +61,7 @@ const glassInputProps = {
 } as const;
 
 export default function ChangeEmailScreen() {
+  const lang = useLanguage(); // перерисовка при смене языка
   const [fontsLoaded] = useFonts({
     Philosopher_400Regular,
     Philosopher_700Bold,
@@ -74,13 +76,13 @@ export default function ChangeEmailScreen() {
     const email = newEmail.trim().toLowerCase();
 
     if (!email) {
-      setError("Введите новую почту");
+      setError(t("mail.error.empty"));
       return;
     }
 
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(email)) {
-      setError("Введите корректную почту");
+      setError(t("mail.error.invalid"));
       return;
     }
 
@@ -99,7 +101,7 @@ export default function ChangeEmailScreen() {
       }
 
       setSuccessMessage(
-        "Запрос отправлен. Подтвердите смену почты через письмо, которое пришло на ваш email.",
+        t("mail.success"),
       );
     } catch (e: any) {
       console.log("Ошибка смены почты:", e);
@@ -123,19 +125,16 @@ export default function ChangeEmailScreen() {
         keyboardVerticalOffset={Platform.OS === "ios" ? 20 : 0}
       >
         <View style={styles.content}>
-          <Text style={styles.title}>Смена почты</Text>
-          <Text style={styles.subtitle}>МИНГИ·ТАУ</Text>
+          <Text style={styles.title}>{t("mail.title")}</Text>
+          <Text style={styles.subtitle}>{t("common.brandCaps")}</Text>
 
           <Tekmet style={styles.tekmet} />
 
-          <Text style={styles.description}>
-            Укажите новую электронную почту и подтвердите изменение через
-            письмо, которое придёт на неё.
-          </Text>
+          <Text style={styles.description}>{t("mail.desc")}</Text>
 
           <Glass {...glassInputProps} style={styles.inputWrap}>
             <TextInput
-              placeholder="Новая электронная почта"
+              placeholder={t("mail.ph")}
               placeholderTextColor="#8FA79A"
               style={styles.input}
               value={newEmail}
@@ -170,14 +169,14 @@ export default function ChangeEmailScreen() {
             >
               <View style={styles.buttonInner}>
                 <Text style={styles.primaryButtonText}>
-                  {loading ? "Отправка..." : "Сменить почту"}
+                  {loading ? t("common.sending") : t("edit.changeEmail")}
                 </Text>
               </View>
             </Glass>
           </TouchableOpacity>
 
           <TouchableOpacity onPress={() => router.back()} activeOpacity={0.8}>
-            <Text style={styles.link}>Назад</Text>
+            <Text style={styles.link}>{t("common.back")}</Text>
           </TouchableOpacity>
         </View>
       </KeyboardAvoidingView>

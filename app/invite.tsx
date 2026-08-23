@@ -20,6 +20,7 @@ import { Glass, Tekmet } from "../components/mingi";
 import { translateInviteError } from "../services/errorService";
 import { validateInviteCode } from "../services/inviteService";
 
+import { t, useLanguage } from "../services/i18nService";
 const glassInputProps = {
   radius: 16,
   tintColor: "rgba(255,255,255,0.95)",
@@ -28,6 +29,7 @@ const glassInputProps = {
 } as const;
 
 export default function InviteScreen() {
+  const lang = useLanguage(); // перерисовка при смене языка
   const [fontsLoaded] = useFonts({
     Philosopher_400Regular,
     Philosopher_700Bold,
@@ -41,7 +43,7 @@ export default function InviteScreen() {
     const normalized = code.trim().toUpperCase();
 
     if (!normalized) {
-      setError("Введите инвайт-код");
+      setError(t("invite.error.empty"));
       return;
     }
 
@@ -76,14 +78,14 @@ export default function InviteScreen() {
         behavior={Platform.OS === "ios" ? "padding" : undefined}
       >
         <View style={styles.content}>
-          <Text style={styles.title}>Приглашение</Text>
-          <Text style={styles.subtitle}>МИНГИ·ТАУ</Text>
+          <Text style={styles.title}>{t("invite.title")}</Text>
+          <Text style={styles.subtitle}>{t("common.brandCaps")}</Text>
 
           <Tekmet style={styles.tekmet} />
 
           <Glass {...glassInputProps} style={styles.inputWrap}>
             <TextInput
-              placeholder="Инвайт-код"
+              placeholder={t("invite.codePlaceholder")}
               placeholderTextColor="#8FA79A"
               style={styles.input}
               value={code}
@@ -114,19 +116,19 @@ export default function InviteScreen() {
                 {checking ? (
                   <ActivityIndicator color="#FFFFFF" />
                 ) : (
-                  <Text style={styles.primaryButtonText}>Продолжить</Text>
+                  <Text style={styles.primaryButtonText}>{t("common.continue")}</Text>
                 )}
               </View>
             </Glass>
           </TouchableOpacity>
 
-          <Text style={styles.hint}>Нет инвайта?</Text>
+          <Text style={styles.hint}>{t("invite.noInvite")}</Text>
 
           <TouchableOpacity
             onPress={() => router.push("/request-invite")}
             activeOpacity={0.8}
           >
-            <Text style={styles.link}>Оставить заявку</Text>
+            <Text style={styles.link}>{t("invite.leaveRequest")}</Text>
           </TouchableOpacity>
         </View>
       </KeyboardAvoidingView>

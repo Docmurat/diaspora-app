@@ -35,6 +35,7 @@ import { DbUserProfile, getMyProfile } from "../../services/profileService";
 import { signOutUser } from "../../services/sessionService";
 import { getAgeFromBirthDate } from "../../store/user";
 
+import { t, tCategory, useLanguage } from "../../services/i18nService";
 type RowProps = {
   icon: keyof typeof Ionicons.glyphMap;
   label: string;
@@ -74,6 +75,12 @@ function SectionRow({ icon, label, badge, onPress, last, danger }: RowProps) {
 }
 
 export default function ProfileScreen() {
+  const lang = useLanguage(); // перерисовка при смене языка
+
+  const copyLabel = (key: string) => {
+    const s = t(key);
+    return s.charAt(0) + s.slice(1).toLowerCase();
+  };
   const [fontsLoaded] = useFonts({
     Philosopher_400Regular,
     Philosopher_700Bold,
@@ -110,7 +117,7 @@ export default function ProfileScreen() {
       setQualRequestSent(true);
     } catch (e: any) {
       console.log("Запрос квалификации не ушёл:", e);
-      setQualError("Не удалось отправить запрос. Попробуйте позже.");
+      setQualError(t("qual.error"));
     } finally {
       setQualRequesting(false);
     }
@@ -176,9 +183,9 @@ export default function ProfileScreen() {
 
     try {
       await Clipboard.setStringAsync(text);
-      Alert.alert("Скопировано", `${label} скопирован(о)`);
+      Alert.alert(t("profile.copy.done"), t("cab.copy.done", { label }));
     } catch (e) {
-      Alert.alert("Ошибка", "Не удалось скопировать");
+      Alert.alert(t("common.error"), t("cab.copy.fail"));
     }
   };
 
@@ -191,7 +198,7 @@ export default function ProfileScreen() {
       const supported = await Linking.canOpenURL(url);
       if (supported) await Linking.openURL(url);
     } catch (e) {
-      Alert.alert("Ошибка", "Не удалось открыть почту");
+      Alert.alert(t("common.error"), t("profile.open.mail"));
     }
   };
 
@@ -212,7 +219,7 @@ export default function ProfileScreen() {
 
       await Linking.openURL(canOpenApp ? appUrl : `https://t.me/${raw}`);
     } catch (e) {
-      Alert.alert("Ошибка", "Не удалось открыть Telegram");
+      Alert.alert(t("common.error"), "Не удалось открыть Telegram");
     }
   };
 
@@ -242,7 +249,7 @@ export default function ProfileScreen() {
         canOpenApp ? appUrl : `https://instagram.com/${username}`,
       );
     } catch (e) {
-      Alert.alert("Ошибка", "Не удалось открыть Instagram");
+      Alert.alert(t("common.error"), t("profile.open.instagram"));
     }
   };
 
@@ -333,10 +340,8 @@ export default function ProfileScreen() {
       <View style={styles.centerState}>
         <StatusBar style="dark" />
 
-        <Text style={styles.stateTitle}>Профиль не найден</Text>
-        <Text style={styles.stateText}>
-          Войдите в аккаунт или зарегистрируйтесь заново.
-        </Text>
+        <Text style={styles.stateTitle}>{t("common.notFound.member")}</Text>
+        <Text style={styles.stateText}>{t("cab.notFoundHint")}</Text>
 
         <TouchableOpacity
           style={styles.primaryShadow}
@@ -349,7 +354,7 @@ export default function ProfileScreen() {
             borderColor="rgba(255,255,255,0.85)"
           >
             <View style={styles.buttonInner}>
-              <Text style={styles.primaryButtonText}>На главный экран</Text>
+              <Text style={styles.primaryButtonText}>{t("cab.toHome")}</Text>
             </View>
           </Glass>
         </TouchableOpacity>
@@ -358,15 +363,15 @@ export default function ProfileScreen() {
   }
 
   const fullName =
-    `${user.first_name || ""} ${user.last_name || ""}`.trim() || "Без имени";
+    `${user.first_name || ""} ${user.last_name || ""}`.trim() || t("profile.noName");
   const age = getAgeFromBirthDate(user.birth_date || "");
   const isAdmin = user.role === "owner" || user.role === "moderator";
 
   const roleBadgeText =
     user.role === "owner"
-      ? "ОСНОВАТЕЛЬ"
+      ? t("cab.badge.founder")
       : user.role === "moderator"
-        ? "МОДЕРАТОР"
+        ? t("cab.badge.moderator")
         : null;
 
   return (
@@ -386,7 +391,7 @@ export default function ProfileScreen() {
             activeOpacity={0.8}
             style={styles.backLink}
           >
-            <Text style={styles.backLinkText}>← Назад</Text>
+            <Text style={styles.backLinkText}>{t("common.backArrow")}</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
@@ -408,10 +413,10 @@ export default function ProfileScreen() {
 
           <Text style={styles.subInfo}>
             {[user.category, user.city].filter(Boolean).join(", ") ||
-              "Не указано"}
+              t("profile.notSpecified")}
           </Text>
 
-          {!!age && <Text style={styles.age}>{age} лет</Text>}
+          {!!age && <Text style={styles.age}>{t("common.ageSuffix", { возраст: age })}</Text>}
 
           {!!roleBadgeText && (
             <View style={styles.roleBadge}>
@@ -431,9 +436,7 @@ export default function ProfileScreen() {
               borderWidth={0.75}
             >
               <View style={styles.buttonInner}>
-                <Text style={styles.secondaryButtonText}>
-                  Редактировать профиль
-                </Text>
+                <Text style={styles.secondaryButtonText}>{t("cab.editProfile")}</Text>
               </View>
             </Glass>
           </TouchableOpacity>
@@ -444,20 +447,20 @@ export default function ProfileScreen() {
             {/* Красным с сердечком — по решению владельца (Веха 60) */}
             <SectionRow
               icon="heart"
-              label="О проекте и поддержка"
+              label={t("cab.menu.about")}
               danger
               onPress={() => router.push("/about-project" as any)}
             />
 
             <SectionRow
               icon="reader-outline"
-              label="Мои посты"
+              label={t("cab.menu.myPosts")}
               onPress={() => router.push("/my-help-posts" as any)}
             />
 
             <SectionRow
               icon="mail-open-outline"
-              label="Мои инвайты"
+              label={t("cab.menu.myInvites")}
               onPress={() => router.push("/invites" as any)}
             />
 
@@ -472,19 +475,19 @@ export default function ProfileScreen() {
 
             <SectionRow
               icon="settings-outline"
-              label="Настройки"
+              label={t("cab.menu.settings")}
               onPress={() => router.push("/settings" as any)}
             />
 
             <SectionRow
               icon="document-text-outline"
-              label="Пользовательское соглашение"
+              label={t("cab.menu.terms")}
               onPress={() => router.push("/terms")}
             />
 
             <SectionRow
               icon="lock-closed-outline"
-              label="Политика конфиденциальности"
+              label={t("cab.menu.privacy")}
               onPress={() => router.push("/privacy")}
             />
 
@@ -492,10 +495,10 @@ export default function ProfileScreen() {
               icon="log-out-outline"
               label={
                 loggingOut
-                  ? "Выходим..."
+                  ? t("cab.logout.doing")
                   : confirmLogout
-                    ? "Нажмите ещё раз, чтобы выйти"
-                    : "Выйти из аккаунта"
+                    ? t("cab.logout.confirm")
+                    : t("restricted.logoutFull")
               }
               danger
               onPress={handleLogout}
@@ -503,18 +506,18 @@ export default function ProfileScreen() {
             />
           </View>
 
-          <Text style={styles.blockLabel}>МОИ ДАННЫЕ</Text>
+          <Text style={styles.blockLabel}>{t("cab.myData")}</Text>
 
           <TouchableOpacity
             activeOpacity={0.9}
             onLongPress={() =>
-              handleCopyText("Сфера деятельности", user.category)
+              handleCopyText(t("cab.copy.category"), user.category)
             }
             delayLongPress={300}
             style={styles.infoBlock}
           >
-            <Text style={styles.infoTitle}>СФЕРА ДЕЯТЕЛЬНОСТИ</Text>
-            <Text style={styles.infoText}>{user.category || "—"}</Text>
+            <Text style={styles.infoTitle}>{t("cab.h.category")}</Text>
+            <Text style={styles.infoText}>{user.category ? tCategory(user.category) : "—"}</Text>
 
             {/* Квалификация (Веха 57): только в чувствительных категориях
                 Стены. Подтверждена — строка; нет — кнопка «Запросить»
@@ -524,16 +527,12 @@ export default function ProfileScreen() {
               ((user as any).qualification_confirmed_at ? (
                 <View style={styles.qualRow}>
                   <Ionicons name="shield-checkmark" size={15} color="#69B78D" />
-                  <Text style={styles.qualOkText}>
-                    Квалификация подтверждена — вам доступны скрытые материалы
-                    Стены помощи
-                  </Text>
+                  <Text style={styles.qualOkText}>{t("qual.confirmed")}</Text>
                 </View>
               ) : (
                 <View>
                   <Text style={styles.qualHintText}>
-                    Скрытые материалы Стены помощи в категории «{user.category}»
-                    доступны подтверждённым специалистам.
+                    {t("qual.hint", { категория: tCategory(user.category) })}
                   </Text>
                   <TouchableOpacity
                     style={[
@@ -552,10 +551,10 @@ export default function ProfileScreen() {
                       ]}
                     >
                       {qualRequesting
-                        ? "Отправляем…"
+                        ? t("qual.sending")
                         : qualRequestSent
-                          ? "Запрос отправлен — ответ придёт в колокольчик"
-                          : "Запросить подтверждение квалификации"}
+                          ? t("qual.sent")
+                          : t("qual.request")}
                     </Text>
                   </TouchableOpacity>
                   {!!qualError && (
@@ -567,11 +566,11 @@ export default function ProfileScreen() {
 
           <TouchableOpacity
             activeOpacity={0.9}
-            onLongPress={() => handleCopyText("Профессия", user.profession)}
+            onLongPress={() => handleCopyText(copyLabel("profile.h.profession"), user.profession)}
             delayLongPress={300}
             style={styles.infoBlock}
           >
-            <Text style={styles.infoTitle}>ПРОФЕССИЯ</Text>
+            <Text style={styles.infoTitle}>{t("profile.h.profession")}</Text>
             <Text style={styles.infoText}>{user.profession || "—"}</Text>
           </TouchableOpacity>
 
@@ -579,14 +578,14 @@ export default function ProfileScreen() {
             activeOpacity={0.9}
             onLongPress={() =>
               handleCopyText(
-                "Локация",
+                copyLabel("profile.h.location"),
                 [user.city, user.country].filter(Boolean).join(", "),
               )
             }
             delayLongPress={300}
             style={styles.infoBlock}
           >
-            <Text style={styles.infoTitle}>ЛОКАЦИЯ</Text>
+            <Text style={styles.infoTitle}>{t("profile.h.location")}</Text>
             <Text style={styles.infoText}>
               {[user.city, user.country].filter(Boolean).join(", ") || "—"}
             </Text>
@@ -594,11 +593,11 @@ export default function ProfileScreen() {
 
           <TouchableOpacity
             activeOpacity={0.9}
-            onLongPress={() => handleCopyText("Описание", user.bio)}
+            onLongPress={() => handleCopyText(t("profile.h.copyBio"), user.bio)}
             delayLongPress={300}
             style={styles.infoBlock}
           >
-            <Text style={styles.infoTitle}>ЧЕМ МОГУ БЫТЬ ПОЛЕЗЕН</Text>
+            <Text style={styles.infoTitle}>{t("cab.h.bio")}</Text>
             {renderTextWithLinks(user.bio)}
           </TouchableOpacity>
 
@@ -606,29 +605,29 @@ export default function ProfileScreen() {
             <TouchableOpacity
               activeOpacity={0.9}
               onPress={handleOpenEmail}
-              onLongPress={() => handleCopyText("Почта", user.email)}
+              onLongPress={() => handleCopyText(copyLabel("profile.h.email"), user.email)}
               delayLongPress={300}
               style={styles.infoBlock}
             >
-              <Text style={styles.infoTitle}>ПОЧТА</Text>
+              <Text style={styles.infoTitle}>{t("profile.h.email")}</Text>
               <Text style={styles.linkText}>{user.email}</Text>
             </TouchableOpacity>
           )}
 
           <TouchableOpacity
             activeOpacity={0.9}
-            onLongPress={() => handleCopyText("Телефон", user.phone)}
+            onLongPress={() => handleCopyText(copyLabel("profile.h.phone"), user.phone)}
             delayLongPress={300}
             style={styles.infoBlock}
           >
-            <Text style={styles.infoTitle}>ТЕЛЕФОН</Text>
+            <Text style={styles.infoTitle}>{t("profile.h.phone")}</Text>
             <Text style={styles.infoText}>
               {formatPhone(user.phone) || "—"}
             </Text>
             <Text style={styles.infoHint}>
               {user.phone_visible
-                ? "Номер отображается в профиле."
-                : "Номер скрыт от пользователей и доступен только администрации."}
+                ? t("cab.phoneShown")
+                : t("cab.phoneHidden")}
             </Text>
           </TouchableOpacity>
 
@@ -664,12 +663,12 @@ export default function ProfileScreen() {
             <TouchableOpacity
               activeOpacity={1}
               onLongPress={() =>
-                handleCopyText("Дополнительно", user.extra_info)
+                handleCopyText(copyLabel("profile.h.extra"), user.extra_info)
               }
               delayLongPress={300}
               style={styles.infoBlock}
             >
-              <Text style={styles.infoTitle}>ДОПОЛНИТЕЛЬНО</Text>
+              <Text style={styles.infoTitle}>{t("profile.h.extra")}</Text>
               {renderTextWithLinks(user.extra_info)}
             </TouchableOpacity>
           )}

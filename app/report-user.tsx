@@ -20,6 +20,7 @@ import {
 import { Glass, Tekmet } from "../components/mingi";
 import { createComplaint } from "../services/complaintsService";
 
+import { t, useLanguage } from "../services/i18nService";
 const glassInputProps = {
   radius: 16,
   tintColor: "rgba(255,255,255,0.95)",
@@ -28,6 +29,7 @@ const glassInputProps = {
 } as const;
 
 export default function ReportUserScreen() {
+  const lang = useLanguage(); // перерисовка при смене языка
   const [fontsLoaded] = useFonts({
     Philosopher_400Regular,
     Philosopher_700Bold,
@@ -44,7 +46,7 @@ export default function ReportUserScreen() {
 
   const handleSubmit = async () => {
     if (!reason.trim()) {
-      setError("Опишите, что произошло");
+      setError(t("report.error.empty"));
       return;
     }
 
@@ -58,7 +60,7 @@ export default function ReportUserScreen() {
 
       setSuccess(true);
     } catch (e) {
-      const message = e instanceof Error ? e.message : "Ошибка отправки жалобы";
+      const message = e instanceof Error ? e.message : t("report.error.send");
       setError(message);
     } finally {
       setSending(false);
@@ -75,15 +77,12 @@ export default function ReportUserScreen() {
         <StatusBar style="dark" />
 
         <View style={styles.center}>
-          <Text style={styles.title}>Жалоба отправлена</Text>
-          <Text style={styles.subtitle}>МИНГИ·ТАУ</Text>
+          <Text style={styles.title}>{t("report.success.title")}</Text>
+          <Text style={styles.subtitle}>{t("common.brandCaps")}</Text>
 
           <Tekmet style={styles.tekmet} />
 
-          <Text style={styles.successText}>
-            Модераторы рассмотрят обращение и сообщат вам о решении. Спасибо,
-            что помогаете беречь сообщество.
-          </Text>
+          <Text style={styles.successText}>{t("report.success.text")}</Text>
 
           <TouchableOpacity
             activeOpacity={0.85}
@@ -96,7 +95,7 @@ export default function ReportUserScreen() {
               borderColor="rgba(255,255,255,0.85)"
             >
               <View style={styles.buttonInner}>
-                <Text style={styles.primaryButtonText}>Вернуться</Text>
+                <Text style={styles.primaryButtonText}>{t("report.return")}</Text>
               </View>
             </Glass>
           </TouchableOpacity>
@@ -123,26 +122,22 @@ export default function ReportUserScreen() {
             activeOpacity={0.8}
             style={styles.backLink}
           >
-            <Text style={styles.backLinkText}>← Назад</Text>
+            <Text style={styles.backLinkText}>{t("common.backArrow")}</Text>
           </TouchableOpacity>
 
-          <Text style={styles.title}>Жалоба</Text>
-          <Text style={styles.subtitle}>МИНГИ·ТАУ</Text>
+          <Text style={styles.title}>{t("report.title")}</Text>
+          <Text style={styles.subtitle}>{t("common.brandCaps")}</Text>
 
           <Tekmet style={styles.tekmet} />
 
           {!!targetUserName && (
             <View style={styles.targetCard}>
-              <Text style={styles.targetLabel}>ЖАЛОБА НА УЧАСТНИКА</Text>
+              <Text style={styles.targetLabel}>{t("report.targetLabel")}</Text>
               <Text style={styles.targetName}>{targetUserName}</Text>
             </View>
           )}
 
-          <Text style={styles.description}>
-            Опишите, что произошло, как можно конкретнее: где и когда, какие
-            слова или действия вас задели. Модератору важны подробности — по
-            короткой жалобе он не сможет разобраться.
-          </Text>
+          <Text style={styles.description}>{t("report.description")}</Text>
 
           <Glass {...glassInputProps} style={styles.inputWrap}>
             <TextInput
@@ -152,7 +147,7 @@ export default function ReportUserScreen() {
                 setReason(text);
                 setError("");
               }}
-              placeholder="Например: в переписке оскорбил(а) мою семью"
+              placeholder={t("report.ph")}
               placeholderTextColor="#8FA79A"
               multiline
               textAlignVertical="top"
@@ -177,20 +172,17 @@ export default function ReportUserScreen() {
             >
               <View style={styles.buttonInner}>
                 <Text style={styles.primaryButtonText}>
-                  {sending ? "Отправка..." : "Отправить жалобу"}
+                  {sending ? t("common.sending") : t("report.submit")}
                 </Text>
               </View>
             </Glass>
           </TouchableOpacity>
 
           <TouchableOpacity onPress={() => router.back()} activeOpacity={0.8}>
-            <Text style={styles.cancelLink}>Отмена</Text>
+            <Text style={styles.cancelLink}>{t("common.cancel")}</Text>
           </TouchableOpacity>
 
-          <Text style={styles.privacyNote}>
-            Жалобу видят только модераторы. Участник, на которого вы
-            пожаловались, не узнает, кто её написал.
-          </Text>
+          <Text style={styles.privacyNote}>{t("report.privacyNote")}</Text>
         </ScrollView>
       </KeyboardAvoidingView>
     </View>

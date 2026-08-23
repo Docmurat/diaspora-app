@@ -33,6 +33,7 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import { t, tCategory, useLanguage } from "../services/i18nService";
 import {
   HELP_CATEGORIES,
   HelpPostType,
@@ -49,8 +50,8 @@ import {
 function formatSize(bytes: number | null): string {
   if (!bytes) return "";
   if (bytes >= 1024 * 1024)
-    return `${(bytes / 1024 / 1024).toFixed(1).replace(".", ",")} МБ`;
-  return `${Math.max(1, Math.round(bytes / 1024))} КБ`;
+    return `${(bytes / 1024 / 1024).toFixed(1).replace(".", ",")} ${t("chat.unit.mb")}`;
+  return `${Math.max(1, Math.round(bytes / 1024))} ${t("chat.unit.kb")}`;
 }
 
 // Фото перед отправкой ужимаем до 1600 px — правило вложений (Веха 49).
@@ -77,6 +78,7 @@ async function preparePhoto(asset: {
 type PickedFile = NewHelpFile & { isImage: boolean };
 
 export default function NewHelpPostScreen() {
+  const lang = useLanguage(); // перерисовка при смене языка
   const insets = useSafeAreaInsets();
   const [fontsLoaded] = useFonts({
     Philosopher_400Regular,
@@ -129,7 +131,7 @@ export default function NewHelpPostScreen() {
 
     if (room <= 0) {
       setError(
-        `${isHidden ? "В скрытом блоке" : "Фото"} — не больше ${MAX_PHOTOS_PER_BLOCK} фото`,
+        `${isHidden ? "В скрытом блоке" : t("newPost.photosLabel")} — не больше ${MAX_PHOTOS_PER_BLOCK} фото`,
       );
       return;
     }
@@ -163,12 +165,12 @@ export default function NewHelpPostScreen() {
 
       if (picked.assets.length > room) {
         setError(
-          `Добавлено ${room} из ${picked.assets.length}: не больше ${MAX_PHOTOS_PER_BLOCK} фото в блоке`,
+          t("newPost.limit.photosAdded", { X: room, Y: picked.assets.length, N: MAX_PHOTOS_PER_BLOCK }),
         );
       }
     } catch (e) {
       console.log("Фото не выбралось:", e);
-      setError("Не удалось добавить фото, попробуйте ещё раз");
+      setError(t("newPost.error.addPhoto"));
     }
   };
 
@@ -222,15 +224,15 @@ export default function NewHelpPostScreen() {
       setFiles((prev) => [...prev, ...accepted]);
 
       if (skippedBig > 0) {
-        setError(`Пропущено ${skippedBig}: файл больше ${MAX_FILE_MB} МБ`);
+        setError(t("newPost.limit.fileBig", { X: skippedBig, N: MAX_FILE_MB }));
       } else if (skippedLimit > 0) {
         setError(
-          `Пропущено ${skippedLimit}: не больше ${MAX_FILES_PER_BLOCK} файлов в блоке`,
+          t("newPost.limit.filesMany", { X: skippedLimit, N: MAX_FILES_PER_BLOCK }),
         );
       }
     } catch (e) {
       console.log("Файл не выбрался:", e);
-      setError("Не удалось добавить файл, попробуйте ещё раз");
+      setError(t("newPost.error.addFile"));
     }
   };
 
@@ -302,7 +304,7 @@ export default function NewHelpPostScreen() {
       router.back();
     } catch (e: any) {
       console.log("Пост не создался:", e);
-      setError(e?.message || "Не удалось опубликовать пост");
+      setError(e?.message || t("newPost.error.publish"));
       setSubmitting(false);
     }
   };
@@ -327,7 +329,7 @@ export default function NewHelpPostScreen() {
           <Ionicons name="chevron-back" size={26} color="#3F6B5B" />
         </TouchableOpacity>
 
-        <Text style={styles.headerTitle}>Новый пост</Text>
+        <Text style={styles.headerTitle}>{t("newPost.title")}</Text>
 
         <View style={styles.backButton} />
       </View>
@@ -338,13 +340,13 @@ export default function NewHelpPostScreen() {
         showsVerticalScrollIndicator={false}
       >
         {/* Тип поста */}
-        <Text style={styles.label}>Что это? *</Text>
+        <Text style={styles.label}>{t("newPost.whatIsIt")}</Text>
 
         <View style={styles.typeRow}>
           {(
             [
-              ["question", "Вопрос", "Прошу совета или помощи"],
-              ["offer", "Предложение", "Готов(а) помочь или поделиться"],
+              ["question", t("newPost.type.question"), t("newPost.type.questionHint")],
+              ["offer", t("newPost.type.offer"), t("newPost.type.offerHint")],
             ] as const
           ).map(([value, title, hint]) => {
             const active = postType === value;
@@ -378,7 +380,7 @@ export default function NewHelpPostScreen() {
         </View>
 
         {/* Категория */}
-        <Text style={styles.label}>Категория *</Text>
+        <Text style={styles.label}>{t("newPost.category")}</Text>
 
         <View style={styles.chipsWrap}>
           {HELP_CATEGORIES.map((item) => {
@@ -394,7 +396,7 @@ export default function NewHelpPostScreen() {
                 <Text
                   style={[styles.chipText, active && styles.chipTextActive]}
                 >
-                  {item}
+                  {tCategory(item)}
                 </Text>
               </TouchableOpacity>
             );
@@ -402,12 +404,12 @@ export default function NewHelpPostScreen() {
         </View>
 
         {/* Текст */}
-        <Text style={styles.label}>Текст поста *</Text>
+        <Text style={styles.label}>{t("newPost.text")}</Text>
 
         <TextInput
           style={styles.bodyInput}
           multiline
-          placeholder="Опишите вопрос или предложение…"
+          placeholder={t("newPost.textPh")}
           placeholderTextColor="#8FA79A"
           value={body}
           onChangeText={(v) => {
@@ -418,7 +420,7 @@ export default function NewHelpPostScreen() {
 
         {/* Открытые вложения: фото коллажем, файлы строками (Веха 55) */}
         <View style={styles.labelRow}>
-          <Text style={styles.label}>Фото (видны всем)</Text>
+          <Text style={styles.label}>{t("newPost.photosPublic")}</Text>
           <Text style={styles.counter}>
             {openPhotos.length} / {MAX_PHOTOS_PER_BLOCK}
           </Text>
@@ -445,13 +447,13 @@ export default function NewHelpPostScreen() {
               onPress={() => pickPhoto(false)}
             >
               <Ionicons name="image-outline" size={22} color="#719686" />
-              <Text style={styles.addTileText}>Фото</Text>
+              <Text style={styles.addTileText}>{t("newPost.photosLabel")}</Text>
             </TouchableOpacity>
           )}
         </View>
 
         <View style={styles.labelRow}>
-          <Text style={styles.label}>Файлы (видны всем)</Text>
+          <Text style={styles.label}>{t("newPost.filesPublic")}</Text>
           <Text style={styles.counter}>
             {openDocs.length} / {MAX_FILES_PER_BLOCK}
           </Text>
@@ -482,8 +484,8 @@ export default function NewHelpPostScreen() {
             onPress={() => pickDocument(false)}
           >
             <Ionicons name="attach-outline" size={16} color="#3F6B5B" />
-            <Text style={styles.hiddenAddText}>Добавить файл</Text>
-            <Text style={styles.addDocHint}>до {MAX_FILE_MB} МБ</Text>
+            <Text style={styles.hiddenAddText}>{t("newPost.addFile")}</Text>
+            <Text style={styles.addDocHint}>{t("newPost.upToMb", { N: MAX_FILE_MB })}</Text>
           </TouchableOpacity>
         )}
 
@@ -502,13 +504,9 @@ export default function NewHelpPostScreen() {
               color={hiddenEnabled ? "#69B78D" : "#8FA79A"}
             />
             <View style={{ flex: 1 }}>
-              <Text style={styles.hiddenToggleTitle}>
-                Добавить скрытый блок
-              </Text>
+              <Text style={styles.hiddenToggleTitle}>{t("newPost.addHidden")}</Text>
               <Text style={styles.hiddenToggleHint}>
-                Этот блок увидят только вы, модераторы и подтверждённые
-                специалисты категории «{category}». Сюда можно поместить
-                личные данные, документы и снимки.
+                {t("newPost.hiddenNote", { категория: tCategory(category) })}
               </Text>
             </View>
           </TouchableOpacity>
@@ -518,26 +516,24 @@ export default function NewHelpPostScreen() {
           <View style={styles.hiddenBlock}>
             <View style={styles.hiddenHeader}>
               <Ionicons name="lock-closed" size={15} color="#3F6B5B" />
-              <Text style={styles.hiddenTitle}>Скрытый материал</Text>
+              <Text style={styles.hiddenTitle}>{t("post.hiddenTitle")}</Text>
             </View>
 
             <Text style={styles.hiddenHint}>
-              Комментарии под постом тоже будут скрыты: видеть текст блока
-              и участвовать в обсуждении смогут только вы и подтверждённые
-              специалисты категории «{category}».
+              {t("newPost.hiddenComments", { категория: tCategory(category) })}
             </Text>
 
             <TextInput
               style={styles.hiddenInput}
               multiline
-              placeholder="Скрытый текст (не обязательно)…"
+              placeholder={t("newPost.hiddenTextPh")}
               placeholderTextColor="#8FA79A"
               value={hiddenBody}
               onChangeText={setHiddenBody}
             />
 
             <View style={styles.labelRow}>
-              <Text style={styles.hiddenSubLabel}>Фото</Text>
+              <Text style={styles.hiddenSubLabel}>{t("newPost.photosLabel")}</Text>
               <Text style={styles.counter}>
                 {hiddenPhotos.length} / {MAX_PHOTOS_PER_BLOCK}
               </Text>
@@ -564,13 +560,13 @@ export default function NewHelpPostScreen() {
                   onPress={() => pickPhoto(true)}
                 >
                   <Ionicons name="image-outline" size={22} color="#719686" />
-                  <Text style={styles.addTileText}>Фото</Text>
+                  <Text style={styles.addTileText}>{t("newPost.photosLabel")}</Text>
                 </TouchableOpacity>
               )}
             </View>
 
             <View style={styles.labelRow}>
-              <Text style={styles.hiddenSubLabel}>Файлы</Text>
+              <Text style={styles.hiddenSubLabel}>{t("newPost.filesLabel")}</Text>
               <Text style={styles.counter}>
                 {hiddenDocs.length} / {MAX_FILES_PER_BLOCK}
               </Text>
@@ -605,8 +601,8 @@ export default function NewHelpPostScreen() {
                 onPress={() => pickDocument(true)}
               >
                 <Ionicons name="attach-outline" size={16} color="#3F6B5B" />
-                <Text style={styles.hiddenAddText}>Добавить файл</Text>
-                <Text style={styles.addDocHint}>до {MAX_FILE_MB} МБ</Text>
+                <Text style={styles.hiddenAddText}>{t("newPost.addFile")}</Text>
+                <Text style={styles.addDocHint}>{t("newPost.upToMb", { N: MAX_FILE_MB })}</Text>
               </TouchableOpacity>
             )}
           </View>
@@ -615,10 +611,7 @@ export default function NewHelpPostScreen() {
         {!!error && <Text style={styles.errorText}>{error}</Text>}
 
         {hiddenBlockEmpty && (
-          <Text style={styles.hiddenEmptyHint}>
-            Скрытый блок пуст: добавьте в него текст, фото или файл — либо
-            снимите галочку «Добавить скрытый блок»
-          </Text>
+          <Text style={styles.hiddenEmptyHint}>{t("newPost.hiddenEmpty")}</Text>
         )}
 
         <TouchableOpacity
@@ -630,13 +623,11 @@ export default function NewHelpPostScreen() {
           {submitting ? (
             <ActivityIndicator color="#FFFFFF" size="small" />
           ) : (
-            <Text style={styles.submitText}>Опубликовать</Text>
+            <Text style={styles.submitText}>{t("newPost.publish")}</Text>
           )}
         </TouchableOpacity>
 
-        <Text style={styles.requiredHint}>
-          Поля со звёздочкой (*) обязательны
-        </Text>
+        <Text style={styles.requiredHint}>{t("register.requiredHint")}</Text>
       </ScrollView>
     </KeyboardAvoidingView>
   );

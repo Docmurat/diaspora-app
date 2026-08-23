@@ -63,6 +63,7 @@ import {
 } from "../services/helpService";
 import { subscribeToChanges } from "../services/liveService";
 
+import { t, tCategory, useLanguage } from "../services/i18nService";
 // «14.08, 15:32» — коротко и без библиотек.
 function formatWhen(iso: string) {
   const d = new Date(iso);
@@ -74,9 +75,9 @@ function formatWhen(iso: string) {
 }
 
 function shortName(author: HelpCommentItem["author"]) {
-  if (!author) return "Участник";
+  if (!author) return t("post.member");
   return (
-    `${author.first_name || ""} ${author.last_name || ""}`.trim() || "Участник"
+    `${author.first_name || ""} ${author.last_name || ""}`.trim() || t("post.member")
   );
 }
 
@@ -84,8 +85,8 @@ function shortName(author: HelpCommentItem["author"]) {
 function formatSize(bytes: number | null): string {
   if (!bytes) return "";
   if (bytes >= 1024 * 1024)
-    return `${(bytes / 1024 / 1024).toFixed(1).replace(".", ",")} МБ`;
-  return `${Math.max(1, Math.round(bytes / 1024))} КБ`;
+    return `${(bytes / 1024 / 1024).toFixed(1).replace(".", ",")} ${t("chat.unit.mb")}`;
+  return `${Math.max(1, Math.round(bytes / 1024))} ${t("chat.unit.kb")}`;
 }
 
 // ─────────────────────────────────────────────────────────────────────
@@ -277,7 +278,7 @@ function FileRow({ file }: { file: HelpAttachmentItem }) {
     >
       <Ionicons name="document-text-outline" size={18} color="#4E7364" />
       <Text style={styles.docName} numberOfLines={1}>
-        {file.fileName || "Файл"}
+        {file.fileName || t("chat.attach.file")}
       </Text>
       {!!file.fileSize && (
         <Text style={styles.docSize}>{formatSize(file.fileSize)}</Text>
@@ -288,6 +289,7 @@ function FileRow({ file }: { file: HelpAttachmentItem }) {
 }
 
 export default function HelpPostScreen() {
+  const lang = useLanguage(); // перерисовка при смене языка
   const insets = useSafeAreaInsets();
   const params = useLocalSearchParams();
   const postId = String(params.id || "");
@@ -359,7 +361,7 @@ export default function HelpPostScreen() {
       setMenuOpen(false);
     } catch (e: any) {
       console.log("Жалоба не ушла:", e);
-      setActionError(e?.message || "Не удалось отправить жалобу.");
+      setActionError(e?.message || t("post.error.report"));
     } finally {
       setReportSending(false);
     }
@@ -381,7 +383,7 @@ export default function HelpPostScreen() {
       }
     } catch (e: any) {
       console.log("Действие модерации не прошло:", e);
-      setActionError(e?.message || "Не удалось выполнить действие.");
+      setActionError(e?.message || t("post.error.action"));
     } finally {
       setModBusy(false);
     }
@@ -400,7 +402,7 @@ export default function HelpPostScreen() {
   const load = useCallback(
     async (quiet: boolean) => {
       if (!postId) {
-        setError("Пост не найден");
+        setError(t("post.error.notFound"));
         setLoading(false);
         return;
       }
@@ -428,7 +430,7 @@ export default function HelpPostScreen() {
         }
       } catch (e: any) {
         console.log("Пост не загрузился:", e);
-        if (!quiet) setError("Пост не найден или недоступен");
+        if (!quiet) setError(t("post.error.unavailable"));
       } finally {
         if (!quiet) setLoading(false);
       }
@@ -509,7 +511,7 @@ export default function HelpPostScreen() {
       );
     } catch (e: any) {
       console.log("Комментарий не отправился:", e);
-      setActionError("Не удалось отправить. Попробуйте ещё раз.");
+      setActionError(t("post.error.sendComment"));
     } finally {
       setSending(false);
     }
@@ -531,7 +533,7 @@ export default function HelpPostScreen() {
       await reloadComments();
     } catch (e: any) {
       console.log("Комментарий не удалился:", e);
-      setActionError("Не удалось удалить комментарий.");
+      setActionError(t("post.error.deleteComment"));
     }
   };
 
@@ -557,7 +559,7 @@ export default function HelpPostScreen() {
       await load(true);
     } catch (e: any) {
       console.log("Статус поста не сменился:", e);
-      setActionError("Не удалось изменить статус поста.");
+      setActionError(t("post.error.status"));
     } finally {
       setStatusBusy(false);
     }
@@ -569,8 +571,8 @@ export default function HelpPostScreen() {
 
   const authorName = post?.author
     ? `${post.author.first_name || ""} ${post.author.last_name || ""}`.trim() ||
-      "Участник"
-    : "Участник";
+      t("post.member")
+    : t("post.member");
 
   const all = post?.attachments || [];
   const live = all.filter((a) => !a.expired);
@@ -623,7 +625,7 @@ export default function HelpPostScreen() {
               setBlockArmed(false);
             }}
             hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-            accessibilityLabel="Меню поста"
+            accessibilityLabel={t("a11y.postMenu")}
           >
             <Ionicons name="ellipsis-vertical" size={22} color="#3F6B5B" />
           </TouchableOpacity>
@@ -685,7 +687,7 @@ export default function HelpPostScreen() {
                           })
                         }
                       >
-                        <Text style={styles.reportSendText}>Заблокировать</Text>
+                        <Text style={styles.reportSendText}>{t("profile.block")}</Text>
                       </TouchableOpacity>
                       <TouchableOpacity
                         onPress={() => {
@@ -694,7 +696,7 @@ export default function HelpPostScreen() {
                         }}
                         hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                       >
-                        <Text style={styles.reportCancel}>Отмена</Text>
+                        <Text style={styles.reportCancel}>{t("common.cancel")}</Text>
                       </TouchableOpacity>
                     </View>
                   </View>
@@ -707,7 +709,7 @@ export default function HelpPostScreen() {
                 onPress={() => runModeration(() => unblockHelpPost(post.id))}
               >
                 <Ionicons name="lock-open-outline" size={17} color="#3F6B5B" />
-                <Text style={styles.modMenuText}>Снять блокировку</Text>
+                <Text style={styles.modMenuText}>{t("profile.unblock")}</Text>
               </TouchableOpacity>
             ))}
 
@@ -725,7 +727,7 @@ export default function HelpPostScreen() {
               }
             >
               <Ionicons name="archive-outline" size={17} color="#3F6B5B" />
-              <Text style={styles.modMenuText}>Убрать в архив</Text>
+              <Text style={styles.modMenuText}>{t("post.toArchive")}</Text>
             </TouchableOpacity>
           )}
 
@@ -736,7 +738,7 @@ export default function HelpPostScreen() {
               onPress={() => runModeration(() => reopenHelpPost(post.id))}
             >
               <Ionicons name="refresh-outline" size={17} color="#3F6B5B" />
-              <Text style={styles.modMenuText}>Вернуть из архива</Text>
+              <Text style={styles.modMenuText}>{t("post.unarchive")}</Text>
             </TouchableOpacity>
           )}
 
@@ -766,8 +768,8 @@ export default function HelpPostScreen() {
                 ]}
               >
                 {deleteArmed
-                  ? "Точно удалить насовсем? Нажмите ещё раз"
-                  : "Удалить пост"}
+                  ? t("post.deleteConfirm")
+                  : t("post.delete")}
               </Text>
             </TouchableOpacity>
           )}
@@ -786,7 +788,7 @@ export default function HelpPostScreen() {
               <Text
                 style={[styles.modMenuText, reportDone && { color: "#96AC9E" }]}
               >
-                {reportDone ? "Жалоба отправлена" : "Пожаловаться на пост"}
+                {reportDone ? t("report.success.title") : t("post.report")}
               </Text>
             </TouchableOpacity>
           )}
@@ -796,7 +798,7 @@ export default function HelpPostScreen() {
               <TextInput
                 style={styles.reportInput}
                 multiline
-                placeholder="Что не так с этим постом?"
+                placeholder={t("post.reportPh")}
                 placeholderTextColor="#8FA79A"
                 value={reportText}
                 onChangeText={setReportText}
@@ -812,7 +814,7 @@ export default function HelpPostScreen() {
                   onPress={handleSendReport}
                 >
                   <Text style={styles.reportSendText}>
-                    {reportSending ? "Отправка…" : "Отправить жалобу"}
+                    {reportSending ? t("common.sending") : t("report.submit")}
                   </Text>
                 </TouchableOpacity>
                 <TouchableOpacity
@@ -822,12 +824,10 @@ export default function HelpPostScreen() {
                   }}
                   hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                 >
-                  <Text style={styles.reportCancel}>Отмена</Text>
+                  <Text style={styles.reportCancel}>{t("common.cancel")}</Text>
                 </TouchableOpacity>
               </View>
-              <Text style={styles.modMenuHint}>
-                Жалобу увидят модераторы. Автору о ней не сообщается.
-              </Text>
+              <Text style={styles.modMenuHint}>{t("post.reportNote")}</Text>
             </View>
           )}
 
@@ -847,11 +847,7 @@ export default function HelpPostScreen() {
             </Text>
           )}
           {!isModerator && post.isMine && (
-            <Text style={styles.modMenuHint}>
-              Удалить — значит стереть насовсем вместе с комментариями, в архив
-              такой пост не попадает. Хотите сохранить пост читаемым — выберите
-              «Убрать в архив».
-            </Text>
+            <Text style={styles.modMenuHint}>{t("post.deleteNote")}</Text>
           )}
         </View>
       )}
@@ -923,7 +919,7 @@ export default function HelpPostScreen() {
                   ]}
                 >
                   {post.status === "archived"
-                    ? "✓ Завершено"
+                    ? t("post.done")
                     : POST_TYPE_LABELS[post.postType]}
                 </Text>
               </View>
@@ -940,9 +936,7 @@ export default function HelpPostScreen() {
             {post.status === "archived" && (
               <View style={styles.statusBanner}>
                 <Ionicons name="archive-outline" size={16} color="#6B7570" />
-                <Text style={styles.statusBannerText}>
-                  Пост завершён и убран в архив: читать можно, писать нельзя.
-                </Text>
+                <Text style={styles.statusBannerText}>{t("post.archivedNote")}</Text>
               </View>
             )}
 
@@ -956,11 +950,11 @@ export default function HelpPostScreen() {
                   ]}
                 >
                   {post.isMine
-                    ? "Пост заблокирован модерацией и виден только вам."
+                    ? t("post.blockedOwn")
                     : "Пост заблокирован модерацией: виден только автору и модераторам."}
                   {!!post.blockedReason && (
                     <Text style={styles.statusBannerReason}>
-                      {"\n"}Причина: {post.blockedReason}
+                      {"\n"}{t("post.blockedReason", { текст: post.blockedReason ?? "" })}
                     </Text>
                   )}
                 </Text>
@@ -984,8 +978,7 @@ export default function HelpPostScreen() {
               <View style={styles.expiredRow}>
                 <Ionicons name="time-outline" size={15} color="#96AC9E" />
                 <Text style={styles.expiredText}>
-                  Срок хранения вложений истёк ({openExpired}) — файлы хранятся
-                  90 дней.
+                  {t("post.attachExpired", { N: openExpired })}
                 </Text>
               </View>
             )}
@@ -995,7 +988,7 @@ export default function HelpPostScreen() {
               <View style={styles.hiddenBlock}>
                 <View style={styles.hiddenHeader}>
                   <Ionicons name="lock-open" size={15} color="#3F6B5B" />
-                  <Text style={styles.hiddenTitle}>Скрытый материал</Text>
+                  <Text style={styles.hiddenTitle}>{t("post.hiddenTitle")}</Text>
                 </View>
 
                 {!!post.hiddenBody && (
@@ -1019,8 +1012,7 @@ export default function HelpPostScreen() {
                   <View style={styles.expiredRow}>
                     <Ionicons name="time-outline" size={15} color="#96AC9E" />
                     <Text style={styles.expiredText}>
-                      Срок хранения вложений истёк ({hiddenExpired}) — файлы
-                      хранятся 90 дней.
+                      {t("post.attachExpired", { N: hiddenExpired })}
                     </Text>
                   </View>
                 )}
@@ -1031,8 +1023,7 @@ export default function HelpPostScreen() {
               <View style={styles.hiddenLockedBlock}>
                 <Ionicons name="lock-closed" size={16} color="#719686" />
                 <Text style={styles.hiddenLockedText}>
-                  В посте есть скрытый материал — он доступен только
-                  подтверждённым специалистам категории «{post.category}».
+                  {t("post.hiddenNote", { категория: tCategory(post.category) })}
                 </Text>
               </View>
             )}
@@ -1070,11 +1061,11 @@ export default function HelpPostScreen() {
                     >
                       {closeArmed
                         ? post.status === "active"
-                          ? "Точно завершить? Нажмите ещё раз"
-                          : "Точно вернуть? Нажмите ещё раз"
+                          ? t("post.finishConfirm")
+                          : t("post.unarchiveConfirm")
                         : post.status === "active"
-                          ? "Завершить и убрать в архив"
-                          : "Вернуть из архива"}
+                          ? t("post.finishArchive")
+                          : t("post.unarchive")}
                     </Text>
                   </>
                 )}
@@ -1083,14 +1074,14 @@ export default function HelpPostScreen() {
 
             {/* ОБСУЖДЕНИЕ */}
             <View style={styles.commentsHeader}>
-              <Text style={styles.commentsTitle}>Обсуждение</Text>
+              <Text style={styles.commentsTitle}>{t("post.comments")}</Text>
               {comments.length > 0 && (
                 <Text style={styles.commentsCount}>{comments.length}</Text>
               )}
               {post.commentsHidden && discussionAllowed && (
                 <View style={styles.hiddenTag}>
                   <Ionicons name="lock-closed" size={11} color="#719686" />
-                  <Text style={styles.hiddenTagText}>скрытое</Text>
+                  <Text style={styles.hiddenTagText}>{t("post.hiddenTag")}</Text>
                 </View>
               )}
             </View>
@@ -1104,8 +1095,7 @@ export default function HelpPostScreen() {
                   color="#719686"
                 />
                 <Text style={styles.hiddenLockedText}>
-                  Обсуждение под этим постом доступно только автору и
-                  подтверждённым специалистам категории «{post.category}».
+                  {t("post.commentsHiddenNote", { категория: tCategory(post.category) })}
                 </Text>
               </View>
             )}
@@ -1113,8 +1103,8 @@ export default function HelpPostScreen() {
             {discussionAllowed && comments.length === 0 && (
               <Text style={styles.noComments}>
                 {post.status === "active"
-                  ? "Пока никто не написал. Будьте первым!"
-                  : "Обсуждения не было."}
+                  ? t("post.noComments")
+                  : t("post.noCommentsArchived")}
               </Text>
             )}
 
@@ -1184,9 +1174,7 @@ export default function HelpPostScreen() {
                               setDeleteArmedId(null);
                             }}
                           >
-                            <Text style={styles.commentActionText}>
-                              Ответить
-                            </Text>
+                            <Text style={styles.commentActionText}>{t("post.reply")}</Text>
                           </TouchableOpacity>
                         )}
 
@@ -1202,7 +1190,7 @@ export default function HelpPostScreen() {
                                 armed && styles.commentDeleteArmed,
                               ]}
                             >
-                              {armed ? "Точно удалить?" : "Удалить"}
+                              {armed ? t("post.deleteCommentConfirm") : t("post.deleteComment")}
                             </Text>
                           </TouchableOpacity>
                         )}
@@ -1235,7 +1223,7 @@ export default function HelpPostScreen() {
                     color="#4E7364"
                   />
                   <Text style={styles.replyBarText} numberOfLines={1}>
-                    Ответ для {shortName(replyTo.author)}: {replyTo.body}
+                    {t("post.replyTo", { имя: shortName(replyTo.author), текст: replyTo.body })}
                   </Text>
                   <TouchableOpacity
                     hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
@@ -1248,7 +1236,7 @@ export default function HelpPostScreen() {
 
               <View style={styles.inputCapsule}>
                 <TextInput
-                  placeholder={replyTo ? "Ваш ответ…" : "Написать комментарий…"}
+                  placeholder={replyTo ? t("post.replyPh") : t("post.commentPh")}
                   placeholderTextColor="#8FA79A"
                   style={styles.input}
                   value={input}

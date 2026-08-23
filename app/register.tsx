@@ -40,6 +40,7 @@ import {
 } from "../store/consentFlow";
 import { formatBirthDateInput, normalizeBirthDate } from "../store/user";
 
+import { t, tCategory, useLanguage } from "../services/i18nService";
 const categories = [
   "Медицина",
   "Юриспруденция",
@@ -94,6 +95,7 @@ const glassInputProps = {
 } as const;
 
 export default function RegisterScreen() {
+  const lang = useLanguage(); // перерисовка при смене языка
   const [fontsLoaded] = useFonts({
     Philosopher_400Regular,
     Philosopher_700Bold,
@@ -163,7 +165,11 @@ export default function RegisterScreen() {
     const search = category.trim().toLowerCase();
     if (!search) return categories;
 
-    return categories.filter((item) => item.toLowerCase().includes(search));
+    return categories.filter(
+      (item) =>
+        item.toLowerCase().includes(search) ||
+        tCategory(item).toLowerCase().includes(search),
+    );
   }, [category]);
 
   const categoryValid = useMemo(
@@ -214,7 +220,7 @@ export default function RegisterScreen() {
     });
 
     if (error) {
-      let message = "Не удалось связаться с сервером. Попробуйте ещё раз.";
+      let message = t("register.error.server");
       try {
         const context = await (error as any).context?.json?.();
         if (context?.error) message = context.error;
@@ -241,7 +247,7 @@ export default function RegisterScreen() {
       setError("");
       await sendVerificationCode();
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Не удалось отправить код");
+      setError(e instanceof Error ? e.message : t("register.error.sendCode"));
     } finally {
       setCheckingEmail(false);
     }
@@ -262,7 +268,7 @@ export default function RegisterScreen() {
 
       setStep(3);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Неверный код");
+      setError(e instanceof Error ? e.message : t("register.error.wrongCode"));
     } finally {
       setVerifyingCode(false);
     }
@@ -286,7 +292,7 @@ export default function RegisterScreen() {
     const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
 
     if (!permission.granted) {
-      Alert.alert("Нет доступа", "Нужно разрешение на доступ к галерее.");
+      Alert.alert(t("register.gallery.title"), t("register.gallery.text"));
       return;
     }
 
@@ -323,13 +329,13 @@ export default function RegisterScreen() {
       !birthDateInput.trim() ||
       !locationsValid(locations)
     ) {
-      setError("Заполните все обязательные поля");
+      setError(t("register.error.fillAll"));
       return;
     }
 
     const normalizedBirthDate = normalizeBirthDate(birthDateInput);
     if (!normalizedBirthDate) {
-      setError("Дата рождения должна быть в формате ДД.ММ.ГГГГ");
+      setError(t("register.error.birthFormat"));
       return;
     }
 
@@ -340,7 +346,7 @@ export default function RegisterScreen() {
       const emailExists = await checkEmailExists(email);
 
       if (emailExists) {
-        setError("Эта почта уже используется");
+        setError(t("register.error.emailTaken"));
         return;
       }
 
@@ -358,18 +364,18 @@ export default function RegisterScreen() {
     if (submitting) return;
 
     if (!inviteCode.trim()) {
-      setError("Инвайт-код не найден. Вернитесь и введите код заново.");
+      setError(t("register.error.inviteLost"));
       return;
     }
 
     if (!category.trim() || !profession.trim() || !bio.trim()) {
-      setError("Заполните все обязательные поля");
+      setError(t("register.error.fillAll"));
       return;
     }
 
     if (!consentPdn || !consentTerms || !consentMemo) {
       setError(
-        "Для регистрации отметьте все три пункта: согласие на обработку данных, принятие соглашения и Меморандум сообщества",
+        t("register.error.consents"),
       );
       return;
     }
@@ -379,13 +385,13 @@ export default function RegisterScreen() {
     );
 
     if (!matchedCategory) {
-      setError("Выберите сферу деятельности из списка");
+      setError(t("register.error.categoryFromList"));
       return;
     }
 
     const normalizedBirthDate = normalizeBirthDate(birthDateInput);
     if (!normalizedBirthDate) {
-      setError("Дата рождения должна быть в формате ДД.ММ.ГГГГ");
+      setError(t("register.error.birthFormat"));
       return;
     }
 
@@ -460,15 +466,13 @@ export default function RegisterScreen() {
           keyboardDismissMode="on-drag"
           showsVerticalScrollIndicator={false}
         >
-          <Text style={styles.title}>Регистрация</Text>
-          <Text style={styles.subtitle}>ШАГ {step} ИЗ 3</Text>
+          <Text style={styles.title}>{t("register.title")}</Text>
+          <Text style={styles.subtitle}>{t("register.stepOf", { N: step })}</Text>
 
           <Tekmet style={styles.tekmet} />
 
           {step !== 2 && (
-            <Text style={styles.requiredHint}>
-              Поля со звёздочкой (*) обязательны
-            </Text>
+            <Text style={styles.requiredHint}>{t("register.requiredHint")}</Text>
           )}
 
           {step === 1 && (
@@ -488,11 +492,11 @@ export default function RegisterScreen() {
                 />
               </TouchableOpacity>
 
-              <Text style={styles.avatarHint}>Добавить фото профиля</Text>
+              <Text style={styles.avatarHint}>{t("register.addPhoto")}</Text>
 
               <Glass {...glassInputProps} style={styles.inputWrap}>
                 <TextInput
-                  placeholder="Электронная почта *"
+                  placeholder={t("register.ph.email")}
                   placeholderTextColor="#8FA79A"
                   style={styles.input}
                   value={email}
@@ -507,7 +511,7 @@ export default function RegisterScreen() {
 
               <Glass {...glassInputProps} style={styles.inputWrap}>
                 <TextInput
-                  placeholder="Пароль *"
+                  placeholder={t("register.ph.password")}
                   placeholderTextColor="#8FA79A"
                   style={styles.input}
                   value={password}
@@ -521,7 +525,7 @@ export default function RegisterScreen() {
 
               <Glass {...glassInputProps} style={styles.inputWrap}>
                 <TextInput
-                  placeholder="Номер телефона *"
+                  placeholder={t("register.ph.phone")}
                   placeholderTextColor="#8FA79A"
                   style={styles.input}
                   value={phone}
@@ -536,12 +540,8 @@ export default function RegisterScreen() {
               <Glass {...glassInputProps} style={styles.inputWrap}>
                 <View style={styles.switchRow}>
                   <View style={styles.switchTextWrap}>
-                    <Text style={styles.switchTitle}>
-                      Показывать номер в профиле
-                    </Text>
-                    <Text style={styles.switchHint}>
-                      Выключите, чтобы номер был доступен только администрации
-                    </Text>
+                    <Text style={styles.switchTitle}>{t("register.phoneVisible.title")}</Text>
+                    <Text style={styles.switchHint}>{t("register.phoneVisible.hint")}</Text>
                   </View>
                   <Switch
                     value={phoneVisible}
@@ -555,10 +555,8 @@ export default function RegisterScreen() {
               <Glass {...glassInputProps} style={styles.inputWrap}>
                 <View style={styles.switchRow}>
                   <View style={styles.switchTextWrap}>
-                    <Text style={styles.switchTitle}>У меня есть WhatsApp</Text>
-                    <Text style={styles.switchHint}>
-                      При открытом номере в анкете появится кнопка WhatsApp
-                    </Text>
+                    <Text style={styles.switchTitle}>{t("register.whatsapp.title")}</Text>
+                    <Text style={styles.switchHint}>{t("register.whatsapp.hint")}</Text>
                   </View>
                   <Switch
                     value={hasWhatsapp}
@@ -571,7 +569,7 @@ export default function RegisterScreen() {
 
               <Glass {...glassInputProps} style={styles.inputWrap}>
                 <TextInput
-                  placeholder="Имя *"
+                  placeholder={t("register.ph.firstName")}
                   placeholderTextColor="#8FA79A"
                   style={styles.input}
                   value={firstName}
@@ -584,7 +582,7 @@ export default function RegisterScreen() {
 
               <Glass {...glassInputProps} style={styles.inputWrap}>
                 <TextInput
-                  placeholder="Фамилия *"
+                  placeholder={t("register.ph.lastName")}
                   placeholderTextColor="#8FA79A"
                   style={styles.input}
                   value={lastName}
@@ -597,7 +595,7 @@ export default function RegisterScreen() {
 
               <Glass {...glassInputProps} style={styles.inputWrap}>
                 <TextInput
-                  placeholder="Дата рождения (ДД.ММ.ГГГГ) *"
+                  placeholder={t("register.ph.birthDate")}
                   placeholderTextColor="#8FA79A"
                   style={styles.input}
                   value={birthDateInput}
@@ -635,7 +633,7 @@ export default function RegisterScreen() {
                 >
                   <View style={styles.buttonInner}>
                     <Text style={styles.primaryButtonText}>
-                      {checkingEmail ? "Отправка кода..." : "Далее"}
+                      {checkingEmail ? t("register.code.sending") : t("common.next")}
                     </Text>
                   </View>
                 </Glass>
@@ -646,13 +644,13 @@ export default function RegisterScreen() {
           {step === 2 && (
             <>
               <Text style={styles.codeText}>
-                Мы отправили 6-значный код на{"\n"}
+                {t("register.code.sentTo")}{"\n"}
                 <Text style={styles.codeEmail}>{email.trim()}</Text>
               </Text>
 
               <Glass {...glassInputProps} style={styles.inputWrap}>
                 <TextInput
-                  placeholder="Код из письма"
+                  placeholder={t("register.code.placeholder")}
                   placeholderTextColor="#8FA79A"
                   style={[styles.input, styles.codeInput]}
                   value={codeInput}
@@ -665,9 +663,7 @@ export default function RegisterScreen() {
                 />
               </Glass>
 
-              <Text style={styles.hintCentered}>
-                Код действует 10 минут. Письмо не пришло? Проверьте папку «Спам»
-              </Text>
+              <Text style={styles.hintCentered}>{t("register.code.hint")}</Text>
 
               {!!error && <Text style={styles.error}>{error}</Text>}
 
@@ -687,7 +683,7 @@ export default function RegisterScreen() {
                 >
                   <View style={styles.buttonInner}>
                     <Text style={styles.primaryButtonText}>
-                      {verifyingCode ? "Проверка..." : "Подтвердить"}
+                      {verifyingCode ? t("common.checking") : t("register.code.confirm")}
                     </Text>
                   </View>
                 </Glass>
@@ -700,10 +696,10 @@ export default function RegisterScreen() {
               >
                 <Text style={[styles.link, resendIn > 0 && styles.linkMuted]}>
                   {resendIn > 0
-                    ? `Запросить новый код можно через ${resendIn} сек`
+                    ? t("register.code.resendIn", { N: resendIn })
                     : checkingEmail
-                      ? "Отправка..."
-                      : "Отправить код ещё раз"}
+                      ? t("common.sending")
+                      : t("register.code.resend")}
                 </Text>
               </TouchableOpacity>
 
@@ -715,7 +711,7 @@ export default function RegisterScreen() {
                 }}
                 activeOpacity={0.8}
               >
-                <Text style={styles.link}>Изменить почту</Text>
+                <Text style={styles.link}>{t("register.code.changeEmail")}</Text>
               </TouchableOpacity>
             </>
           )}
@@ -724,7 +720,7 @@ export default function RegisterScreen() {
             <>
               <Glass {...glassInputProps} style={styles.inputWrap}>
                 <TextInput
-                  placeholder="Сфера деятельности *"
+                  placeholder={t("register.ph.category")}
                   placeholderTextColor="#8FA79A"
                   style={styles.input}
                   value={category}
@@ -753,7 +749,7 @@ export default function RegisterScreen() {
                         setError("");
                       }}
                     >
-                      <Text style={styles.optionText}>{item}</Text>
+                      <Text style={styles.optionText}>{tCategory(item)}</Text>
                     </TouchableOpacity>
                   ))}
                 </Glass>
@@ -761,7 +757,7 @@ export default function RegisterScreen() {
 
               <Glass {...glassInputProps} style={styles.inputWrap}>
                 <TextInput
-                  placeholder="Профессия *"
+                  placeholder={t("register.ph.profession")}
                   placeholderTextColor="#8FA79A"
                   style={styles.input}
                   value={profession}
@@ -797,7 +793,7 @@ export default function RegisterScreen() {
 
               <Glass {...glassInputProps} style={styles.inputWrap}>
                 <TextInput
-                  placeholder="Чем могу быть полезен *"
+                  placeholder={t("register.ph.bio")}
                   placeholderTextColor="#8FA79A"
                   style={[styles.input, styles.textArea]}
                   value={bio}
@@ -811,7 +807,7 @@ export default function RegisterScreen() {
 
               <Glass {...glassInputProps} style={styles.inputWrap}>
                 <TextInput
-                  placeholder="Telegram (необязательно)"
+                  placeholder={t("register.ph.telegram")}
                   placeholderTextColor="#8FA79A"
                   style={styles.input}
                   value={telegram}
@@ -825,7 +821,7 @@ export default function RegisterScreen() {
 
               <Glass {...glassInputProps} style={styles.inputWrap}>
                 <TextInput
-                  placeholder="Instagram (необязательно)"
+                  placeholder={t("register.ph.instagram")}
                   placeholderTextColor="#8FA79A"
                   style={styles.input}
                   value={instagram}
@@ -856,12 +852,14 @@ export default function RegisterScreen() {
                   )}
                 </View>
                 <Text style={styles.consentText}>
-                  Я даю согласие на обработку моих персональных данных{" "}
+                  {lang === "en"
+                    ? "I consent to the processing of my personal data "
+                    : "Я даю согласие на обработку моих персональных данных "}
                   <Text
                     style={styles.consentLink}
                     onPress={() => router.push("/consent" as any)}
                   >
-                    (текст согласия)
+                    {lang === "en" ? "(consent text)" : "(текст согласия)"}
                   </Text>
                 </Text>
               </TouchableOpacity>
@@ -885,19 +883,23 @@ export default function RegisterScreen() {
                   )}
                 </View>
                 <Text style={styles.consentText}>
-                  Принимаю{" "}
+                  {lang === "en" ? "I accept the " : "Принимаю "}
                   <Text
                     style={styles.consentLink}
                     onPress={() => router.push("/terms" as any)}
                   >
-                    Пользовательское соглашение
-                  </Text>{" "}
-                  и ознакомлен(а) с{" "}
+                    {lang === "en"
+                      ? "Terms of Use"
+                      : "Пользовательское соглашение"}
+                  </Text>
+                  {lang === "en" ? " and have read the " : " и ознакомлен(а) с "}
                   <Text
                     style={styles.consentLink}
                     onPress={() => router.push("/privacy" as any)}
                   >
-                    Политикой конфиденциальности
+                    {lang === "en"
+                      ? "Privacy Policy"
+                      : "Политикой конфиденциальности"}
                   </Text>
                 </Text>
               </TouchableOpacity>
@@ -927,12 +929,16 @@ export default function RegisterScreen() {
                 </View>
                 <Text style={styles.consentText}>
                   {consentMemo ? (
-                    "Меморандум «Минги-Тау» принят"
+                    t("register.consent.memoDone")
                   ) : (
                     <>
-                      Меморандум «Минги-Тау» —{" "}
+                      {lang === "en"
+                        ? "The Mingi-Tau Memorandum — "
+                        : "Меморандум «Минги-Тау» — "}
                       <Text style={styles.consentLink}>
-                        прочитать и принять
+                        {lang === "en"
+                          ? "read and accept"
+                          : "прочитать и принять"}
                       </Text>
                     </>
                   )}
@@ -957,7 +963,7 @@ export default function RegisterScreen() {
                     borderWidth={0.75}
                   >
                     <View style={styles.buttonInner}>
-                      <Text style={styles.secondaryButtonText}>Назад</Text>
+                      <Text style={styles.secondaryButtonText}>{t("common.back")}</Text>
                     </View>
                   </Glass>
                 </TouchableOpacity>
@@ -990,7 +996,7 @@ export default function RegisterScreen() {
                   >
                     <View style={styles.buttonInner}>
                       <Text style={styles.primaryButtonText}>
-                        {submitting ? "Отправка..." : "Готово"}
+                        {submitting ? t("common.sending") : t("common.done")}
                       </Text>
                     </View>
                   </Glass>

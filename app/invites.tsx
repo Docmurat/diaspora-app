@@ -22,6 +22,7 @@ import {
 
 import { Glass, Tekmet } from "../components/mingi";
 import { authorProfileParams } from "../services/helpService";
+import { dateLocale, t, useLanguage } from "../services/i18nService";
 import {
   createInvite,
   disableInvite,
@@ -42,7 +43,7 @@ function formatDate(dateString?: string | null) {
 }
 
 function inviteMessage(code: string) {
-  return `Приглашаю вас в «Минги-Тау» — закрытое сообщество карачаевцев и балкарцев. Мой инвайт-код: ${code}`;
+  return t("inv.shareText", { код: code });
 }
 
 // Прямые ссылки с готовым текстом: работают и в браузере, и на телефоне,
@@ -56,6 +57,7 @@ function whatsappShareLink(code: string) {
 }
 
 export default function Invites() {
+  const lang = useLanguage(); // перерисовка при смене языка
   const [fontsLoaded] = useFonts({
     Philosopher_400Regular,
     Philosopher_700Bold,
@@ -81,8 +83,8 @@ export default function Invites() {
       setInvites(invitesData || []);
       setInvitedUsers(invitedUsersData || []);
     } catch (e) {
-      const message = e instanceof Error ? e.message : "Ошибка загрузки данных";
-      Alert.alert("Ошибка", message);
+      const message = e instanceof Error ? e.message : t("inv.error.load");
+      Alert.alert(t("common.error"), message);
     } finally {
       setLoading(false);
     }
@@ -105,8 +107,8 @@ export default function Invites() {
       await loadData();
     } catch (e) {
       const message =
-        e instanceof Error ? e.message : "Ошибка создания инвайта";
-      Alert.alert("Ошибка", message);
+        e instanceof Error ? e.message : t("inv.error.create");
+      Alert.alert(t("common.error"), message);
     } finally {
       setCreating(false);
     }
@@ -140,11 +142,11 @@ export default function Invites() {
       await markAsHandedOver(invite);
 
       Alert.alert(
-        "Скопировано",
-        "Код скопирован. Инвайт перенесён в «Переданные», чтобы вы не отдали его дважды.",
+        t("profile.copy.done"),
+        t("inv.copied"),
       );
     } catch {
-      Alert.alert("Ошибка", "Не удалось скопировать код");
+      Alert.alert(t("common.error"), t("inv.error.copy"));
     }
   };
 
@@ -153,7 +155,7 @@ export default function Invites() {
       await Linking.openURL(telegramShareLink(invite.code));
       await markAsHandedOver(invite);
     } catch {
-      Alert.alert("Ошибка", "Не удалось открыть Телеграм");
+      Alert.alert(t("common.error"), "Не удалось открыть Телеграм");
     }
   };
 
@@ -162,7 +164,7 @@ export default function Invites() {
       await Linking.openURL(whatsappShareLink(invite.code));
       await markAsHandedOver(invite);
     } catch {
-      Alert.alert("Ошибка", "Не удалось открыть WhatsApp");
+      Alert.alert(t("common.error"), t("profile.open.whatsapp"));
     }
   };
 
@@ -180,8 +182,8 @@ export default function Invites() {
       setInvites((prev) => prev.filter((item) => item.id !== invite.id));
     } catch (e) {
       const message =
-        e instanceof Error ? e.message : "Ошибка удаления инвайта";
-      Alert.alert("Ошибка", message);
+        e instanceof Error ? e.message : t("inv.error.delete");
+      Alert.alert(t("common.error"), message);
     } finally {
       setDeletingId(null);
       setConfirmDeleteId(null);
@@ -220,9 +222,9 @@ export default function Invites() {
   }
 
   const stats: { key: TabType; value: number; label: string }[] = [
-    { key: "created", value: createdInvites.length, label: "Создано" },
-    { key: "sent", value: sentInvites.length, label: "Передано" },
-    { key: "invited", value: invitedUsers.length, label: "Пришли" },
+    { key: "created", value: createdInvites.length, label: t("inv.counter.created") },
+    { key: "sent", value: sentInvites.length, label: t("inv.counter.sent") },
+    { key: "invited", value: invitedUsers.length, label: t("inv.counter.invited") },
   ];
 
   const renderInviteCard = (invite: any) => {
@@ -236,15 +238,16 @@ export default function Invites() {
 
           {!!invite.sent_at && (
             <View style={styles.badge}>
-              <Text style={styles.badgeText}>ПЕРЕДАН</Text>
+              <Text style={styles.badgeText}>{t("inv.badge.sent")}</Text>
             </View>
           )}
         </View>
 
         {!!formatDate(invite.sent_at || invite.created_at) && (
           <Text style={styles.meta}>
-            {invite.sent_at ? "Передан: " : "Создан: "}
-            {formatDate(invite.sent_at || invite.created_at)}
+            {invite.sent_at
+              ? t("inv.sentAt", { дата: formatDate(invite.sent_at) })
+              : t("inv.createdAt", { дата: formatDate(invite.created_at) })}
           </Text>
         )}
 
@@ -254,7 +257,7 @@ export default function Invites() {
             onPress={() => handleCopyInvite(invite)}
             activeOpacity={0.85}
           >
-            <Text style={styles.smallButtonText}>Копировать</Text>
+            <Text style={styles.smallButtonText}>{t("inv.copy")}</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
@@ -262,7 +265,7 @@ export default function Invites() {
             onPress={() => handleTelegramInvite(invite)}
             activeOpacity={0.85}
           >
-            <Text style={styles.smallButtonText}>Телеграм</Text>
+            <Text style={styles.smallButtonText}>{t("inv.telegram")}</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
@@ -285,10 +288,10 @@ export default function Invites() {
           >
             <Text style={[styles.smallButtonText, styles.dangerButtonText]}>
               {isDeleting
-                ? "Удаление..."
+                ? t("inv.deleting")
                 : isConfirming
-                  ? "Точно удалить?"
-                  : "Удалить"}
+                  ? t("post.deleteCommentConfirm")
+                  : t("post.deleteComment")}
             </Text>
           </TouchableOpacity>
         </View>
@@ -298,7 +301,7 @@ export default function Invites() {
             onPress={() => setConfirmDeleteId(null)}
             activeOpacity={0.8}
           >
-            <Text style={styles.cancelLink}>Не удалять</Text>
+            <Text style={styles.cancelLink}>{t("set.dontDelete")}</Text>
           </TouchableOpacity>
         )}
       </View>
@@ -318,11 +321,11 @@ export default function Invites() {
           activeOpacity={0.8}
           style={styles.backLink}
         >
-          <Text style={styles.backLinkText}>← Назад</Text>
+          <Text style={styles.backLinkText}>{t("common.backArrow")}</Text>
         </TouchableOpacity>
 
-        <Text style={styles.title}>Инвайты</Text>
-        <Text style={styles.subtitle}>МИНГИ·ТАУ</Text>
+        <Text style={styles.title}>{t("inv.title")}</Text>
+        <Text style={styles.subtitle}>{t("common.brandCaps")}</Text>
 
         <Tekmet style={styles.tekmet} />
 
@@ -365,7 +368,7 @@ export default function Invites() {
           >
             <View style={styles.buttonInner}>
               <Text style={styles.primaryButtonText}>
-                {creating ? "Создание..." : "Создать инвайт"}
+                {creating ? t("inv.creating") : t("inv.create")}
               </Text>
             </View>
           </Glass>
@@ -373,35 +376,29 @@ export default function Invites() {
 
         <Text style={styles.blockLabel}>
           {activeTab === "created"
-            ? "СОЗДАННЫЕ, НО НЕ ПЕРЕДАННЫЕ"
+            ? t("inv.section.free")
             : activeTab === "sent"
-              ? "ПЕРЕДАННЫЕ"
-              : "ПРИШЛИ ПО МОИМ ИНВАЙТАМ"}
+              ? t("inv.section.sent")
+              : t("inv.section.invited")}
         </Text>
 
         {activeTab === "created" &&
           (createdInvites.length === 0 ? (
-            <Text style={styles.emptyText}>
-              Свободных инвайтов нет. Создайте новый кнопкой выше.
-            </Text>
+            <Text style={styles.emptyText}>{t("inv.empty.free")}</Text>
           ) : (
             createdInvites.map((invite) => renderInviteCard(invite))
           ))}
 
         {activeTab === "sent" &&
           (sentInvites.length === 0 ? (
-            <Text style={styles.emptyText}>Переданных инвайтов пока нет.</Text>
+            <Text style={styles.emptyText}>{t("inv.empty.sent")}</Text>
           ) : (
             sentInvites.map((invite) => renderInviteCard(invite))
           ))}
 
         {activeTab === "invited" &&
           (invitedUsers.length === 0 ? (
-            <Text style={styles.emptyText}>
-              По вашим инвайтам пока никто не пришёл. Человек появится здесь
-              после того, как пройдёт регистрацию и модератор одобрит его
-              анкету.
-            </Text>
+            <Text style={styles.emptyText}>{t("inv.empty.invited")}</Text>
           ) : (
             invitedUsers.map((item) => (
               // Пришедший человек — живая строка (Веха 59): аватарка, ФИО,
@@ -433,7 +430,7 @@ export default function Invites() {
                   </Text>
                   {!!item.used_at && (
                     <Text style={styles.invitedDate}>
-                      пришёл(ла) {new Date(item.used_at).toLocaleDateString("ru-RU")}
+                      {t("inv.usedAt", { дата: new Date(item.used_at).toLocaleDateString(dateLocale()) })}
                     </Text>
                   )}
                 </View>
