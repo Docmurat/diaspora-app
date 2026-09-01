@@ -143,7 +143,7 @@ export default function RequestNameChangeScreen() {
       <View style={styles.centerState}>
         <StatusBar style="dark" />
 
-        <Text style={styles.stateTitle}>Запрос отправлен</Text>
+        <Text style={styles.stateTitle}>{t("name.sentTitle")}</Text>
 
         <Tekmet style={styles.tekmetSuccess} />
 

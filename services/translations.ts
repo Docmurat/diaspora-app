@@ -610,6 +610,11 @@ export const STRINGS: Record<string, Entry> = {
     en: "Couldn't open Instagram",
     kb: "Instagram ачылмады",
   },
+  "profile.open.telegram": {
+    ru: "Не удалось открыть Telegram",
+    en: "Couldn't open Telegram",
+    kb: "Telegram ачылмады",
+  },
   "profile.open.whatsapp": {
     ru: "Не удалось открыть WhatsApp",
     en: "Couldn't open WhatsApp",
@@ -1241,6 +1246,12 @@ export const STRINGS: Record<string, Entry> = {
   },
   "newPost.photosLabel": { ru: "Фото", en: "Photos", kb: "Суратла" },
   "newPost.filesLabel": { ru: "Файлы", en: "Files", kb: "Файлла" },
+  "newPost.where.hidden": {
+    ru: "В скрытом блоке",
+    en: "Hidden section",
+    kb: "Джашырылгъан блокда",
+  },
+  "newPost.where.files": { ru: "Файлов", en: "Files", kb: "Файлла" },
   "newPost.addHidden": {
     ru: "Добавить скрытый блок",
     en: "Add a hidden section",
@@ -1682,6 +1693,11 @@ export const STRINGS: Record<string, Entry> = {
     en: "Couldn't send the request",
     kb: "Тилек ийилмеди",
   },
+  "name.sentTitle": {
+    ru: "Запрос отправлен",
+    en: "Request sent",
+    kb: "Запрос ийилди",
+  },
   "name.sentText": {
     ru: "Модератор рассмотрит запрос на изменение имени и фамилии. Ответ придёт в уведомления.",
     en: "A moderator will review the name change request. The reply will arrive in your notifications.",
@@ -1724,6 +1740,16 @@ export const STRINGS: Record<string, Entry> = {
     ru: "В открытом блоке — не больше {N} файлов",
     en: "Open section — no more than {N} files",
     kb: "Ачыкъ блокда — {N} файлдан кёб болмазгъа керекди",
+  },
+  "wallSvc.limit.photosHidden": {
+    ru: "В скрытом блоке — не больше {N} фото",
+    en: "Hidden section — no more than {N} photos",
+    kb: "Джашырылгъан блокда — {N} суратдан кёб болмазгъа керекди",
+  },
+  "wallSvc.limit.filesHidden": {
+    ru: "В скрытом блоке — не больше {N} файлов",
+    en: "Hidden section — no more than {N} files",
+    kb: "Джашырылгъан блокда — {N} файлдан кёб болмазгъа керекди",
   },
   "wallSvc.limit.fileBigName": {
     ru: "Файл «{имя}» больше {N} МБ",
@@ -2079,6 +2105,150 @@ export const STRINGS: Record<string, Entry> = {
     ru: "Ошибка проверки инвайта",
     en: "Invite verification error",
     kb: "Чакъырыу тинтиуде терслик",
+  },
+  // Уведомления (Веха 64.1): русские тексты рождаются в базе, экран
+  // узнаёт их по шаблону и показывает перевод (notificationI18n.ts).
+  "ntf.invite.title": {
+    ru: "Новый участник по вашему инвайту",
+    en: "New member via your invite",
+    kb: "Сизни чакъырыуугъуз бла джангы адам",
+  },
+  "ntf.invite.body": {
+    ru: "{имя} присоединился к сообществу по вашему приглашению.",
+    en: "{имя} has joined the community via your invitation.",
+    kb: "{имя} сизни чакъырыуугъуз бла сообществогъа къошулду.",
+  },
+  "ntf.fallback.newMember": {
+    ru: "Новый участник",
+    en: "New member",
+    kb: "Джангы адам",
+  },
+  "ntf.appeal.closed": {
+    ru: "Обращение закрыто",
+    en: "Request closed",
+    kb: "Тилек джабылды",
+  },
+  "ntf.appeal.closedBody": {
+    ru: "Ваше обращение рассмотрено администрацией.",
+    en: "Your request has been reviewed by the administration.",
+    kb: "Тилегигизге администрация къарагъанды.",
+  },
+  "ntf.appeal.reply": {
+    ru: "Ответ администрации",
+    en: "Reply from the administration",
+    kb: "Администрацияны джууабы",
+  },
+  "ntf.help.comment": {
+    ru: "Новый комментарий к вашему посту",
+    en: "New comment on your post",
+    kb: "Постугъузгъа джангы комментарий",
+  },
+  "ntf.help.reply": {
+    ru: "Ответ на ваш комментарий",
+    en: "Reply to your comment",
+    kb: "Комментарийигизге джууаб",
+  },
+  "ntf.help.newPost": {
+    ru: "Новый пост на Стене помощи · {сфера}",
+    en: "New post on the Help Wall · {сфера}",
+    kb: "Болушлукъ стенада джангы пост · {сфера}",
+  },
+  "ntf.help.blocked": {
+    ru: "Пост скрыт модерацией",
+    en: "Post hidden by moderation",
+    kb: "Пост модерация бла джашырылгъанды",
+  },
+  "ntf.help.blockedBody": {
+    ru: "Ваш пост на Стене помощи заблокирован и виден только вам.",
+    en: "Your post on the Help Wall has been blocked and is visible only to you.",
+    kb: "Болушлукъ стенадагъы постугъуз блок этилгенди эмда джангыз сизге кёрюнеди.",
+  },
+  "ntf.help.blockedReason": {
+    ru: "Причина: {причина}",
+    en: "Reason: {причина}",
+    kb: "Себеб: {причина}",
+  },
+  "ntf.complaint.resolved": {
+    ru: "Жалоба на {имя} рассмотрена",
+    en: "Your report on {имя} has been reviewed",
+    kb: "{имя} юсюнден тарыгъыугъа къаралды",
+  },
+  "ntf.complaint.resolvedBody": {
+    ru: "Мы разобрались и приняли меры. Спасибо, что помогаете беречь сообщество.",
+    en: "We have looked into it and taken action. Thank you for helping to protect the community.",
+    kb: "Биз тинтдик эмда мадар этдик. Джамагъатны сакълагъаныгъыз ючюн сау болугъуз.",
+  },
+  "ntf.complaint.rejected": {
+    ru: "Жалоба на {имя} отклонена",
+    en: "Your report on {имя} has been declined",
+    kb: "{имя} юсюнден тарыгъыу алынмады",
+  },
+  "ntf.complaint.rejectedBody": {
+    ru: "Мы изучили обращение и не нашли нарушений правил сообщества.",
+    en: "We have reviewed the report and found no violation of the community rules.",
+    kb: "Биз тарыгъыугъа къарадыкъ эмда сообществону джорукъларын бузгъан зат табмадыкъ.",
+  },
+  "ntf.fallback.member": { ru: "участника", en: "a member", kb: "адамны" },
+  "ntf.nameChange.approved": {
+    ru: "Имя изменено",
+    en: "Name changed",
+    kb: "Ат тюрлендирилди",
+  },
+  "ntf.nameChange.approvedBody": {
+    ru: "Заявка одобрена. Теперь вас зовут {имя}.",
+    en: "Request approved. Your name is now {имя}.",
+    kb: "Заявка алынды. Энди атыгъыз — {имя}.",
+  },
+  "ntf.nameChange.rejected": {
+    ru: "Заявка на смену имени отклонена",
+    en: "Name change request declined",
+    kb: "Ат тюрлендириу заявка алынмады",
+  },
+  "ntf.nameChange.rejectedBody": {
+    ru: "Имя осталось прежним.",
+    en: "Your name remains unchanged.",
+    kb: "Ат алгъынча къалды.",
+  },
+  "ntf.nameChange.note": {
+    ru: "Комментарий модератора: «{текст}»",
+    en: "Moderator’s comment: “{текст}”",
+    kb: "Модераторну комментарийи: «{текст}»",
+  },
+  "ntf.message.title": {
+    ru: "Новое сообщение: {имя}",
+    en: "New message: {имя}",
+    kb: "Джангы письмо: {имя}",
+  },
+  "ntf.fallback.participant": { ru: "Участник", en: "Member", kb: "Адам" },
+  "ntf.reg.approved": {
+    ru: "Заявка одобрена",
+    en: "Application approved",
+    kb: "Заявка алынды",
+  },
+  "ntf.reg.approvedBody": {
+    ru: "Добро пожаловать в «Минги-Тау». Теперь вам доступно всё сообщество.",
+    en: "Welcome to Mingi-Tau. The whole community is now open to you.",
+    kb: "«Минги-Тау»-гъа хош келигиз. Энди сизге бютеу сообщество ачыкъды.",
+  },
+  "ntf.reg.revision": {
+    ru: "Анкету нужно исправить",
+    en: "Your profile needs corrections",
+    kb: "Анкетаны тюзетирге керекди",
+  },
+  "ntf.reg.rejected": {
+    ru: "Заявка отклонена",
+    en: "Application declined",
+    kb: "Заявка алынмады",
+  },
+  "ntf.qual.confirmed": {
+    ru: "Квалификация подтверждена",
+    en: "Qualification confirmed",
+    kb: "Квалификация бегитилгенди",
+  },
+  "ntf.qual.confirmedBody": {
+    ru: "Ваша квалификация в категории «{сфера}» подтверждена. На Стене помощи вам доступны скрытые материалы и обсуждения этой категории.",
+    en: "Your qualification in the “{сфера}” category has been confirmed. Hidden materials and discussions of this category on the Help Wall are now available to you.",
+    kb: "«{сфера}» категорияда квалификациягъыз бегитилгенди. Болушлукъ стенада бу категорияны джашырылгъан материаллары бла ушакълары энди сизге ачыкъдыла.",
   },
 };
 

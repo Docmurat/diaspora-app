@@ -219,7 +219,7 @@ export default function ProfileScreen() {
 
       await Linking.openURL(canOpenApp ? appUrl : `https://t.me/${raw}`);
     } catch (e) {
-      Alert.alert(t("common.error"), "Не удалось открыть Telegram");
+      Alert.alert(t("common.error"), t("profile.open.telegram"));
     }
   };
 

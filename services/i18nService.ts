@@ -97,9 +97,12 @@ export function useLanguage(): Lang {
 // Перевод по ключу. Нет перевода (null в словаре или ключ не найден) —
 // показываем русский: так юртексты и служебные строки остаются
 // по-русски на любом языке (решение владельца).
+// Подстановки: текст или число; пусто (null/undefined) — подставится
+// пустая строка, чтобы формат-функции вроде formatDate() (могут вернуть
+// null) не горели красным в проверке типов.
 export function t(
   key: string,
-  params?: Record<string, string | number>,
+  params?: Record<string, string | number | null | undefined>,
 ): string {
   const entry = STRINGS[key];
   let text: string;
@@ -117,7 +120,10 @@ export function t(
 
   if (params) {
     for (const name of Object.keys(params)) {
-      text = text.split(`{${name}}`).join(String(params[name]));
+      const value = params[name];
+      text = text
+        .split(`{${name}}`)
+        .join(value === null || value === undefined ? "" : String(value));
     }
   }
   return text;

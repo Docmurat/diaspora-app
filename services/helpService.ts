@@ -593,9 +593,9 @@ export function checkHelpFileLimits(files: NewHelpFile[]): string | null {
   if (count(false, false) > MAX_FILES_PER_BLOCK)
     return t("wallSvc.limit.filesOpen", { N: MAX_FILES_PER_BLOCK });
   if (count(true, true) > MAX_PHOTOS_PER_BLOCK)
-    return `В скрытом блоке — не больше ${MAX_PHOTOS_PER_BLOCK} фото`;
+    return t("wallSvc.limit.photosHidden", { N: MAX_PHOTOS_PER_BLOCK });
   if (count(true, false) > MAX_FILES_PER_BLOCK)
-    return `В скрытом блоке — не больше ${MAX_FILES_PER_BLOCK} файлов`;
+    return t("wallSvc.limit.filesHidden", { N: MAX_FILES_PER_BLOCK });
 
   const tooBig = files.find(
     (f) => (f.size || 0) > MAX_FILE_MB * 1024 * 1024,

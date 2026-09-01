@@ -29,6 +29,7 @@ import {
 } from "../services/notificationService";
 import { getMyProfile } from "../services/profileService";
 import { t, useLanguage } from "../services/i18nService";
+import { localizeNotification } from "../services/notificationI18n";
 
 const ICONS: Record<string, keyof typeof Ionicons.glyphMap> = {
   message: "chatbubble-ellipses-outline",
@@ -329,6 +330,8 @@ export default function NotificationsScreen() {
 
               {group.items.map((item) => {
                 const openable = canOpenLink(item.link, isModerator);
+                // Перевод известных русских текстов (Веха 64.1)
+                const shown = localizeNotification(item);
 
                 return (
                   <TouchableOpacity
@@ -359,7 +362,7 @@ export default function NotificationsScreen() {
                           ]}
                           numberOfLines={1}
                         >
-                          {item.title}
+                          {shown.title}
                         </Text>
 
                         <Text style={styles.cardTime}>
@@ -367,9 +370,9 @@ export default function NotificationsScreen() {
                         </Text>
                       </View>
 
-                      {!!item.body && (
+                      {!!shown.body && (
                         <Text style={styles.cardText} numberOfLines={2}>
-                          {item.body}
+                          {shown.body}
                         </Text>
                       )}
                     </View>

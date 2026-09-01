@@ -39,7 +39,7 @@ function formatDate(dateString?: string | null) {
   const date = new Date(dateString);
   if (Number.isNaN(date.getTime())) return null;
 
-  return date.toLocaleString("ru-RU");
+  return date.toLocaleString(dateLocale());
 }
 
 function inviteMessage(code: string) {
@@ -155,7 +155,7 @@ export default function Invites() {
       await Linking.openURL(telegramShareLink(invite.code));
       await markAsHandedOver(invite);
     } catch {
-      Alert.alert(t("common.error"), "Не удалось открыть Телеграм");
+      Alert.alert(t("common.error"), t("profile.open.telegram"));
     }
   };
 

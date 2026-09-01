@@ -131,7 +131,10 @@ export default function NewHelpPostScreen() {
 
     if (room <= 0) {
       setError(
-        `${isHidden ? "В скрытом блоке" : t("newPost.photosLabel")} — не больше ${MAX_PHOTOS_PER_BLOCK} фото`,
+        t("newPost.limit.photos", {
+          где: isHidden ? t("newPost.where.hidden") : t("newPost.photosLabel"),
+          N: MAX_PHOTOS_PER_BLOCK,
+        }),
       );
       return;
     }
@@ -184,7 +187,10 @@ export default function NewHelpPostScreen() {
 
     if (room <= 0) {
       setError(
-        `${isHidden ? "В скрытом блоке" : "Файлов"} — не больше ${MAX_FILES_PER_BLOCK}`,
+        t("newPost.limit.files", {
+          где: isHidden ? t("newPost.where.hidden") : t("newPost.where.files"),
+          N: MAX_FILES_PER_BLOCK,
+        }),
       );
       return;
     }
