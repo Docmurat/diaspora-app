@@ -7,9 +7,9 @@
 
 import { supabase } from "../lib/supabase";
 
-export const PDN_CONSENT_VERSION = "1.0 от 08.08.2026";
-export const TERMS_VERSION = "2.0 от 15.08.2026";
-export const MEMORANDUM_VERSION = "1.0 от 08.08.2026";
+export const PDN_CONSENT_VERSION = "1.0 от 03.09.2026";
+export const TERMS_VERSION = "2.0 от 03.09.2026";
+export const MEMORANDUM_VERSION = "1.0 от 03.09.2026";
 
 // Записывает все согласия нового участника (обработка ПДн + принятие
 // соглашения и политики + Меморандум сообщества). Вызывается сразу

@@ -54,7 +54,7 @@ export default function PrivacyScreen() {
         <Tekmet style={styles.tekmet} />
 
         <Text style={styles.updated}>
-          {en ? "Version 2.0. Effective date: 15 August 2026" : "Версия 2.0. Дата вступления в силу: 15.08.2026"}
+          {en ? "Version 2.0. Effective date: 3 September 2026" : "Версия 2.0. Дата вступления в силу: 03.09.2026"}
         </Text>
 
         {en ? (

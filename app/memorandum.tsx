@@ -71,7 +71,7 @@ export default function MemorandumScreen() {
         <Tekmet style={styles.tekmet} />
 
         <Text style={styles.updated}>
-          {en ? "Version 1.0 of 8 August 2026" : "Версия 1.0 от 08.08.2026"}
+          {en ? "Version 1.0 of 3 September 2026" : "Версия 1.0 от 03.09.2026"}
         </Text>
 
         {en ? (
