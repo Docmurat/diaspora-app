@@ -195,6 +195,15 @@ export default function HelpScreen() {
     return unsubscribe;
   }, [loadFeed]);
 
+  // «Все категории» в фильтре ленты: явная кнопка-сброс (Веха 65).
+  const setFilterAll = () => {
+    if (filter.length === 0) return; // уже всё видно
+    setFilter([]);
+    setLoading(true);
+    loadFeed([]);
+    saveMyHelpFilter([]).catch((e) => console.log("Фильтр не сохранился:", e));
+  };
+
   const toggleCategory = (category: string) => {
     const next = filter.includes(category)
       ? filter.filter((c) => c !== category)
@@ -322,9 +331,25 @@ export default function HelpScreen() {
 
         {filterOpen && (
           <View style={styles.filterPanel}>
+            <Text style={styles.notifyTitle}>{t("wall.filterTitle")}</Text>
             <Text style={styles.filterHint}>{t("wall.filterHint")}</Text>
 
             <View style={styles.chipsWrap}>
+              <TouchableOpacity
+                style={[styles.chip, filter.length === 0 && styles.chipActive]}
+                activeOpacity={0.75}
+                onPress={setFilterAll}
+              >
+                <Text
+                  style={[
+                    styles.chipText,
+                    filter.length === 0 && styles.chipTextActive,
+                  ]}
+                >
+                  {t("wall.allCategories")}
+                </Text>
+              </TouchableOpacity>
+
               {HELP_CATEGORIES.map((category) => {
                 const active = filter.includes(category);
 
@@ -357,7 +382,40 @@ export default function HelpScreen() {
 
         {notifyOpen && (
           <View style={styles.filterPanel}>
-            <Text style={styles.notifyTitle}>{t("wall.notifyTitle")}</Text>
+            <TouchableOpacity
+              style={styles.bellRow}
+              activeOpacity={0.75}
+              onPress={toggleBell}
+            >
+              <Ionicons
+                name={
+                  notifyNewPosts
+                    ? "notifications-outline"
+                    : "notifications-off-outline"
+                }
+                size={18}
+                color="#3F6B5B"
+              />
+              <View style={{ flex: 1 }}>
+                <Text style={styles.bellTitle}>
+                  {notifyNewPosts ? t("wall.notifyOn") : t("wall.notifyOff")}
+                </Text>
+              </View>
+              <View
+                style={[
+                  styles.switchTrack,
+                  notifyNewPosts && styles.switchTrackOn,
+                ]}
+              >
+                <View
+                  style={[
+                    styles.switchKnob,
+                    notifyNewPosts && styles.switchKnobOn,
+                  ]}
+                />
+              </View>
+            </TouchableOpacity>
+
             <Text style={styles.filterHint}>{t("wall.notifyHint")}</Text>
 
             <View style={styles.chipsWrap}>
@@ -374,7 +432,9 @@ export default function HelpScreen() {
                     styles.chipText,
                     notifyCategories.length === 0 && styles.chipTextActive,
                   ]}
-                >{t("wall.allCategories")}</Text>
+                >
+                  {t("wall.allCategories")}
+                </Text>
               </TouchableOpacity>
 
               {HELP_CATEGORIES.map((category) => {
@@ -396,49 +456,6 @@ export default function HelpScreen() {
                 );
               })}
             </View>
-
-            <TouchableOpacity
-              style={styles.bellRow}
-              activeOpacity={0.75}
-              onPress={toggleBell}
-            >
-              <Ionicons
-                name={
-                  notifyNewPosts
-                    ? "notifications-outline"
-                    : "notifications-off-outline"
-                }
-                size={18}
-                color="#3F6B5B"
-              />
-              <View style={{ flex: 1 }}>
-                <Text style={styles.bellTitle}>
-                  {notifyNewPosts
-                    ? t("wall.notifyOn")
-                    : t("wall.notifyOff")}
-                </Text>
-                <Text style={styles.bellHint}>
-                  {notifyNewPosts
-                    ? t("wall.notifyOnHint")
-                    : t("wall.notifyOffHint")}
-                </Text>
-              </View>
-              <View
-                style={[
-                  styles.switchTrack,
-                  notifyNewPosts && styles.switchTrackOn,
-                ]}
-              >
-                <View
-                  style={[
-                    styles.switchKnob,
-                    notifyNewPosts && styles.switchKnobOn,
-                  ]}
-                />
-              </View>
-            </TouchableOpacity>
-
-            <Text style={styles.filterHint2}>{t("wall.repliesAlways")}</Text>
           </View>
         )}
 
@@ -452,7 +469,9 @@ export default function HelpScreen() {
           >
             <View style={styles.newInDot} />
             <Text style={styles.newInText} numberOfLines={2}>
-              {t("wall.newIn", { категории: hiddenUnseen.map(tCategory).join(" · ") })}
+              {t("wall.newIn", {
+                категории: hiddenUnseen.map(tCategory).join(" · "),
+              })}
             </Text>
             <Ionicons name="arrow-forward" size={15} color="#3F6B5B" />
           </TouchableOpacity>
@@ -617,14 +636,14 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
 
+  // Переключатель теперь ПЕРВЫЙ в панели (Веха 65): линия-разделитель
+  // и верхние отступы прежнего нижнего положения убраны, вместо них —
+  // небольшой отступ снизу, отделяющий его от подписи и категорий.
   bellRow: {
     flexDirection: "row",
     alignItems: "center",
     gap: 10,
-    marginTop: 14,
-    paddingTop: 12,
-    borderTopWidth: 0.75,
-    borderTopColor: "rgba(93,140,120,0.18)",
+    marginBottom: 12,
     ...(Platform.OS === "web" ? ({ cursor: "pointer" } as any) : {}),
   },
 

@@ -5,6 +5,7 @@ import { Platform, StyleSheet, View } from "react-native";
 import "react-native-reanimated";
 
 import AccountGuard from "../components/AccountGuard";
+import PushBridge from "../components/PushBridge";
 
 export const unstable_settings = {
   initialRouteName: "index",
@@ -27,6 +28,7 @@ export default function RootLayout() {
   return (
     <ThemeProvider value={DefaultTheme}>
       <AccountGuard />
+      <PushBridge />
       <AppFrame>
         <Stack screenOptions={{ headerShown: false }}>
           <Stack.Screen name="index" />

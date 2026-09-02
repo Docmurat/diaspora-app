@@ -243,13 +243,22 @@ export function MingiBackground({
   // с запасом — полную высоту экрана устройства (браузер на телефоне то
   // прячет, то показывает адресную строку, и окно «дышит»; экран — нет).
   // Пересчитываем только при повороте экрана (изменилась ширина).
-  const measureWeb = () => ({
-    w: window.innerWidth,
-    h: Math.max(
-      window.innerHeight,
-      (typeof window.screen !== "undefined" && window.screen.height) || 0,
-    ),
-  });
+  // Ширина слоя = ширина КОЛОНКИ приложения (та же, что maxWidth: 768 у
+  // webFrame в app/_layout.tsx), по центру окна: на широком мониторе
+  // пятна не разлетаются за рамку приложения (Веха 65, косметика).
+  const APP_FRAME_MAX_WIDTH = 768;
+
+  const measureWeb = () => {
+    const frameW = Math.min(window.innerWidth, APP_FRAME_MAX_WIDTH);
+    return {
+      w: frameW,
+      left: Math.max(0, (window.innerWidth - frameW) / 2),
+      h: Math.max(
+        window.innerHeight,
+        (typeof window.screen !== "undefined" && window.screen.height) || 0,
+      ),
+    };
+  };
 
   const [webSize, setWebSize] = useState(() =>
     Platform.OS === "web" && typeof window !== "undefined"
@@ -264,7 +273,9 @@ export function MingiBackground({
       setWebSize((prev) => {
         const next = measureWeb();
         if (!prev) return next;
-        if (next.w !== prev.w) return next; // поворот экрана
+        // Поворот экрана или изменение ширины окна браузера — колонка
+        // приложения сдвинулась/сжалась, пересчитываем слой.
+        if (next.w !== prev.w || next.left !== prev.left) return next;
         // Любые изменения одной лишь высоты (клавиатура, адресная
         // строка браузера) игнорируем — фон стоит как вкопанный.
         return prev;
@@ -284,7 +295,7 @@ export function MingiBackground({
       ? ({
           position: "fixed",
           top: 0,
-          left: 0,
+          left: webSize.left,
           width: webSize.w,
           height: webSize.h,
           overflow: "hidden",

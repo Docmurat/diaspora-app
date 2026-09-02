@@ -15,7 +15,6 @@ import {
 } from "react";
 import {
   ActivityIndicator,
-  Alert,
   Animated,
   Easing,
   Image,
@@ -25,7 +24,7 @@ import {
   Text,
   TextInput,
   TouchableOpacity,
-  View,
+  View
 } from "react-native";
 
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -323,7 +322,9 @@ export default function HomeScreen() {
                 styles.modeTabText,
                 mode === "all" && styles.modeTabTextActive,
               ]}
-            >{t("people.tab.all")}</Text>
+            >
+              {t("people.tab.all")}
+            </Text>
           </TouchableOpacity>
 
           <TouchableOpacity
@@ -340,7 +341,9 @@ export default function HomeScreen() {
                 styles.modeTabText,
                 mode === "saved" && styles.modeTabTextActive,
               ]}
-            >{t("people.tab.saved")}</Text>
+            >
+              {t("people.tab.saved")}
+            </Text>
           </TouchableOpacity>
 
           <Animated.View
@@ -407,7 +410,9 @@ export default function HomeScreen() {
         <View style={!showList && styles.halfBottom}>
           {!showList && users.length > 0 && (
             <View style={styles.counterRow}>
-              <Text style={styles.counterLabel}>{t("people.counterLabel")}</Text>
+              <Text style={styles.counterLabel}>
+                {t("people.counterLabel")}
+              </Text>
               <Text style={styles.counterValue}>{users.length}</Text>
             </View>
           )}
@@ -439,7 +444,11 @@ export default function HomeScreen() {
                         <Text style={styles.name} numberOfLines={2}>
                           {user.fullName}
                         </Text>
-                        {!!age && <Text style={styles.age}>{t("common.ageSuffix", { возраст: age })}</Text>}
+                        {!!age && (
+                          <Text style={styles.age}>
+                            {t("common.ageSuffix", { возраст: age })}
+                          </Text>
+                        )}
                         <Text style={styles.profession}>
                           {user.profession || "—"}
                         </Text>
@@ -800,10 +809,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
   },
 
+  // Кнопка-человечек (инвайты) — над капсулой вкладок, как «+» Стены:
+  // при bottom: 26 она пряталась ПОД капсулой, поэтому её «давно не было».
   fabShadow: {
     position: "absolute",
     right: 20,
-    bottom: 26,
+    bottom: 104,
     borderRadius: 22,
     shadowColor: "#69B78D",
     shadowOpacity: 0.45,

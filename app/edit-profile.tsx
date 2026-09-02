@@ -21,6 +21,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import AvatarCropModal, { prepareAvatarSource } from "../components/AvatarCrop";
 import {
   normalizeHandle,
@@ -79,6 +80,7 @@ const glassInputProps = {
 
 export default function EditProfileScreen() {
   const lang = useLanguage(); // перерисовка при смене языка
+  const insets = useSafeAreaInsets(); // «Назад» на одном уровне со всеми экранами
   const [fontsLoaded] = useFonts({
     Philosopher_400Regular,
     Philosopher_700Bold,
@@ -383,11 +385,19 @@ export default function EditProfileScreen() {
         keyboardVerticalOffset={Platform.OS === "ios" ? 20 : 0}
       >
         <ScrollView
-          contentContainerStyle={styles.container}
+          contentContainerStyle={[styles.container, { paddingTop: insets.top + 10 }]}
           keyboardShouldPersistTaps="handled"
           keyboardDismissMode="on-drag"
           showsVerticalScrollIndicator={false}
         >
+          <TouchableOpacity
+            onPress={() => router.back()}
+            activeOpacity={0.8}
+            style={styles.backLink}
+          >
+            <Text style={styles.backLinkText}>{t("common.backArrow")}</Text>
+          </TouchableOpacity>
+
           <Text style={styles.title}>{t("edit.title")}</Text>
           <Text style={styles.subtitle}>{t("common.brandCaps")}</Text>
 
@@ -796,9 +806,18 @@ const styles = StyleSheet.create({
 
   container: {
     paddingHorizontal: 28,
-    paddingTop: 64,
     paddingBottom: 40,
     flexGrow: 1,
+  },
+
+  backLink: {
+    alignSelf: "flex-start",
+    marginBottom: 12,
+  },
+
+  backLinkText: {
+    fontSize: 15,
+    color: "#96AC9E",
   },
 
   title: {

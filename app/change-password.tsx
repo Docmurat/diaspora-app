@@ -15,6 +15,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Glass, Tekmet } from "../components/mingi";
 import { supabase } from "../lib/supabase";
 import { t, useLanguage } from "../services/i18nService";
@@ -62,6 +63,7 @@ const glassInputProps = {
 
 export default function ChangePasswordScreen() {
   const lang = useLanguage(); // перерисовка при смене языка
+  const insets = useSafeAreaInsets(); // «Назад» на одном уровне со всеми экранами
   const [fontsLoaded] = useFonts({
     Philosopher_400Regular,
     Philosopher_700Bold,
@@ -134,6 +136,15 @@ export default function ChangePasswordScreen() {
   return (
     <View style={styles.screen}>
       <StatusBar style="dark" />
+
+      {/* «Назад» сверху, на одном уровне со всеми экранами (Веха 65) */}
+      <TouchableOpacity
+        onPress={() => router.back()}
+        activeOpacity={0.8}
+        style={[styles.backLink, { top: insets.top + 10 }]}
+      >
+        <Text style={styles.backLinkText}>{t("common.backArrow")}</Text>
+      </TouchableOpacity>
 
       <KeyboardAvoidingView
         style={styles.keyboardWrap}
@@ -223,9 +234,6 @@ export default function ChangePasswordScreen() {
             </Glass>
           </TouchableOpacity>
 
-          <TouchableOpacity onPress={() => router.back()} activeOpacity={0.8}>
-            <Text style={styles.link}>{t("common.back")}</Text>
-          </TouchableOpacity>
         </View>
       </KeyboardAvoidingView>
     </View>
@@ -233,6 +241,18 @@ export default function ChangePasswordScreen() {
 }
 
 const styles = StyleSheet.create({
+  backLink: {
+    position: "absolute",
+    left: 20,
+    zIndex: 10,
+    ...(Platform.OS === "web" ? ({ cursor: "pointer" } as any) : {}),
+  },
+
+  backLinkText: {
+    fontSize: 15,
+    color: "#96AC9E",
+  },
+
   screen: {
     flex: 1,
     backgroundColor: "#FFFFFF",
@@ -326,14 +346,6 @@ const styles = StyleSheet.create({
     color: "#FFFFFF",
     fontSize: 16,
     fontWeight: "600",
-  },
-
-  link: {
-    color: "#96AC9E",
-    textAlign: "center",
-    fontSize: 14,
-    marginTop: 20,
-    textDecorationLine: "underline",
   },
 
   disabled: {

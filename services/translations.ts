@@ -975,10 +975,11 @@ export const STRINGS: Record<string, Entry> = {
     en: "Categories: {N}",
     kb: "Категорияла: {N}",
   },
+  "wall.filterTitle": { ru: "Фильтр", en: "Filter", kb: "Фильтр" },
   "wall.filterHint": {
-    ru: "Показывать в ленте только выбранные категории. Ничего не выбрано — видно всё. На уведомления фильтр не влияет.",
-    en: "Show only the selected categories in the feed. Nothing selected — everything is visible. The filter does not affect notifications.",
-    kb: "Лентада джангыз сайланнган категорияланы кёргюзюрге. Джукъ сайланмагъан эсе- бары да кёрюнеди. Уведомлениеге фильтр къатышмайды.",
+    ru: "Выберите категории, которые хотите видеть в ленте.",
+    en: "Choose the categories you want to see in the feed.",
+    kb: "Лентада кёрюрге излеген категорияларыгъызны сайлагъыз.",
   },
   "wall.notifyTitle": {
     ru: "Какие посты мне важны",
@@ -986,9 +987,9 @@ export const STRINGS: Record<string, Entry> = {
     kb: "Къайсы постла манга магъаналыдыла",
   },
   "wall.notifyHint": {
-    ru: "По ним загорается точка на вкладке и приходят уведомления.",
-    en: "They light up the dot on the tab and send notifications.",
-    kb: "Ала ючюн вкладкада точка джанады эмда уведомлениеле келедиле.",
+    ru: "Выберите категории, по которым будут приходить уведомления.",
+    en: "Choose the categories you want to get notifications for.",
+    kb: "Уведомлениеле келлик категорияланы сайлагъыз.",
   },
   "wall.notifyOn": {
     ru: "Уведомления о новых постах включены",
@@ -1517,6 +1518,46 @@ export const STRINGS: Record<string, Entry> = {
     ru: "Не удалось удалить профиль",
     en: "Couldn't delete the profile",
     kb: "Профиль кетерилмеди",
+  },
+  "set.block.push": {
+    ru: "ПУШ-УВЕДОМЛЕНИЯ",
+    en: "PUSH NOTIFICATIONS",
+    kb: "ПУШ-УВЕДОМЛЕНИЕЛЕ",
+  },
+  "set.push.label": {
+    ru: "Пуш-уведомления",
+    en: "Push notifications",
+    kb: "Пуш-уведомлениеле",
+  },
+  "set.push.on": {
+    ru: "Включены на этом телефоне или компьютере",
+    en: "On for this phone or computer",
+    kb: "Бу телефонда неда компьютерде джандырылыбдыла",
+  },
+  "set.push.off": {
+    ru: "Нажмите, чтобы включить. Уведомления будут приходить, даже когда сайт закрыт",
+    en: "Tap to turn on. Notifications will arrive even when the site is closed",
+    kb: "Джандырыр ючюн басыгъыз. Сайт джабыкъ болса да, уведомлениеле келликдиле",
+  },
+  "set.push.denied": {
+    ru: "Запрещены в настройках браузера. Разрешите сайту уведомления и нажмите ещё раз",
+    en: "Blocked in the browser settings. Allow notifications for this site and tap again",
+    kb: "Браузерни настройкаларында тыйылыбдыла. Сайтха уведомлениелеге эркинлик беригиз эмда дагъыда бир кере басыгъыз",
+  },
+  "set.push.needsInstall": {
+    ru: "На iPhone сначала добавьте сайт на экран «Домой» («Поделиться» → «На экран „Домой“») и включите пуши уже там",
+    en: "On iPhone, first add the site to the Home Screen (Share → Add to Home Screen), then turn pushes on there",
+    kb: "iPhone-да алгъа сайтны «Домой» экраннга къошугъуз («Поделиться» → «На экран „Домой“»), пушланы уа анда джандырыгъыз",
+  },
+  "set.push.unsupported": {
+    ru: "Этот браузер не поддерживает пуш-уведомления",
+    en: "This browser doesn't support push notifications",
+    kb: "Бу браузер пуш-уведомлениелени тутмайды",
+  },
+  "set.push.error": {
+    ru: "Не удалось включить пуш-уведомления. Попробуйте ещё раз",
+    en: "Couldn't turn on push notifications. Please try again",
+    kb: "Пуш-уведомлениеле джандырылмадыла. Джангыдан кёрюгюз",
   },
   "mail.title": {
     ru: "Смена почты",

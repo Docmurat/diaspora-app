@@ -6,19 +6,27 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import { StatusBar } from "expo-status-bar";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   Alert,
+  Platform,
   ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
   View,
 } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { Tekmet } from "../components/mingi";
 import { softDeleteMyAccount } from "../services/profileService";
 import { setLanguage, t, useLanguage } from "../services/i18nService";
+import {
+  disablePush,
+  enablePush,
+  getPushStatus,
+  PushStatus,
+} from "../services/pushService";
 
 type RowProps = {
   icon: keyof typeof Ionicons.glyphMap;
@@ -57,6 +65,7 @@ function SettingsRow({ icon, label, hint, danger, onPress, last }: RowProps) {
 
 export default function SettingsScreen() {
   const lang = useLanguage(); // перерисовка при смене языка
+  const insets = useSafeAreaInsets(); // «Назад» на одном уровне со всеми экранами
   const [fontsLoaded] = useFonts({
     Philosopher_400Regular,
     Philosopher_700Bold,
@@ -66,6 +75,43 @@ export default function SettingsScreen() {
   // одинаково и в браузере, и на телефоне.
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [busy, setBusy] = useState(false);
+
+  // Пуш-уведомления (Веха 65): только в браузере. null — ещё выясняем.
+  const [pushStatus, setPushStatus] = useState<PushStatus | null>(null);
+  const [pushBusy, setPushBusy] = useState(false);
+
+  useEffect(() => {
+    if (Platform.OS !== "web") return;
+    getPushStatus().then(setPushStatus);
+  }, []);
+
+  const pushHintKey: Record<PushStatus, string> = {
+    on: "set.push.on",
+    off: "set.push.off",
+    denied: "set.push.denied",
+    needsInstall: "set.push.needsInstall",
+    unsupported: "set.push.unsupported",
+  };
+
+  const handlePushToggle = async () => {
+    if (pushBusy || pushStatus === null) return;
+    try {
+      setPushBusy(true);
+      if (pushStatus === "on") {
+        setPushStatus(await disablePush());
+      } else if (pushStatus === "off") {
+        setPushStatus(await enablePush());
+      } else {
+        // denied / needsInstall / unsupported: человек мог поменять
+        // настройки браузера — просто перепроверяем состояние.
+        setPushStatus(await getPushStatus());
+      }
+    } catch {
+      setPushStatus(await getPushStatus().catch(() => "off" as PushStatus));
+    } finally {
+      setPushBusy(false);
+    }
+  };
 
   const handleDelete = async () => {
     if (!confirmDelete) {
@@ -98,7 +144,7 @@ export default function SettingsScreen() {
       <StatusBar style="dark" />
 
       <ScrollView
-        contentContainerStyle={styles.container}
+        contentContainerStyle={[styles.container, { paddingTop: insets.top + 10 }]}
         showsVerticalScrollIndicator={false}
       >
         <TouchableOpacity
@@ -136,6 +182,28 @@ export default function SettingsScreen() {
             last
           />
         </View>
+
+        {Platform.OS === "web" && pushStatus !== null && (
+          <>
+            <Text style={styles.blockLabel}>{t("set.block.push")}</Text>
+
+            <View style={styles.sectionCard}>
+              <SettingsRow
+                icon={
+                  pushStatus === "on"
+                    ? "notifications"
+                    : pushStatus === "off"
+                      ? "notifications-outline"
+                      : "notifications-off-outline"
+                }
+                label={t("set.push.label")}
+                hint={t(pushHintKey[pushStatus])}
+                onPress={handlePushToggle}
+                last
+              />
+            </View>
+          </>
+        )}
 
         <Text style={styles.blockLabel}>{t("set.block.login")}</Text>
 
@@ -214,7 +282,6 @@ const styles = StyleSheet.create({
 
   container: {
     paddingHorizontal: 20,
-    paddingTop: 56,
     paddingBottom: 40,
     flexGrow: 1,
   },

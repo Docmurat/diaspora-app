@@ -17,6 +17,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { Glass, Tekmet } from "../components/mingi";
 import { createNameChangeRequest } from "../services/nameChangeService";
@@ -32,6 +33,7 @@ const glassInputProps = {
 
 export default function RequestNameChangeScreen() {
   const lang = useLanguage(); // перерисовка при смене языка
+  const insets = useSafeAreaInsets(); // «Назад» на одном уровне со всеми экранами
   const [fontsLoaded] = useFonts({
     Philosopher_400Regular,
     Philosopher_700Bold,
@@ -180,7 +182,7 @@ export default function RequestNameChangeScreen() {
         behavior={Platform.OS === "ios" ? "padding" : undefined}
       >
         <ScrollView
-          contentContainerStyle={styles.container}
+          contentContainerStyle={[styles.container, { paddingTop: insets.top + 10 }]}
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
         >
@@ -336,7 +338,6 @@ const styles = StyleSheet.create({
 
   container: {
     paddingHorizontal: 20,
-    paddingTop: 56,
     paddingBottom: 40,
     flexGrow: 1,
   },

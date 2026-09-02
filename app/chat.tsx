@@ -194,20 +194,22 @@ export default function ChatScreen() {
     }
   };
 
-  // Пока диалог открыт, уведомления от этого собеседника гасим сразу —
-  // колокольчик не копит то, что человек видит глазами (решение владельца).
+  // Пока диалог открыт, уведомления «Новое сообщение» от этого собеседника
+  // не гасим, а СТИРАЕМ (Веха 65, решение владельца): то, что человек
+  // видит глазами, не должно засорять список уведомлений — ни
+  // непрочитанным, ни прочитанным. Заодно это сигнал почтальону пушей:
+  // запись исчезла за 3 секунды → пуш о сообщении не отправляется.
   const muteThisChatNotifications = async () => {
     const myId = myUserIdRef.current;
     if (!myId || !otherUserId) return;
     try {
       await supabase
         .from("notifications")
-        .update({ is_read: true })
+        .delete()
         .eq("user_id", myId)
-        .eq("is_read", false)
         .like("link", `/chat?userId=${otherUserId}%`);
     } catch {
-      // правило базы «свои уведомления правит хозяин» уже стоит (markRead)
+      // правило базы «свои уведомления правит хозяин» уже стоит (delete)
     }
   };
 
@@ -416,8 +418,7 @@ export default function ChatScreen() {
           },
         );
       } catch (e) {
-        const message =
-          e instanceof Error ? e.message : t("chat.error.open");
+        const message = e instanceof Error ? e.message : t("chat.error.open");
         setScreenError(message);
       } finally {
         setLoading(false);
@@ -525,8 +526,7 @@ export default function ChatScreen() {
       await markChatAsRead(chatId);
       await reloadMessages();
     } catch (e) {
-      const message =
-        e instanceof Error ? e.message : t("chat.error.attach");
+      const message = e instanceof Error ? e.message : t("chat.error.attach");
       setAttachError(message);
     } finally {
       setUploading(false);
@@ -755,7 +755,9 @@ export default function ChatScreen() {
                     });
                   }}
                 >
-                  <Text style={styles.menuItemText}>{t("chat.menu.openProfile")}</Text>
+                  <Text style={styles.menuItemText}>
+                    {t("chat.menu.openProfile")}
+                  </Text>
                 </TouchableOpacity>
 
                 <View style={styles.menuDivider} />
@@ -775,7 +777,9 @@ export default function ChatScreen() {
                     });
                   }}
                 >
-                  <Text style={[styles.menuItemText, styles.menuItemDanger]}>{t("profile.report")}</Text>
+                  <Text style={[styles.menuItemText, styles.menuItemDanger]}>
+                    {t("profile.report")}
+                  </Text>
                 </TouchableOpacity>
 
                 <View style={styles.menuDivider} />
@@ -883,7 +887,9 @@ export default function ChatScreen() {
 
           {groupedMessages.length === 0 ? (
             <View style={styles.emptyWrap}>
-              <Text style={styles.emptyTitle}>{t("chats.noMessagesPreview")}</Text>
+              <Text style={styles.emptyTitle}>
+                {t("chats.noMessagesPreview")}
+              </Text>
               <Text style={styles.emptySubtext}>{t("chat.empty.hint")}</Text>
             </View>
           ) : (
@@ -910,7 +916,9 @@ export default function ChatScreen() {
                         message.mine && styles.myMessageText,
                         styles.deletedText,
                       ]}
-                    >{t("chat.msg.deleted")}</Text>
+                    >
+                      {t("chat.msg.deleted")}
+                    </Text>
                   ) : message.attachment_type === "image" ? (
                     // Фото: предпросмотр в пузырьке, нажатие — полный размер.
                     message.attachmentUrl ? (
@@ -931,7 +939,9 @@ export default function ChatScreen() {
                           message.mine && styles.myMessageText,
                           styles.deletedText,
                         ]}
-                      >{t("chat.attach.photoGone")}</Text>
+                      >
+                        {t("chat.attach.photoGone")}
+                      </Text>
                     )
                   ) : message.attachment_type === "file" ? (
                     // Документ: строка с именем и размером, нажатие — скачать.
@@ -971,7 +981,10 @@ export default function ChatScreen() {
                           ]}
                         >
                           {message.attachmentUrl
-                            ? [formatSize(message.attachment_size), t("chat.attach.download")]
+                            ? [
+                                formatSize(message.attachment_size),
+                                t("chat.attach.download"),
+                              ]
                                 .filter(Boolean)
                                 .join(" · ")
                             : t("chat.attach.fileGone")}
@@ -1058,7 +1071,9 @@ export default function ChatScreen() {
                 onPress={handlePickImage}
               >
                 <Ionicons name="image-outline" size={20} color="#3F6B5B" />
-                <Text style={styles.attachMenuItemText}>{t("chat.attach.photo")}</Text>
+                <Text style={styles.attachMenuItemText}>
+                  {t("chat.attach.photo")}
+                </Text>
               </TouchableOpacity>
 
               <View style={styles.menuDivider} />
@@ -1073,7 +1088,9 @@ export default function ChatScreen() {
                   size={20}
                   color="#3F6B5B"
                 />
-                <Text style={styles.attachMenuItemText}>{t("chat.attach.doc")}</Text>
+                <Text style={styles.attachMenuItemText}>
+                  {t("chat.attach.doc")}
+                </Text>
               </TouchableOpacity>
             </View>
           )}

@@ -19,6 +19,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { Glass, Tekmet } from "../components/mingi";
 import { authorProfileParams } from "../services/helpService";
@@ -58,6 +59,7 @@ function whatsappShareLink(code: string) {
 
 export default function Invites() {
   const lang = useLanguage(); // перерисовка при смене языка
+  const insets = useSafeAreaInsets(); // «Назад» на одном уровне со всеми экранами
   const [fontsLoaded] = useFonts({
     Philosopher_400Regular,
     Philosopher_700Bold,
@@ -106,8 +108,7 @@ export default function Invites() {
 
       await loadData();
     } catch (e) {
-      const message =
-        e instanceof Error ? e.message : t("inv.error.create");
+      const message = e instanceof Error ? e.message : t("inv.error.create");
       Alert.alert(t("common.error"), message);
     } finally {
       setCreating(false);
@@ -141,10 +142,7 @@ export default function Invites() {
       await Clipboard.setStringAsync(invite.code);
       await markAsHandedOver(invite);
 
-      Alert.alert(
-        t("profile.copy.done"),
-        t("inv.copied"),
-      );
+      Alert.alert(t("profile.copy.done"), t("inv.copied"));
     } catch {
       Alert.alert(t("common.error"), t("inv.error.copy"));
     }
@@ -181,8 +179,7 @@ export default function Invites() {
       await disableInvite(invite.id);
       setInvites((prev) => prev.filter((item) => item.id !== invite.id));
     } catch (e) {
-      const message =
-        e instanceof Error ? e.message : t("inv.error.delete");
+      const message = e instanceof Error ? e.message : t("inv.error.delete");
       Alert.alert(t("common.error"), message);
     } finally {
       setDeletingId(null);
@@ -222,9 +219,17 @@ export default function Invites() {
   }
 
   const stats: { key: TabType; value: number; label: string }[] = [
-    { key: "created", value: createdInvites.length, label: t("inv.counter.created") },
+    {
+      key: "created",
+      value: createdInvites.length,
+      label: t("inv.counter.created"),
+    },
     { key: "sent", value: sentInvites.length, label: t("inv.counter.sent") },
-    { key: "invited", value: invitedUsers.length, label: t("inv.counter.invited") },
+    {
+      key: "invited",
+      value: invitedUsers.length,
+      label: t("inv.counter.invited"),
+    },
   ];
 
   const renderInviteCard = (invite: any) => {
@@ -313,7 +318,10 @@ export default function Invites() {
       <StatusBar style="dark" />
 
       <ScrollView
-        contentContainerStyle={styles.container}
+        contentContainerStyle={[
+          styles.container,
+          { paddingTop: insets.top + 10 },
+        ]}
         showsVerticalScrollIndicator={false}
       >
         <TouchableOpacity
@@ -374,13 +382,21 @@ export default function Invites() {
           </Glass>
         </TouchableOpacity>
 
-        <Text style={styles.blockLabel}>
-          {activeTab === "created"
-            ? t("inv.section.free")
-            : activeTab === "sent"
-              ? t("inv.section.sent")
-              : t("inv.section.invited")}
-        </Text>
+        {/* Заголовок раздела показываем, только когда в нём что-то есть:
+            у пустого раздела и так стоит поясняющая строка (Веха 65). */}
+        {(activeTab === "created"
+          ? createdInvites.length > 0
+          : activeTab === "sent"
+            ? sentInvites.length > 0
+            : invitedUsers.length > 0) && (
+          <Text style={styles.blockLabel}>
+            {activeTab === "created"
+              ? t("inv.section.free")
+              : activeTab === "sent"
+                ? t("inv.section.sent")
+                : t("inv.section.invited")}
+          </Text>
+        )}
 
         {activeTab === "created" &&
           (createdInvites.length === 0 ? (
@@ -430,7 +446,11 @@ export default function Invites() {
                   </Text>
                   {!!item.used_at && (
                     <Text style={styles.invitedDate}>
-                      {t("inv.usedAt", { дата: new Date(item.used_at).toLocaleDateString(dateLocale()) })}
+                      {t("inv.usedAt", {
+                        дата: new Date(item.used_at).toLocaleDateString(
+                          dateLocale(),
+                        ),
+                      })}
                     </Text>
                   )}
                 </View>
@@ -458,7 +478,6 @@ const styles = StyleSheet.create({
 
   container: {
     paddingHorizontal: 20,
-    paddingTop: 56,
     paddingBottom: 40,
     flexGrow: 1,
   },
