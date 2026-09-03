@@ -152,9 +152,14 @@ export default function RequestInviteScreen() {
             </Glass>
           </TouchableOpacity>
 
-          <TouchableOpacity onPress={() => router.back()} activeOpacity={0.8}>
-            <Text style={styles.link}>{t("common.back")}</Text>
-          </TouchableOpacity>
+          {Platform.OS === "web" && (
+            <TouchableOpacity
+              onPress={() => router.back()}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.link}>{t("common.back")}</Text>
+            </TouchableOpacity>
+          )}
         </ScrollView>
       </KeyboardAvoidingView>
     </View>

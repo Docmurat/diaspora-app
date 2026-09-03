@@ -1,11 +1,29 @@
 import { DefaultTheme, ThemeProvider } from "@react-navigation/native";
 import { Stack } from "expo-router";
 import { StatusBar } from "expo-status-bar";
-import { Platform, StyleSheet, View } from "react-native";
+import {
+  Platform,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from "react-native";
 import "react-native-reanimated";
 
 import AccountGuard from "../components/AccountGuard";
 import PushBridge from "../components/PushBridge";
+
+// ВРЕМЕННО (Веха 66, решение владельца): приложение не подчиняется
+// системному увеличению шрифта («режим для слабовидящих») — вёрстка
+// остаётся как нарисована. Позже можно разрешить умеренное увеличение
+// через maxFontSizeMultiplier.
+// @ts-ignore — defaultProps для Text официально поддерживается в React Native
+Text.defaultProps = { ...(Text as any).defaultProps, allowFontScaling: false };
+// @ts-ignore
+TextInput.defaultProps = {
+  ...(TextInput as any).defaultProps,
+  allowFontScaling: false,
+};
 
 export const unstable_settings = {
   initialRouteName: "index",

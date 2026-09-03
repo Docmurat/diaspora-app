@@ -1,18 +1,20 @@
 // Почтальон «Минги-Тау»: отправляет и проверяет коды подтверждения почты.
 // Отправка — через ящик проекта на Яндексе (данные лежат в секретах).
-// При переезде на Яндекс-серверы эта функция переедет без изменений логики.
+// ВАЖНО (03.09.2026): библиотека denomailer в среде функций подвисала
+// намертво (early termination без ошибок) — заменена прямым SMTP-диалогом
+// с smtp.yandex.ru:465, с таймаутами и журналом каждого шага.
 // @ts-nocheck — файл для Deno (сервер), обычная проверка VS Code к нему не применима
 
-import { SMTPClient } from "https://deno.land/x/denomailer@1.6.0/mod.ts";
 import { createClient } from "npm:@supabase/supabase-js@2";
 
 // ВАЖНО: тема письма — только латиница.
-// Кириллицу в заголовке библиотека кодирует так, что Яндекс показывает
-// крякозябры. Русский текст живёт внутри письма (html/content) — там всё в порядке.
+// Кириллица в заголовке в прошлой версии превращалась в крякозябры.
+// Русский текст живёт внутри письма (html/plain) — там всё в порядке.
 
 const CODE_TTL_MINUTES = 10; // сколько живёт код
 const RESEND_COOLDOWN_SECONDS = 60; // пауза между отправками
 const MAX_ATTEMPTS = 5; // попыток ввода кода
+const SMTP_TIMEOUT_MS = 25000; // предохранитель: дольше не ждём
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -26,7 +28,7 @@ function json(body: unknown, status = 200) {
     headers: { ...corsHeaders, "Content-Type": "application/json" },
   });
 }
-//вывы
+
 function buildHtml(code: string) {
   return `<!DOCTYPE html>
 <html lang="ru">
@@ -47,6 +49,168 @@ function buildHtml(code: string) {
 </body>
 </html>`;
 }
+
+// ---------- Прямой SMTP-разговор с Яндексом ----------
+
+// Текст → base64 (для писем в UTF-8 и для логина/пароля)
+function b64(text: string) {
+  const bytes = new TextEncoder().encode(text);
+  let bin = "";
+  for (const b of bytes) bin += String.fromCharCode(b);
+  return btoa(bin);
+}
+
+// base64 длинными строками почта не любит — режем по 76 символов
+function b64wrap(text: string) {
+  return b64(text)
+    .replace(/(.{76})/g, "$1\r\n")
+    .trim();
+}
+
+// Письмо целиком: заголовки + текстовая и html-версии
+function buildMime(
+  from: string,
+  to: string,
+  subject: string,
+  plain: string,
+  html: string,
+) {
+  const boundary = "mingi-tau-" + Math.random().toString(36).slice(2);
+  return [
+    `From: Mingi-Tau <${from}>`,
+    `To: <${to}>`,
+    `Subject: ${subject}`,
+    "MIME-Version: 1.0",
+    `Content-Type: multipart/alternative; boundary="${boundary}"`,
+    "",
+    `--${boundary}`,
+    'Content-Type: text/plain; charset="utf-8"',
+    "Content-Transfer-Encoding: base64",
+    "",
+    b64wrap(plain),
+    "",
+    `--${boundary}`,
+    'Content-Type: text/html; charset="utf-8"',
+    "Content-Transfer-Encoding: base64",
+    "",
+    b64wrap(html),
+    "",
+    `--${boundary}--`,
+    "",
+  ].join("\r\n");
+}
+
+// Отправка письма по SMTP своими руками, без библиотек.
+// Каждый шаг пишется в журнал; на всё — жёсткий таймаут.
+async function sendViaYandex(
+  to: string,
+  subject: string,
+  plain: string,
+  html: string,
+) {
+  const user = Deno.env.get("YANDEX_SMTP_USER")!;
+  const pass = Deno.env.get("YANDEX_SMTP_PASS")!;
+
+  const work = (async () => {
+    console.log("почтальон: соединяюсь с smtp.yandex.ru:465");
+    const conn = await Deno.connectTls({
+      hostname: "smtp.yandex.ru",
+      port: 465,
+    });
+    const reader = conn.readable.getReader();
+    const writer = conn.writable.getWriter();
+    const dec = new TextDecoder();
+    const enc = new TextEncoder();
+    let buf = "";
+
+    // Читаем ответ сервера до финальной строки вида "250 ..." (код+пробел)
+    async function expect(codes: string[], step: string) {
+      while (true) {
+        const lines = buf.split("\r\n");
+        for (const line of lines) {
+          if (/^\d{3} /.test(line)) {
+            const code = line.slice(0, 3);
+            if (!codes.includes(code)) {
+              throw new Error(
+                `почта: шаг «${step}» ответ ${line.slice(0, 120)}`,
+              );
+            }
+            console.log(`почтальон: ${step} → ${code}`);
+            buf = "";
+            return;
+          }
+        }
+        const { value, done } = await reader.read();
+        if (done)
+          throw new Error(`почта: соединение оборвалось на шаге «${step}»`);
+        buf += dec.decode(value);
+      }
+    }
+
+    async function say(cmd: string, masked?: string) {
+      console.log("почтальон: →", masked ?? cmd);
+      await writer.write(enc.encode(cmd + "\r\n"));
+    }
+
+    try {
+      await expect(["220"], "приветствие");
+      await say("EHLO mingi-tau.ru");
+      await expect(["250"], "EHLO");
+      await say("AUTH LOGIN");
+      await expect(["334"], "AUTH");
+      await say(b64(user), "(логин)");
+      await expect(["334"], "логин");
+      await say(b64(pass), "(пароль)");
+      await expect(["235"], "пароль принят");
+      await say(`MAIL FROM:<${user}>`);
+      await expect(["250"], "MAIL FROM");
+      await say(`RCPT TO:<${to}>`);
+      await expect(["250", "251"], "RCPT TO");
+      await say("DATA");
+      await expect(["354"], "DATA");
+      const mime = buildMime(user, to, subject, plain, html);
+      await writer.write(enc.encode(mime + "\r\n.\r\n"));
+      await expect(["250"], "письмо принято");
+      await say("QUIT");
+      // ответ на QUIT не ждём — письмо уже принято
+    } finally {
+      try {
+        reader.releaseLock();
+      } catch (_) {
+        /* уже закрыт */
+      }
+      try {
+        writer.releaseLock();
+      } catch (_) {
+        /* уже закрыт */
+      }
+      try {
+        conn.close();
+      } catch (_) {
+        /* уже закрыт */
+      }
+    }
+  })();
+
+  // Предохранитель: если Яндекс молчит — падаем с понятной ошибкой,
+  // а не висим до принудительного убийства функции.
+  let timer: number | undefined;
+  const timeout = new Promise((_, reject) => {
+    timer = setTimeout(
+      () => reject(new Error("почта: не уложились в таймаут")),
+      SMTP_TIMEOUT_MS,
+    );
+  });
+
+  try {
+    await Promise.race([work, timeout]);
+    console.log("почтальон: письмо отправлено на", to.slice(0, 3) + "…");
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+// ---------- Обработчик запросов ----------
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -119,32 +283,25 @@ Deno.serve(async (req) => {
         return json({ error: "Не удалось создать код" }, 500);
       }
 
-      const smtpUser = Deno.env.get("YANDEX_SMTP_USER")!;
-      const smtpPass = Deno.env.get("YANDEX_SMTP_PASS")!;
-
-      const client = new SMTPClient({
-        connection: {
-          hostname: "smtp.yandex.ru",
-          port: 465,
-          tls: true,
-          auth: { username: smtpUser, password: smtpPass },
-        },
-      });
-
-      await client.send({
-        from: `Mingi-Tau <${smtpUser}>`,
-        to: normalizedEmail,
-        subject: `Mingi-Tau: code ${newCode}`,
-        content: [
-          `Ваш код подтверждения: ${newCode}`,
-          "",
-          `Код действует ${CODE_TTL_MINUTES} минут.`,
-          "Если вы не регистрировались в «Минги-Тау», просто удалите это письмо.",
-        ].join("\n"),
-        html: buildHtml(newCode),
-      });
-
-      await client.close();
+      try {
+        await sendViaYandex(
+          normalizedEmail,
+          `Mingi-Tau: code ${newCode}`,
+          [
+            `Ваш код подтверждения: ${newCode}`,
+            "",
+            `Код действует ${CODE_TTL_MINUTES} минут.`,
+            "Если вы не регистрировались в «Минги-Тау», просто удалите это письмо.",
+          ].join("\n"),
+          buildHtml(newCode),
+        );
+      } catch (mailError) {
+        console.error("почтальон: отправка не удалась:", mailError);
+        return json(
+          { error: "Письмо не отправилось. Попробуйте ещё раз через минуту." },
+          502,
+        );
+      }
 
       return json({ sent: true });
     }

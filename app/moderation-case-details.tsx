@@ -17,6 +17,7 @@ import {
   ScrollView,
   StyleSheet,
   Text,
+  Platform,
   TouchableOpacity,
   View,
 } from "react-native";
@@ -444,13 +445,15 @@ export default function ModerationCaseDetailsScreen() {
           {screenError || "Запись не найдена"}
         </Text>
 
-        <TouchableOpacity
-          style={styles.errorButton}
-          onPress={() => router.back()}
-          activeOpacity={0.85}
-        >
-          <Text style={styles.errorButtonText}>Назад</Text>
-        </TouchableOpacity>
+        {Platform.OS === "web" && (
+          <TouchableOpacity
+            style={styles.errorButton}
+            onPress={() => router.back()}
+            activeOpacity={0.85}
+          >
+            <Text style={styles.errorButtonText}>Назад</Text>
+          </TouchableOpacity>
+        )}
       </View>
     );
   }
@@ -460,13 +463,15 @@ export default function ModerationCaseDetailsScreen() {
       <StatusBar style="dark" />
 
       <View style={[styles.header, { paddingTop: insets.top + 10 }]}>
-        <TouchableOpacity
-          style={styles.backButton}
-          onPress={() => router.back()}
-          activeOpacity={0.8}
-        >
-          <Text style={styles.backButtonText}>←</Text>
-        </TouchableOpacity>
+        {Platform.OS === "web" && (
+          <TouchableOpacity
+            style={styles.backButton}
+            onPress={() => router.back()}
+            activeOpacity={0.8}
+          >
+            <Text style={styles.backButtonText}>←</Text>
+          </TouchableOpacity>
+        )}
 
         <View style={styles.headerInfo}>
           <Text style={styles.headerTitle} numberOfLines={1}>
@@ -689,13 +694,15 @@ export default function ModerationCaseDetailsScreen() {
           </View>
         )}
 
-        <TouchableOpacity
-          style={styles.secondaryAction}
-          activeOpacity={0.85}
-          onPress={() => router.back()}
-        >
-          <Text style={styles.secondaryActionText}>Назад</Text>
-        </TouchableOpacity>
+        {Platform.OS === "web" && (
+          <TouchableOpacity
+            style={styles.secondaryAction}
+            activeOpacity={0.85}
+            onPress={() => router.back()}
+          >
+            <Text style={styles.secondaryActionText}>Назад</Text>
+          </TouchableOpacity>
+        )}
       </ScrollView>
     </View>
   );

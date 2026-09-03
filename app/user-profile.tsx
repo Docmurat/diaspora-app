@@ -255,9 +255,11 @@ export default function UserProfileScreen() {
 
         <Text style={styles.stateTitle}>{t("common.notFound.member")}</Text>
 
-        <TouchableOpacity onPress={() => router.back()} activeOpacity={0.8}>
-          <Text style={styles.backLinkText}>{t("common.backArrow")}</Text>
-        </TouchableOpacity>
+        {Platform.OS === "web" && (
+          <TouchableOpacity onPress={() => router.back()} activeOpacity={0.8}>
+            <Text style={styles.backLinkText}>{t("common.backArrow")}</Text>
+          </TouchableOpacity>
+        )}
       </View>
     );
   }
@@ -1003,9 +1005,16 @@ export default function UserProfileScreen() {
           showsVerticalScrollIndicator={false}
         >
           <View style={styles.topRow}>
-            <TouchableOpacity onPress={() => router.back()} activeOpacity={0.8}>
-              <Text style={styles.backLinkText}>{t("common.backArrow")}</Text>
-            </TouchableOpacity>
+            {Platform.OS === "web" ? (
+              <TouchableOpacity
+                onPress={() => router.back()}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.backLinkText}>{t("common.backArrow")}</Text>
+              </TouchableOpacity>
+            ) : (
+              <View />
+            )}
 
             {renderMenu()}
           </View>

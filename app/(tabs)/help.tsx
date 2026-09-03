@@ -25,6 +25,7 @@ import {
 } from "@expo-google-fonts/philosopher";
 import { Feather, Ionicons } from "@expo/vector-icons";
 import { router, useFocusEffect } from "expo-router";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
@@ -55,6 +56,7 @@ import { subscribeToChanges } from "../../services/liveService";
 import { t, tCategory, useLanguage } from "../../services/i18nService";
 export default function HelpScreen() {
   const lang = useLanguage(); // перерисовка при смене языка
+  const insets = useSafeAreaInsets(); // кнопка «+» — над островком вкладок
   const [fontsLoaded] = useFonts({
     Philosopher_400Regular,
     Philosopher_700Bold,
@@ -537,7 +539,7 @@ export default function HelpScreen() {
 
       {/* Новый пост — плавающая кнопка над капсулой вкладок */}
       <TouchableOpacity
-        style={styles.fabShadow}
+        style={[styles.fabShadow, { bottom: 104 + insets.bottom }]}
         activeOpacity={0.85}
         onPress={() => router.push("/new-help-post" as any)}
       >

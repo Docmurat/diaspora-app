@@ -33,7 +33,6 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { t, tCategory, useLanguage } from "../services/i18nService";
 import {
   HELP_CATEGORIES,
   HelpPostType,
@@ -45,6 +44,7 @@ import {
   checkHelpFileLimits,
   createHelpPost,
 } from "../services/helpService";
+import { t, tCategory, useLanguage } from "../services/i18nService";
 
 // Размер файла человеческим языком: «2,4 МБ» / «310 КБ».
 function formatSize(bytes: number | null): string {
@@ -87,6 +87,8 @@ export default function NewHelpPostScreen() {
 
   const [postType, setPostType] = useState<HelpPostType | null>(null);
   const [category, setCategory] = useState("");
+  // Категории — выпадающим списком: капсула сверху, чипы по нажатию.
+  const [categoryOpen, setCategoryOpen] = useState(false);
   const [body, setBody] = useState("");
   // Скрытый блок включается галочкой (только в чувствительных
   // категориях). Вместе с ним АВТОМАТИЧЕСКИ скрываются комментарии —
@@ -168,7 +170,11 @@ export default function NewHelpPostScreen() {
 
       if (picked.assets.length > room) {
         setError(
-          t("newPost.limit.photosAdded", { X: room, Y: picked.assets.length, N: MAX_PHOTOS_PER_BLOCK }),
+          t("newPost.limit.photosAdded", {
+            X: room,
+            Y: picked.assets.length,
+            N: MAX_PHOTOS_PER_BLOCK,
+          }),
         );
       }
     } catch (e) {
@@ -233,7 +239,10 @@ export default function NewHelpPostScreen() {
         setError(t("newPost.limit.fileBig", { X: skippedBig, N: MAX_FILE_MB }));
       } else if (skippedLimit > 0) {
         setError(
-          t("newPost.limit.filesMany", { X: skippedLimit, N: MAX_FILES_PER_BLOCK }),
+          t("newPost.limit.filesMany", {
+            X: skippedLimit,
+            N: MAX_FILES_PER_BLOCK,
+          }),
         );
       }
     } catch (e) {
@@ -327,13 +336,17 @@ export default function NewHelpPostScreen() {
       <StatusBar style="dark" />
 
       <View style={[styles.header, { paddingTop: insets.top + 10 }]}>
-        <TouchableOpacity
-          style={styles.backButton}
-          onPress={() => router.back()}
-          hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-        >
-          <Ionicons name="chevron-back" size={26} color="#3F6B5B" />
-        </TouchableOpacity>
+        {Platform.OS === "web" ? (
+          <TouchableOpacity
+            style={styles.backButton}
+            onPress={() => router.back()}
+            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+          >
+            <Ionicons name="chevron-back" size={26} color="#3F6B5B" />
+          </TouchableOpacity>
+        ) : (
+          <View style={styles.backButton} />
+        )}
 
         <Text style={styles.headerTitle}>{t("newPost.title")}</Text>
 
@@ -351,7 +364,11 @@ export default function NewHelpPostScreen() {
         <View style={styles.typeRow}>
           {(
             [
-              ["question", t("newPost.type.question"), t("newPost.type.questionHint")],
+              [
+                "question",
+                t("newPost.type.question"),
+                t("newPost.type.questionHint"),
+              ],
               ["offer", t("newPost.type.offer"), t("newPost.type.offerHint")],
             ] as const
           ).map(([value, title, hint]) => {
@@ -388,26 +405,46 @@ export default function NewHelpPostScreen() {
         {/* Категория */}
         <Text style={styles.label}>{t("newPost.category")}</Text>
 
-        <View style={styles.chipsWrap}>
-          {HELP_CATEGORIES.map((item) => {
-            const active = category === item;
+        <TouchableOpacity
+          style={[styles.catSelect, categoryOpen && styles.catSelectOpen]}
+          activeOpacity={0.8}
+          onPress={() => setCategoryOpen((v) => !v)}
+        >
+          <Text style={[styles.catSelectText, !category && styles.catSelectPh]}>
+            {category ? tCategory(category) : t("newPost.category")}
+          </Text>
+          <Ionicons
+            name={categoryOpen ? "chevron-up" : "chevron-down"}
+            size={16}
+            color="#4E7364"
+          />
+        </TouchableOpacity>
 
-            return (
-              <TouchableOpacity
-                key={item}
-                style={[styles.chip, active && styles.chipActive]}
-                activeOpacity={0.75}
-                onPress={() => chooseCategory(item)}
-              >
-                <Text
-                  style={[styles.chipText, active && styles.chipTextActive]}
+        {categoryOpen && (
+          <View style={styles.chipsWrap}>
+            {HELP_CATEGORIES.map((item) => {
+              const active = category === item;
+
+              return (
+                <TouchableOpacity
+                  key={item}
+                  style={[styles.chip, active && styles.chipActive]}
+                  activeOpacity={0.75}
+                  onPress={() => {
+                    chooseCategory(item);
+                    setCategoryOpen(false);
+                  }}
                 >
-                  {tCategory(item)}
-                </Text>
-              </TouchableOpacity>
-            );
-          })}
-        </View>
+                  <Text
+                    style={[styles.chipText, active && styles.chipTextActive]}
+                  >
+                    {tCategory(item)}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        )}
 
         {/* Текст */}
         <Text style={styles.label}>{t("newPost.text")}</Text>
@@ -491,7 +528,9 @@ export default function NewHelpPostScreen() {
           >
             <Ionicons name="attach-outline" size={16} color="#3F6B5B" />
             <Text style={styles.hiddenAddText}>{t("newPost.addFile")}</Text>
-            <Text style={styles.addDocHint}>{t("newPost.upToMb", { N: MAX_FILE_MB })}</Text>
+            <Text style={styles.addDocHint}>
+              {t("newPost.upToMb", { N: MAX_FILE_MB })}
+            </Text>
           </TouchableOpacity>
         )}
 
@@ -510,7 +549,9 @@ export default function NewHelpPostScreen() {
               color={hiddenEnabled ? "#69B78D" : "#8FA79A"}
             />
             <View style={{ flex: 1 }}>
-              <Text style={styles.hiddenToggleTitle}>{t("newPost.addHidden")}</Text>
+              <Text style={styles.hiddenToggleTitle}>
+                {t("newPost.addHidden")}
+              </Text>
               <Text style={styles.hiddenToggleHint}>
                 {t("newPost.hiddenNote", { категория: tCategory(category) })}
               </Text>
@@ -539,7 +580,9 @@ export default function NewHelpPostScreen() {
             />
 
             <View style={styles.labelRow}>
-              <Text style={styles.hiddenSubLabel}>{t("newPost.photosLabel")}</Text>
+              <Text style={styles.hiddenSubLabel}>
+                {t("newPost.photosLabel")}
+              </Text>
               <Text style={styles.counter}>
                 {hiddenPhotos.length} / {MAX_PHOTOS_PER_BLOCK}
               </Text>
@@ -566,13 +609,17 @@ export default function NewHelpPostScreen() {
                   onPress={() => pickPhoto(true)}
                 >
                   <Ionicons name="image-outline" size={22} color="#719686" />
-                  <Text style={styles.addTileText}>{t("newPost.photosLabel")}</Text>
+                  <Text style={styles.addTileText}>
+                    {t("newPost.photosLabel")}
+                  </Text>
                 </TouchableOpacity>
               )}
             </View>
 
             <View style={styles.labelRow}>
-              <Text style={styles.hiddenSubLabel}>{t("newPost.filesLabel")}</Text>
+              <Text style={styles.hiddenSubLabel}>
+                {t("newPost.filesLabel")}
+              </Text>
               <Text style={styles.counter}>
                 {hiddenDocs.length} / {MAX_FILES_PER_BLOCK}
               </Text>
@@ -608,7 +655,9 @@ export default function NewHelpPostScreen() {
               >
                 <Ionicons name="attach-outline" size={16} color="#3F6B5B" />
                 <Text style={styles.hiddenAddText}>{t("newPost.addFile")}</Text>
-                <Text style={styles.addDocHint}>{t("newPost.upToMb", { N: MAX_FILE_MB })}</Text>
+                <Text style={styles.addDocHint}>
+                  {t("newPost.upToMb", { N: MAX_FILE_MB })}
+                </Text>
               </TouchableOpacity>
             )}
           </View>
@@ -727,10 +776,40 @@ const styles = StyleSheet.create({
     color: "rgba(255,255,255,0.9)",
   },
 
+  catSelect: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 8,
+    borderRadius: 16,
+    borderWidth: 0.75,
+    borderColor: "rgba(93,140,120,0.45)",
+    backgroundColor: "rgba(255,255,255,0.95)",
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    ...(Platform.OS === "web" ? ({ cursor: "pointer" } as any) : {}),
+  },
+
+  catSelectOpen: {
+    borderColor: "rgba(105,183,141,0.92)",
+  },
+
+  catSelectText: {
+    fontSize: 14.5,
+    fontWeight: "600",
+    color: "#2F4A3C",
+  },
+
+  catSelectPh: {
+    color: "#8FA79A",
+    fontWeight: "400",
+  },
+
   chipsWrap: {
     flexDirection: "row",
     flexWrap: "wrap",
     gap: 8,
+    marginTop: 10,
   },
 
   chip: {

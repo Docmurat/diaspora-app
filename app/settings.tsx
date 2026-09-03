@@ -147,13 +147,15 @@ export default function SettingsScreen() {
         contentContainerStyle={[styles.container, { paddingTop: insets.top + 10 }]}
         showsVerticalScrollIndicator={false}
       >
-        <TouchableOpacity
-          onPress={() => router.back()}
-          activeOpacity={0.8}
-          style={styles.backLink}
-        >
-          <Text style={styles.backLinkText}>{t("common.backArrow")}</Text>
-        </TouchableOpacity>
+        {Platform.OS === "web" && (
+          <TouchableOpacity
+            onPress={() => router.back()}
+            activeOpacity={0.8}
+            style={styles.backLink}
+          >
+            <Text style={styles.backLinkText}>{t("common.backArrow")}</Text>
+          </TouchableOpacity>
+        )}
 
         <Text style={styles.title}>{t("cab.menu.settings")}</Text>
         <Text style={styles.subtitle}>{t("common.brandCaps")}</Text>

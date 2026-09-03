@@ -390,13 +390,15 @@ export default function EditProfileScreen() {
           keyboardDismissMode="on-drag"
           showsVerticalScrollIndicator={false}
         >
-          <TouchableOpacity
-            onPress={() => router.back()}
-            activeOpacity={0.8}
-            style={styles.backLink}
-          >
-            <Text style={styles.backLinkText}>{t("common.backArrow")}</Text>
-          </TouchableOpacity>
+          {Platform.OS === "web" && (
+            <TouchableOpacity
+              onPress={() => router.back()}
+              activeOpacity={0.8}
+              style={styles.backLink}
+            >
+              <Text style={styles.backLinkText}>{t("common.backArrow")}</Text>
+            </TouchableOpacity>
+          )}
 
           <Text style={styles.title}>{t("edit.title")}</Text>
           <Text style={styles.subtitle}>{t("common.brandCaps")}</Text>

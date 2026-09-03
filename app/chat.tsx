@@ -651,13 +651,15 @@ export default function ChatScreen() {
         <Text style={styles.errorTitle}>{t("chat.error.open")}</Text>
         <Text style={styles.errorText}>{screenError}</Text>
 
-        <TouchableOpacity
-          style={styles.errorButton}
-          onPress={() => router.back()}
-          activeOpacity={0.85}
-        >
-          <Text style={styles.errorButtonText}>{t("common.back")}</Text>
-        </TouchableOpacity>
+        {Platform.OS === "web" && (
+          <TouchableOpacity
+            style={styles.errorButton}
+            onPress={() => router.back()}
+            activeOpacity={0.85}
+          >
+            <Text style={styles.errorButtonText}>{t("common.back")}</Text>
+          </TouchableOpacity>
+        )}
       </View>
     );
   }
@@ -673,13 +675,15 @@ export default function ChatScreen() {
       <StatusBar style="dark" />
 
       <View style={[styles.header, { paddingTop: insets.top + 10 }]}>
-        <TouchableOpacity
-          style={styles.backButton}
-          onPress={() => router.back()}
-          activeOpacity={0.8}
-        >
-          <Text style={styles.backButtonText}>←</Text>
-        </TouchableOpacity>
+        {Platform.OS === "web" && (
+          <TouchableOpacity
+            style={styles.backButton}
+            onPress={() => router.back()}
+            activeOpacity={0.8}
+          >
+            <Text style={styles.backButtonText}>←</Text>
+          </TouchableOpacity>
+        )}
 
         {otherProfile?.avatar_path ? (
           <Image

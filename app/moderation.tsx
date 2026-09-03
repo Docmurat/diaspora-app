@@ -11,6 +11,7 @@ import {
   Alert,
   Image,
   Modal,
+  Platform,
   ScrollView,
   StyleSheet,
   Text,
@@ -2361,9 +2362,16 @@ export default function ModerationScreen() {
     <>
       <View style={styles.screen}>
         <View style={[styles.header, { paddingTop: insets.top + 10 }]}>
-          <TouchableOpacity onPress={() => router.back()} activeOpacity={0.8}>
-            <Text style={styles.backLinkText}>← Назад</Text>
-          </TouchableOpacity>
+          {Platform.OS === "web" ? (
+            <TouchableOpacity
+              onPress={() => router.back()}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.backLinkText}>← Назад</Text>
+            </TouchableOpacity>
+          ) : (
+            <View />
+          )}
 
           <TouchableOpacity
             onPress={toggleNotices}

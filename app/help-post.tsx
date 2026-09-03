@@ -605,13 +605,17 @@ export default function HelpPostScreen() {
       <StatusBar style="dark" />
 
       <View style={[styles.header, { paddingTop: insets.top + 10 }]}>
-        <TouchableOpacity
-          style={styles.backButton}
-          onPress={() => router.back()}
-          hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-        >
-          <Ionicons name="chevron-back" size={26} color="#3F6B5B" />
-        </TouchableOpacity>
+        {Platform.OS === "web" ? (
+          <TouchableOpacity
+            style={styles.backButton}
+            onPress={() => router.back()}
+            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+          >
+            <Ionicons name="chevron-back" size={26} color="#3F6B5B" />
+          </TouchableOpacity>
+        ) : (
+          <View style={styles.backButton} />
+        )}
 
         {/* Заголовок «Пост» убран по решению владельца — только стрелка. */}
         <View style={{ flex: 1 }} />

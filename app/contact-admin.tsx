@@ -353,13 +353,15 @@ export default function ContactAdminScreen() {
       <StatusBar style="dark" />
 
       {/* «Назад» сверху, на одном уровне со всеми экранами (Веха 65) */}
-      <TouchableOpacity
-        onPress={() => router.back()}
-        activeOpacity={0.8}
-        style={[styles.backLink, { top: insets.top + 10 }]}
-      >
-        <Text style={styles.backLinkText}>{t("common.backArrow")}</Text>
-      </TouchableOpacity>
+      {Platform.OS === "web" && (
+        <TouchableOpacity
+          onPress={() => router.back()}
+          activeOpacity={0.8}
+          style={[styles.backLink, { top: insets.top + 10 }]}
+        >
+          <Text style={styles.backLinkText}>{t("common.backArrow")}</Text>
+        </TouchableOpacity>
+      )}
 
       <KeyboardAvoidingView
         style={styles.keyboardWrap}

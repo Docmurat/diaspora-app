@@ -9,6 +9,7 @@ import { StatusBar } from "expo-status-bar";
 import { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
+  Platform,
   ScrollView,
   StyleSheet,
   Text,
@@ -284,13 +285,15 @@ export default function NotificationsScreen() {
         ]}
         showsVerticalScrollIndicator={false}
       >
-        <TouchableOpacity
-          onPress={() => router.back()}
-          activeOpacity={0.8}
-          style={styles.backLink}
-        >
-          <Text style={styles.backLinkText}>{t("common.backArrow")}</Text>
-        </TouchableOpacity>
+        {Platform.OS === "web" && (
+          <TouchableOpacity
+            onPress={() => router.back()}
+            activeOpacity={0.8}
+            style={styles.backLink}
+          >
+            <Text style={styles.backLinkText}>{t("common.backArrow")}</Text>
+          </TouchableOpacity>
+        )}
 
         <Text style={styles.title}>{t("a11y.bell")}</Text>
         <Text style={styles.subtitle}>{t("common.brandCaps")}</Text>

@@ -450,8 +450,8 @@ const styles = StyleSheet.create({
 
   name: {
     flex: 1,
-    fontFamily: "Philosopher_700Bold",
-    fontSize: 17,
+    fontSize: 16.5,
+    fontWeight: "600",
     color: "#3F6B5B",
     marginRight: 10,
   },

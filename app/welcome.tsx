@@ -309,7 +309,14 @@ export default function WelcomeScreen() {
             >
               <View style={styles.chipInner}>
                 <Ionicons name="people-outline" size={16} color="#4E7364" />
-                <Text style={styles.chipText}>{t("welcome.chip.people")}</Text>
+                <Text
+                  style={styles.chipText}
+                  numberOfLines={1}
+                  adjustsFontSizeToFit
+                  minimumFontScale={0.72}
+                >
+                  {t("welcome.chip.people")}
+                </Text>
               </View>
             </Glass>
             <Glass
@@ -325,7 +332,12 @@ export default function WelcomeScreen() {
                   size={16}
                   color="#4E7364"
                 />
-                <Text style={styles.chipText}>
+                <Text
+                  style={styles.chipText}
+                  numberOfLines={1}
+                  adjustsFontSizeToFit
+                  minimumFontScale={0.72}
+                >
                   {t("welcome.chip.mutualHelp")}
                 </Text>
               </View>
@@ -344,7 +356,12 @@ export default function WelcomeScreen() {
                   size={16}
                   color="#4E7364"
                 />
-                <Text style={styles.chipText}>
+                <Text
+                  style={styles.chipText}
+                  numberOfLines={1}
+                  adjustsFontSizeToFit
+                  minimumFontScale={0.72}
+                >
                   {t("welcome.chip.closedCircle")}
                 </Text>
               </View>
@@ -406,6 +423,8 @@ export default function WelcomeScreen() {
           <TouchableOpacity onPress={() => router.push("/terms" as any)}>
             <Text style={styles.linkText}>{t("welcome.termsLink")}</Text>
           </TouchableOpacity>
+          <Text style={styles.dot}>•</Text>
+          <Text style={styles.ageBadge}>16+</Text>
         </View>
 
         {/* Переключатель языка (Веха 64): выбор запоминается */}
@@ -516,6 +535,8 @@ const styles = StyleSheet.create({
     fontFamily: "Philosopher_400Regular",
     fontSize: 14.5,
     color: "#4E7364",
+    flexShrink: 1,
+    textAlign: "center",
   },
 
   bottomSection: {
@@ -577,6 +598,12 @@ const styles = StyleSheet.create({
     marginHorizontal: 6,
     color: "#96AC9E",
     fontSize: 11.5,
+  },
+
+  ageBadge: {
+    fontSize: 11.5,
+    fontWeight: "700",
+    color: "#96AC9E",
   },
 
   langRow: {

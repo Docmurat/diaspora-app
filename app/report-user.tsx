@@ -117,13 +117,15 @@ export default function ReportUserScreen() {
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
-          <TouchableOpacity
-            onPress={() => router.back()}
-            activeOpacity={0.8}
-            style={styles.backLink}
-          >
-            <Text style={styles.backLinkText}>{t("common.backArrow")}</Text>
-          </TouchableOpacity>
+          {Platform.OS === "web" && (
+            <TouchableOpacity
+              onPress={() => router.back()}
+              activeOpacity={0.8}
+              style={styles.backLink}
+            >
+              <Text style={styles.backLinkText}>{t("common.backArrow")}</Text>
+            </TouchableOpacity>
+          )}
 
           <Text style={styles.title}>{t("report.title")}</Text>
           <Text style={styles.subtitle}>{t("common.brandCaps")}</Text>

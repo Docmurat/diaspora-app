@@ -6,6 +6,7 @@ import {
 import { router } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import {
+  Platform,
   ScrollView,
   StyleSheet,
   Text,
@@ -38,13 +39,15 @@ export default function PrivacyScreen() {
         contentContainerStyle={styles.container}
         showsVerticalScrollIndicator={false}
       >
-        <TouchableOpacity
-          onPress={() => router.back()}
-          activeOpacity={0.8}
-          style={styles.backLink}
-        >
-          <Text style={styles.backLinkText}>{en ? "← Back" : "← Назад"}</Text>
-        </TouchableOpacity>
+        {Platform.OS === "web" && (
+          <TouchableOpacity
+            onPress={() => router.back()}
+            activeOpacity={0.8}
+            style={styles.backLink}
+          >
+            <Text style={styles.backLinkText}>{en ? "← Back" : "← Назад"}</Text>
+          </TouchableOpacity>
+        )}
 
         <Text style={styles.title}>
           {en ? "Privacy Policy" : "Политика конфиденциальности"}
@@ -243,13 +246,15 @@ export default function PrivacyScreen() {
           </>
         )}
 
-        <TouchableOpacity
-          style={styles.backButton}
-          onPress={() => router.back()}
-          activeOpacity={0.8}
-        >
-          <Text style={styles.backButtonText}>{en ? "Back" : "Назад"}</Text>
-        </TouchableOpacity>
+        {Platform.OS === "web" && (
+          <TouchableOpacity
+            style={styles.backButton}
+            onPress={() => router.back()}
+            activeOpacity={0.8}
+          >
+            <Text style={styles.backButtonText}>{en ? "Back" : "Назад"}</Text>
+          </TouchableOpacity>
+        )}
       </ScrollView>
     </View>
   );

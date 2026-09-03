@@ -386,13 +386,15 @@ export default function ProfileScreen() {
           ]}
           showsVerticalScrollIndicator={false}
         >
-          <TouchableOpacity
-            onPress={() => router.back()}
-            activeOpacity={0.8}
-            style={styles.backLink}
-          >
-            <Text style={styles.backLinkText}>{t("common.backArrow")}</Text>
-          </TouchableOpacity>
+          {Platform.OS === "web" && (
+            <TouchableOpacity
+              onPress={() => router.back()}
+              activeOpacity={0.8}
+              style={styles.backLink}
+            >
+              <Text style={styles.backLinkText}>{t("common.backArrow")}</Text>
+            </TouchableOpacity>
+          )}
 
           <TouchableOpacity
             activeOpacity={0.9}

@@ -121,21 +121,23 @@ export default function RequestNameChangeScreen() {
         <Text style={styles.stateTitle}>{t("common.notFound.member")}</Text>
         <Text style={styles.stateText}>{t("name.signInRetry")}</Text>
 
-        <TouchableOpacity
-          style={styles.primaryShadow}
-          onPress={() => router.back()}
-          activeOpacity={0.85}
-        >
-          <Glass
-            radius={18}
-            tintColor="rgba(105,183,141,0.92)"
-            borderColor="rgba(255,255,255,0.85)"
+        {Platform.OS === "web" && (
+          <TouchableOpacity
+            style={styles.primaryShadow}
+            onPress={() => router.back()}
+            activeOpacity={0.85}
           >
-            <View style={styles.buttonInner}>
-              <Text style={styles.primaryButtonText}>{t("common.back")}</Text>
-            </View>
-          </Glass>
-        </TouchableOpacity>
+            <Glass
+              radius={18}
+              tintColor="rgba(105,183,141,0.92)"
+              borderColor="rgba(255,255,255,0.85)"
+            >
+              <View style={styles.buttonInner}>
+                <Text style={styles.primaryButtonText}>{t("common.back")}</Text>
+              </View>
+            </Glass>
+          </TouchableOpacity>
+        )}
       </View>
     );
   }
@@ -186,13 +188,15 @@ export default function RequestNameChangeScreen() {
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
         >
-          <TouchableOpacity
-            onPress={() => router.back()}
-            activeOpacity={0.8}
-            style={styles.backLink}
-          >
-            <Text style={styles.backLinkText}>{t("common.backArrow")}</Text>
-          </TouchableOpacity>
+          {Platform.OS === "web" && (
+            <TouchableOpacity
+              onPress={() => router.back()}
+              activeOpacity={0.8}
+              style={styles.backLink}
+            >
+              <Text style={styles.backLinkText}>{t("common.backArrow")}</Text>
+            </TouchableOpacity>
+          )}
 
           <Text style={styles.title}>{t("name.title")}</Text>
           <Text style={styles.subtitle}>{t("common.brandCaps")}</Text>

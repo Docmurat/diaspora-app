@@ -497,7 +497,7 @@ export default function HomeScreen() {
 
       {showList && (
         <TouchableOpacity
-          style={styles.fabShadow}
+          style={[styles.fabShadow, { bottom: 104 + insets.bottom }]}
           activeOpacity={0.85}
           onPress={() => router.push("/invites" as any)}
         >

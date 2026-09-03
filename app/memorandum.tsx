@@ -12,6 +12,7 @@ import {
 import { router, useLocalSearchParams } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import {
+  Platform,
   ScrollView,
   StyleSheet,
   Text,
@@ -55,13 +56,15 @@ export default function MemorandumScreen() {
         contentContainerStyle={styles.container}
         showsVerticalScrollIndicator={false}
       >
-        <TouchableOpacity
-          onPress={() => router.back()}
-          activeOpacity={0.8}
-          style={styles.backLink}
-        >
-          <Text style={styles.backLinkText}>{en ? "← Back" : "← Назад"}</Text>
-        </TouchableOpacity>
+        {Platform.OS === "web" && (
+          <TouchableOpacity
+            onPress={() => router.back()}
+            activeOpacity={0.8}
+            style={styles.backLink}
+          >
+            <Text style={styles.backLinkText}>{en ? "← Back" : "← Назад"}</Text>
+          </TouchableOpacity>
+        )}
 
         <Text style={styles.title}>
           {en ? "Community Memorandum" : "Меморандум сообщества"}
@@ -184,7 +187,7 @@ export default function MemorandumScreen() {
               {en ? "I accept the principles of the community" : "Принимаю принципы сообщества"}
             </Text>
           </TouchableOpacity>
-        ) : (
+        ) : Platform.OS === "web" ? (
           <TouchableOpacity
             style={styles.backButton}
             onPress={() => router.back()}
@@ -192,7 +195,7 @@ export default function MemorandumScreen() {
           >
             <Text style={styles.backButtonText}>{en ? "Back" : "Назад"}</Text>
           </TouchableOpacity>
-        )}
+        ) : null}
       </ScrollView>
     </View>
   );

@@ -21,6 +21,9 @@
       },
       "edgeToEdgeEnabled": true
     },
+    "androidNavigationBar": {
+      "enforceContrast": false
+    },
     "web": {
       "bundler": "metro",
       "favicon": "./assets/images/favicon.png"
