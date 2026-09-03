@@ -30,7 +30,9 @@ export default function RootLayout() {
       <AccountGuard />
       <PushBridge />
       <AppFrame>
-        <Stack screenOptions={{ headerShown: false }}>
+        {/* animation: "none" — переходы между экранами без анимации
+            (в родном приложении по умолчанию включалась системная). */}
+        <Stack screenOptions={{ headerShown: false, animation: "none" }}>
           <Stack.Screen name="index" />
           <Stack.Screen name="welcome" />
           <Stack.Screen name="login" />
