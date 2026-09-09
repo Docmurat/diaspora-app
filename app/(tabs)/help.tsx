@@ -40,6 +40,7 @@ import {
 
 import HelpPostCard from "../../components/HelpPostCard";
 import TopBar from "../../components/TopBar";
+import { getMyProfile } from "../../services/profileService";
 import { Glass, Tekmet } from "../../components/mingi";
 import {
   HELP_CATEGORIES,
@@ -57,6 +58,13 @@ import { t, tCategory, useLanguage } from "../../services/i18nService";
 export default function HelpScreen() {
   const lang = useLanguage(); // перерисовка при смене языка
   const insets = useSafeAreaInsets(); // кнопка «+» — над островком вкладок
+  // Демо-гость (Веха 66): читает Стену, но не пишет — «+» спрятан.
+  const [isDemo, setIsDemo] = useState(false);
+  useEffect(() => {
+    getMyProfile()
+      .then((p) => setIsDemo(!!p?.is_demo))
+      .catch(() => {});
+  }, []);
   const [fontsLoaded] = useFonts({
     Philosopher_400Regular,
     Philosopher_700Bold,
@@ -538,21 +546,23 @@ export default function HelpScreen() {
       </ScrollView>
 
       {/* Новый пост — плавающая кнопка над капсулой вкладок */}
+      {!isDemo && (
       <TouchableOpacity
         style={[styles.fabShadow, { bottom: 104 + insets.bottom }]}
         activeOpacity={0.85}
         onPress={() => router.push("/new-help-post" as any)}
       >
         <Glass
-          radius={22}
+          radius={26}
           tintColor="rgba(105,183,141,0.92)"
           borderColor="rgba(255,255,255,0.85)"
         >
           <View style={styles.fabInner}>
-            <Feather name="plus" size={20} color="#FFFFFF" />
+            <Feather name="plus" size={24} color="#FFFFFF" />
           </View>
         </Glass>
       </TouchableOpacity>
+      )}
     </View>
   );
 }
@@ -822,9 +832,9 @@ const styles = StyleSheet.create({
   // Кнопка нового поста — над капсулой вкладок, чтобы не спорить с ней.
   fabShadow: {
     position: "absolute",
-    right: 20,
+    right: 24,
     bottom: 104,
-    borderRadius: 22,
+    borderRadius: 26,
     shadowColor: "#69B78D",
     shadowOpacity: 0.45,
     shadowRadius: 12,
@@ -834,8 +844,8 @@ const styles = StyleSheet.create({
   },
 
   fabInner: {
-    width: 44,
-    height: 44,
+    width: 52,
+    height: 52,
     alignItems: "center",
     justifyContent: "center",
   },

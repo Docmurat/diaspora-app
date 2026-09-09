@@ -4,10 +4,11 @@ import {
   useFonts,
 } from "@expo-google-fonts/philosopher";
 import { Ionicons } from "@expo/vector-icons";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as Clipboard from "expo-clipboard";
 import { router, useFocusEffect } from "expo-router";
 import { StatusBar } from "expo-status-bar";
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -25,6 +26,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { Glass, Tekmet } from "../../components/mingi";
+import { supabase } from "../../lib/supabase";
 import { formatHandle, formatPhone } from "../../services/contactsService";
 import { SENSITIVE_CATEGORIES } from "../../services/helpService";
 import {
@@ -94,6 +96,31 @@ export default function ProfileScreen() {
   const [loading, setLoading] = useState(true);
   const [avatarModalVisible, setAvatarModalVisible] = useState(false);
   const [moderationCount, setModerationCount] = useState(0);
+
+  // Демо-доступ (Веха 66): пароль показывается в кабинете и хранится
+  // локально на устройстве основателя до следующего обновления.
+  const [demoPass, setDemoPass] = useState<string | null>(null);
+  const [demoCopied, setDemoCopied] = useState(false);
+  const [demoBusy, setDemoBusy] = useState(false);
+
+  useEffect(() => {
+    AsyncStorage.getItem("mingiDemoPassword")
+      .then((v) => {
+        if (v) setDemoPass(v);
+      })
+      .catch(() => {});
+  }, []);
+
+  const copyDemoPass = async () => {
+    if (!demoPass) return;
+    try {
+      await Clipboard.setStringAsync(demoPass);
+      setDemoCopied(true);
+      setTimeout(() => setDemoCopied(false), 2000);
+    } catch (e) {
+      console.log("Пароль не скопировался:", e);
+    }
+  };
   const [confirmLogout, setConfirmLogout] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
 
@@ -363,9 +390,32 @@ export default function ProfileScreen() {
   }
 
   const fullName =
-    `${user.first_name || ""} ${user.last_name || ""}`.trim() || t("profile.noName");
+    `${user.first_name || ""} ${user.last_name || ""}`.trim() ||
+    t("profile.noName");
   const age = getAgeFromBirthDate(user.birth_date || "");
   const isAdmin = user.role === "owner" || user.role === "moderator";
+
+  // Демо-доступ (Веха 66): новый пароль для test@test.ru — только owner.
+  const handleDemoPassword = async () => {
+    if (demoBusy) return;
+    try {
+      setDemoBusy(true);
+      const { data, error } = await supabase.rpc("reset_demo_password");
+      if (error) throw new Error(error.message);
+      const fresh = String(data);
+      setDemoPass(fresh);
+      AsyncStorage.setItem("mingiDemoPassword", fresh).catch(() => {});
+    } catch (e: any) {
+      const message = e?.message || "Попробуйте ещё раз.";
+      if (Platform.OS === "web") {
+        window.alert("Не получилось\n\n" + message);
+      } else {
+        Alert.alert("Не получилось", message);
+      }
+    } finally {
+      setDemoBusy(false);
+    }
+  };
 
   const roleBadgeText =
     user.role === "owner"
@@ -418,7 +468,11 @@ export default function ProfileScreen() {
               t("profile.notSpecified")}
           </Text>
 
-          {!!age && <Text style={styles.age}>{t("common.ageSuffix", { возраст: age })}</Text>}
+          {!!age && (
+            <Text style={styles.age}>
+              {t("common.ageSuffix", { возраст: age })}
+            </Text>
+          )}
 
           {!!roleBadgeText && (
             <View style={styles.roleBadge}>
@@ -438,7 +492,9 @@ export default function ProfileScreen() {
               borderWidth={0.75}
             >
               <View style={styles.buttonInner}>
-                <Text style={styles.secondaryButtonText}>{t("cab.editProfile")}</Text>
+                <Text style={styles.secondaryButtonText}>
+                  {t("cab.editProfile")}
+                </Text>
               </View>
             </Glass>
           </TouchableOpacity>
@@ -473,6 +529,45 @@ export default function ProfileScreen() {
                 badge={moderationCount}
                 onPress={() => router.push("/moderation")}
               />
+            )}
+
+            {user.role === "owner" && (
+              <View style={styles.demoRow}>
+                <Ionicons
+                  name="key-outline"
+                  size={20}
+                  color="#69B78D"
+                  style={styles.demoIcon}
+                />
+                <View style={styles.demoInfo}>
+                  <Text style={styles.demoLabel}>
+                    Демо-доступ · test@test.ru
+                  </Text>
+                  <Text style={styles.demoPass} selectable>
+                    {demoPass || "пароль ещё не создан"}
+                  </Text>
+                </View>
+                <TouchableOpacity
+                  onPress={copyDemoPass}
+                  disabled={!demoPass}
+                  style={styles.demoBtn}
+                  activeOpacity={0.8}
+                >
+                  <Ionicons
+                    name={demoCopied ? "checkmark-outline" : "copy-outline"}
+                    size={18}
+                    color={demoPass ? "#3F6B5B" : "#B9C8BF"}
+                  />
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={handleDemoPassword}
+                  disabled={demoBusy}
+                  style={styles.demoBtn}
+                  activeOpacity={0.8}
+                >
+                  <Ionicons name="refresh-outline" size={18} color="#3F6B5B" />
+                </TouchableOpacity>
+              </View>
             )}
 
             <SectionRow
@@ -519,7 +614,9 @@ export default function ProfileScreen() {
             style={styles.infoBlock}
           >
             <Text style={styles.infoTitle}>{t("cab.h.category")}</Text>
-            <Text style={styles.infoText}>{user.category ? tCategory(user.category) : "—"}</Text>
+            <Text style={styles.infoText}>
+              {user.category ? tCategory(user.category) : "—"}
+            </Text>
 
             {/* Квалификация (Веха 57): только в чувствительных категориях
                 Стены. Подтверждена — строка; нет — кнопка «Запросить»
@@ -568,7 +665,9 @@ export default function ProfileScreen() {
 
           <TouchableOpacity
             activeOpacity={0.9}
-            onLongPress={() => handleCopyText(copyLabel("profile.h.profession"), user.profession)}
+            onLongPress={() =>
+              handleCopyText(copyLabel("profile.h.profession"), user.profession)
+            }
             delayLongPress={300}
             style={styles.infoBlock}
           >
@@ -607,7 +706,9 @@ export default function ProfileScreen() {
             <TouchableOpacity
               activeOpacity={0.9}
               onPress={handleOpenEmail}
-              onLongPress={() => handleCopyText(copyLabel("profile.h.email"), user.email)}
+              onLongPress={() =>
+                handleCopyText(copyLabel("profile.h.email"), user.email)
+              }
               delayLongPress={300}
               style={styles.infoBlock}
             >
@@ -618,7 +719,9 @@ export default function ProfileScreen() {
 
           <TouchableOpacity
             activeOpacity={0.9}
-            onLongPress={() => handleCopyText(copyLabel("profile.h.phone"), user.phone)}
+            onLongPress={() =>
+              handleCopyText(copyLabel("profile.h.phone"), user.phone)
+            }
             delayLongPress={300}
             style={styles.infoBlock}
           >
@@ -627,9 +730,7 @@ export default function ProfileScreen() {
               {formatPhone(user.phone) || "—"}
             </Text>
             <Text style={styles.infoHint}>
-              {user.phone_visible
-                ? t("cab.phoneShown")
-                : t("cab.phoneHidden")}
+              {user.phone_visible ? t("cab.phoneShown") : t("cab.phoneHidden")}
             </Text>
           </TouchableOpacity>
 
@@ -859,6 +960,49 @@ const styles = StyleSheet.create({
     borderColor: "rgba(93,140,120,0.28)",
     overflow: "hidden",
     marginBottom: 26,
+  },
+
+  demoRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 16,
+    paddingVertical: 13,
+    borderBottomWidth: 0.75,
+    borderBottomColor: "rgba(93,140,120,0.18)",
+    gap: 10,
+  },
+
+  demoIcon: {
+    marginRight: 2,
+  },
+
+  demoInfo: {
+    flex: 1,
+  },
+
+  demoLabel: {
+    fontSize: 12,
+    color: "#719686",
+    marginBottom: 3,
+  },
+
+  demoPass: {
+    fontSize: 15,
+    fontWeight: "600",
+    letterSpacing: 0.5,
+    color: "#2F4A3C",
+  },
+
+  demoBtn: {
+    width: 38,
+    height: 38,
+    borderRadius: 12,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 0.75,
+    borderColor: "rgba(93,140,120,0.45)",
+    backgroundColor: "rgba(255,255,255,0.95)",
+    ...(Platform.OS === "web" ? ({ cursor: "pointer" } as any) : {}),
   },
 
   row: {

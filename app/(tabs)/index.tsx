@@ -41,6 +41,7 @@ import {
   DirectoryUser,
   getApprovedUsers,
 } from "../../services/userDirectoryService";
+import { getMyProfile } from "../../services/profileService";
 import { getAgeFromBirthDate } from "../../store/user";
 
 import { t, useLanguage } from "../../services/i18nService";
@@ -74,6 +75,7 @@ export default function HomeScreen() {
 
   const [query, setQuery] = useState("");
   const [users, setUsers] = useState<PreparedUser[]>([]);
+  const [isDemo, setIsDemo] = useState(false);
   const [isSearching, setIsSearching] = useState(false);
   // «Все» — всё сообщество, «Мои» — сохранённые закладкой (бывшее избранное)
   const [mode, setMode] = useState<"all" | "saved">("all");
@@ -86,10 +88,13 @@ export default function HomeScreen() {
         try {
           setLoading(true);
 
-          const [usersData, favoritesData] = await Promise.all([
+          const [usersData, favoritesData, myProfile] = await Promise.all([
             getApprovedUsers(),
             getMyFavorites(),
+            getMyProfile().catch(() => null),
           ]);
+
+          setIsDemo(!!myProfile?.is_demo);
 
           const prepared: PreparedUser[] = usersData.map((user) => ({
             ...user,
@@ -495,19 +500,19 @@ export default function HomeScreen() {
         </View>
       </ScrollView>
 
-      {showList && (
+      {showList && !isDemo && (
         <TouchableOpacity
           style={[styles.fabShadow, { bottom: 104 + insets.bottom }]}
           activeOpacity={0.85}
           onPress={() => router.push("/invites" as any)}
         >
           <Glass
-            radius={22}
+            radius={26}
             tintColor="rgba(105,183,141,0.92)"
             borderColor="rgba(255,255,255,0.85)"
           >
             <View style={styles.fabInner}>
-              <Feather name="user-plus" size={18} color="#FFFFFF" />
+              <Feather name="user-plus" size={22} color="#FFFFFF" />
             </View>
           </Glass>
         </TouchableOpacity>
@@ -813,9 +818,9 @@ const styles = StyleSheet.create({
   // при bottom: 26 она пряталась ПОД капсулой, поэтому её «давно не было».
   fabShadow: {
     position: "absolute",
-    right: 20,
+    right: 24,
     bottom: 104,
-    borderRadius: 22,
+    borderRadius: 26,
     shadowColor: "#69B78D",
     shadowOpacity: 0.45,
     shadowRadius: 12,
@@ -825,8 +830,8 @@ const styles = StyleSheet.create({
   },
 
   fabInner: {
-    width: 44,
-    height: 44,
+    width: 52,
+    height: 52,
     alignItems: "center",
     justifyContent: "center",
   },

@@ -147,6 +147,46 @@ export default function UserProfileScreen() {
     try {
       setLoading(true);
 
+      // Демо-гость (Веха 66): базу о чужих анкетах не спрашиваем —
+      // анкета строится из очищенных данных списка, без контактов.
+      const myFirst = await getMyProfile();
+      if (myFirst?.is_demo) {
+        const nameParts = String(params.name || "")
+          .trim()
+          .split(" ");
+        setUser({
+          id: targetUserId,
+          first_name: nameParts[0] || "",
+          last_name: nameParts.slice(1).join(" "),
+          birth_date: String(params.birthDate || "") || null,
+          country: String(params.country || "") || null,
+          city: String(params.city || "") || null,
+          category: String(params.category || "") || null,
+          profession: String(params.profession || "") || null,
+          bio: String(params.bio || "") || null,
+          extra_info: String(params.extraInfo || "") || null,
+          avatar_path: String(params.avatarUri || "") || null,
+          telegram: null,
+          instagram: null,
+          email: null,
+          phone: null,
+          phone_visible: false,
+          has_whatsapp: false,
+          role: "user",
+          moderation_status: "approved",
+          is_blocked: false,
+          is_deleted: false,
+        } as any);
+        setMe(myFirst);
+        setBlockState({
+          iBlockedUser: false,
+          userBlockedMe: false,
+          isAnyBlocked: false,
+        });
+        setIsFavorite(false);
+        return;
+      }
+
       if (isModerationMode) {
         const [profileResult, myProfile] = await Promise.all([
           supabase
@@ -165,7 +205,7 @@ export default function UserProfileScreen() {
             )
             .eq("id", targetUserId)
             .single(),
-          getMyProfile(),
+          Promise.resolve(myFirst),
         ]);
 
         if (profileResult.error) throw new Error(profileResult.error.message);
@@ -202,7 +242,7 @@ export default function UserProfileScreen() {
             )
             .eq("id", targetUserId)
             .single(),
-          getMyProfile(),
+          Promise.resolve(myFirst),
           hasMutualBlock(targetUserId),
           isFavoriteInDb(targetUserId).catch(() => false),
         ]);
@@ -333,7 +373,10 @@ export default function UserProfileScreen() {
 
     try {
       await Clipboard.setStringAsync(text);
-      Alert.alert(t("profile.copy.done"), t("profile.copy.doneText", { label }));
+      Alert.alert(
+        t("profile.copy.done"),
+        t("profile.copy.doneText", { label }),
+      );
     } catch {
       Alert.alert(t("common.error"), t("profile.copy.fail"));
     }
@@ -478,10 +521,7 @@ export default function UserProfileScreen() {
           isAnyBlocked: true,
         });
         setShowMenu(false);
-        Alert.alert(
-          t("profile.blockedLine"),
-          t("profile.blocked.text"),
-        );
+        Alert.alert(t("profile.blockedLine"), t("profile.blocked.text"));
       }
     } catch (e) {
       Alert.alert(
@@ -669,16 +709,22 @@ export default function UserProfileScreen() {
           {showMenu && (
             <View style={styles.menuDropdown}>
               <View style={styles.menuInfoBlock}>
-                <Text style={styles.menuInfoLabel}>{t("profile.h.regDate")}</Text>
+                <Text style={styles.menuInfoLabel}>
+                  {t("profile.h.regDate")}
+                </Text>
                 <Text style={styles.menuInfoText}>
                   {formatCreatedAt(user.created_at)}
                 </Text>
               </View>
 
               <View style={styles.menuInfoBlock}>
-                <Text style={styles.menuInfoLabel}>{t("profile.h.invitedBy")}</Text>
+                <Text style={styles.menuInfoLabel}>
+                  {t("profile.h.invitedBy")}
+                </Text>
                 <Text style={styles.menuInfoText}>
-                  {invitedByName || user.invited_by?.email || t("profile.notSpecified")}
+                  {invitedByName ||
+                    user.invited_by?.email ||
+                    t("profile.notSpecified")}
                 </Text>
               </View>
             </View>
@@ -702,16 +748,22 @@ export default function UserProfileScreen() {
             {isAdmin && (
               <>
                 <View style={styles.menuInfoBlock}>
-                  <Text style={styles.menuInfoLabel}>{t("profile.h.regDate")}</Text>
+                  <Text style={styles.menuInfoLabel}>
+                    {t("profile.h.regDate")}
+                  </Text>
                   <Text style={styles.menuInfoText}>
                     {formatCreatedAt(user.created_at)}
                   </Text>
                 </View>
 
                 <View style={styles.menuInfoBlock}>
-                  <Text style={styles.menuInfoLabel}>{t("profile.h.invitedBy")}</Text>
+                  <Text style={styles.menuInfoLabel}>
+                    {t("profile.h.invitedBy")}
+                  </Text>
                   <Text style={styles.menuInfoText}>
-                    {invitedByName || user.invited_by?.email || t("profile.notSpecified")}
+                    {invitedByName ||
+                      user.invited_by?.email ||
+                      t("profile.notSpecified")}
                   </Text>
                 </View>
 
@@ -743,9 +795,7 @@ export default function UserProfileScreen() {
                 onPress={handleDeleteUser}
               >
                 <Text style={[styles.menuItemText, styles.dangerText]}>
-                  {confirmDelete
-                    ? t("set.deleteConfirm")
-                    : t("set.delete")}
+                  {confirmDelete ? t("set.deleteConfirm") : t("set.delete")}
                 </Text>
 
                 {confirmDelete && (
@@ -819,7 +869,9 @@ export default function UserProfileScreen() {
                   onPress={handleTogglePersonalBlock}
                 >
                   <Text style={[styles.menuItemText, styles.dangerText]}>
-                    {iBlockedThisUser ? t("profile.unblock") : t("profile.block")}
+                    {iBlockedThisUser
+                      ? t("profile.unblock")
+                      : t("profile.block")}
                   </Text>
                 </TouchableOpacity>
               </>
@@ -884,7 +936,9 @@ export default function UserProfileScreen() {
               borderWidth={0.75}
             >
               <View style={styles.buttonInner}>
-                <Text style={styles.secondaryButtonText}>{t("profile.edit")}</Text>
+                <Text style={styles.secondaryButtonText}>
+                  {t("profile.edit")}
+                </Text>
               </View>
             </Glass>
           </TouchableOpacity>
@@ -924,7 +978,9 @@ export default function UserProfileScreen() {
               borderWidth={0.75}
             >
               <View style={styles.buttonInner}>
-                <Text style={styles.secondaryButtonText}>{t("profile.invites")}</Text>
+                <Text style={styles.secondaryButtonText}>
+                  {t("profile.invites")}
+                </Text>
               </View>
             </Glass>
           </TouchableOpacity>
@@ -941,10 +997,34 @@ export default function UserProfileScreen() {
               borderWidth={0.75}
             >
               <View style={styles.buttonInner}>
-                <Text style={styles.secondaryButtonText}>{t("profile.edit")}</Text>
+                <Text style={styles.secondaryButtonText}>
+                  {t("profile.edit")}
+                </Text>
               </View>
             </Glass>
           </TouchableOpacity>
+        </View>
+      );
+    }
+
+    // Демо-гость видит кнопку «Написать», но она выключена:
+    // так понятно, что чаты в платформе есть.
+    if ((me as any)?.is_demo) {
+      return (
+        <View style={styles.actionsRow}>
+          <View style={[styles.actionFlex, styles.disabled]}>
+            <Glass
+              radius={18}
+              tintColor="rgba(105,183,141,0.92)"
+              borderColor="rgba(255,255,255,0.85)"
+            >
+              <View style={styles.buttonInner}>
+                <Text style={styles.primaryButtonText}>
+                  {t("profile.write")}
+                </Text>
+              </View>
+            </Glass>
+          </View>
         </View>
       );
     }
@@ -1054,7 +1134,11 @@ export default function UserProfileScreen() {
               "—"}
           </Text>
 
-          {!!age && <Text style={styles.age}>{t("common.ageSuffix", { возраст: age })}</Text>}
+          {!!age && (
+            <Text style={styles.age}>
+              {t("common.ageSuffix", { возраст: age })}
+            </Text>
+          )}
 
           {isModerationMode && (
             <View style={styles.modeBadge}>
@@ -1076,7 +1160,9 @@ export default function UserProfileScreen() {
 
           {iBlockedThisUser && !isOwnProfile && !isModerationMode && (
             <View style={styles.blockLine}>
-              <Text style={styles.blockLineText}>{t("profile.blockedLine")}</Text>
+              <Text style={styles.blockLineText}>
+                {t("profile.blockedLine")}
+              </Text>
             </View>
           )}
 
@@ -1086,7 +1172,9 @@ export default function UserProfileScreen() {
 
           <TouchableOpacity
             activeOpacity={0.9}
-            onLongPress={() => handleCopyText(copyLabel("profile.h.profession"), user.profession)}
+            onLongPress={() =>
+              handleCopyText(copyLabel("profile.h.profession"), user.profession)
+            }
             delayLongPress={300}
             style={styles.infoBlock}
           >
@@ -1121,11 +1209,30 @@ export default function UserProfileScreen() {
             </Text>
           </TouchableOpacity>
 
+          {(me as any)?.is_demo && (
+            <>
+              <View style={styles.infoBlock}>
+                <Text style={styles.infoTitle}>{t("profile.h.email")}</Text>
+                <Text style={styles.demoHiddenText}>Скрыто в демо-режиме</Text>
+              </View>
+              <View style={styles.infoBlock}>
+                <Text style={styles.infoTitle}>{t("profile.h.phone")}</Text>
+                <Text style={styles.demoHiddenText}>Скрыто в демо-режиме</Text>
+              </View>
+              <View style={styles.infoBlock}>
+                <Text style={styles.infoTitle}>Telegram</Text>
+                <Text style={styles.demoHiddenText}>Скрыто в демо-режиме</Text>
+              </View>
+            </>
+          )}
+
           {showEmail && (
             <TouchableOpacity
               style={styles.infoBlock}
               onPress={handleOpenEmail}
-              onLongPress={() => handleCopyText(copyLabel("profile.h.email"), user.email)}
+              onLongPress={() =>
+                handleCopyText(copyLabel("profile.h.email"), user.email)
+              }
               delayLongPress={300}
               activeOpacity={0.9}
             >
@@ -1137,7 +1244,9 @@ export default function UserProfileScreen() {
           {showPhone && (
             <TouchableOpacity
               activeOpacity={0.9}
-              onLongPress={() => handleCopyText(copyLabel("profile.h.phone"), user.phone)}
+              onLongPress={() =>
+                handleCopyText(copyLabel("profile.h.phone"), user.phone)
+              }
               delayLongPress={300}
               style={styles.infoBlock}
             >
@@ -1186,7 +1295,9 @@ export default function UserProfileScreen() {
                   <TouchableOpacity
                     style={styles.contactButton}
                     onPress={handleWhatsappOpen}
-                    onLongPress={() => handleCopyText(copyLabel("profile.h.phone"), user.phone)}
+                    onLongPress={() =>
+                      handleCopyText(copyLabel("profile.h.phone"), user.phone)
+                    }
                     delayLongPress={300}
                     activeOpacity={0.85}
                   >
@@ -1552,6 +1663,12 @@ const styles = StyleSheet.create({
     borderColor: "rgba(93,140,120,0.28)",
     padding: 16,
     marginBottom: 10,
+  },
+
+  demoHiddenText: {
+    fontSize: 14.5,
+    color: "#96AC9E",
+    fontStyle: "italic",
   },
 
   infoTitle: {

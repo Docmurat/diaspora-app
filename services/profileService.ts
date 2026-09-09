@@ -23,6 +23,7 @@ export type DbUserProfile = {
   moderation_status: 'pending' | 'approved' | 'rejected';
   is_blocked: boolean;
   is_deleted: boolean;
+  is_demo?: boolean;
   invited_by_user_id: string | null;
   invite_code_used: string | null;
   created_at: string;

@@ -1120,9 +1120,21 @@ export default function ChatScreen() {
               style={styles.input}
               value={input}
               onChangeText={setInput}
-              onSubmitEditing={handleSend}
-              returnKeyType="send"
+              multiline
               editable={!sending && !uploading}
+              onKeyPress={(e: any) => {
+                // На сайте Enter по-прежнему отправляет,
+                // Shift+Enter — новая строка. На телефоне Enter —
+                // перенос, отправка — кнопкой.
+                if (
+                  Platform.OS === "web" &&
+                  e.nativeEvent.key === "Enter" &&
+                  !e.nativeEvent.shiftKey
+                ) {
+                  e.preventDefault?.();
+                  handleSend();
+                }
+              }}
             />
 
             <TouchableOpacity
@@ -1567,7 +1579,8 @@ const styles = StyleSheet.create({
   input: {
     flex: 1,
     minHeight: 44,
-    maxHeight: 100,
+    // растёт до трёх строк, дальше текст крутится внутри поля
+    maxHeight: 84,
     backgroundColor: "transparent",
     borderRadius: 22,
     paddingHorizontal: 14,
