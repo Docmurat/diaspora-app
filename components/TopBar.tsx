@@ -15,7 +15,10 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { supabase } from "../lib/supabase";
 import { subscribeToChanges } from "../services/liveService";
 import { getUnreadCount } from "../services/notificationService";
-import { getMyProfile } from "../services/profileService";
+import {
+  getCachedAvatarPath,
+  refreshMyAvatarPath,
+} from "../services/profileService";
 import { t, useLanguage } from "../services/i18nService";
 
 export default function TopBar({
@@ -27,7 +30,11 @@ export default function TopBar({
 }) {
   const lang = useLanguage(); // перерисовка при смене языка
   const insets = useSafeAreaInsets();
-  const [avatarPath, setAvatarPath] = useState<string | null>(null);
+  // Аватарка: сразу из памятки (Веха 67) — раньше при каждом заходе
+  // шапка спрашивала анкету целиком и заглушка висела заметно долго.
+  const [avatarPath, setAvatarPath] = useState<string | null>(
+    getCachedAvatarPath() ?? null,
+  );
   const [unreadCount, setUnreadCount] = useState(0);
 
   useFocusEffect(
@@ -36,10 +43,11 @@ export default function TopBar({
 
       const load = async () => {
         try {
-          const profile = await getMyProfile();
-          if (alive) setAvatarPath(profile?.avatar_path || null);
+          // Лёгкий запрос одного поля; при ошибке вернёт то, что помнит.
+          const path = await refreshMyAvatarPath();
+          if (alive) setAvatarPath(path);
         } catch (e) {
-          if (alive) setAvatarPath(null);
+          // памятка уже показана — молчим
         }
 
         try {

@@ -64,10 +64,51 @@ export async function getMyProfile(): Promise<DbUserProfile | null> {
   // прежнее место, чтобы остальной код ничего не заметил.
   const { users_private, ...profile } = data as any;
 
+  // Заодно освежаем памятку аватарки (см. ниже) — правка фото в
+  // кабинете сразу доедет и до шапки.
+  avatarPathCache = (profile as any)?.avatar_path ?? null;
+
   return {
     ...profile,
     phone: users_private?.phone ?? null,
   } as DbUserProfile;
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// ПАМЯТКА АВАТАРКИ (Веха 67). Шапка TopBar стоит на каждой вкладке и
+// раньше при каждом заходе заново спрашивала анкету ЦЕЛИКОМ (да ещё со
+// сверкой почты — это два лишних похода в базу) — аватарка подолгу
+// висела заглушкой, хотя список людей уже загрузился. Теперь адрес
+// картинки живёт в памяти: шапка показывает его МГНОВЕННО, а свежесть
+// проверяет тихо в фоне лёгким запросом одного поля. Память живёт,
+// пока открыто приложение (по образцу памятки ссылок Стены, Веха 55).
+// undefined = ещё ни разу не узнавали.
+let avatarPathCache: string | null | undefined;
+
+export function getCachedAvatarPath(): string | null | undefined {
+  return avatarPathCache;
+}
+
+export async function refreshMyAvatarPath(): Promise<string | null> {
+  try {
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
+    if (!user) return avatarPathCache ?? null;
+
+    const { data } = await supabase
+      .from('users')
+      .select('avatar_path')
+      .eq('id', user.id)
+      .maybeSingle();
+
+    avatarPathCache = (data as any)?.avatar_path ?? null;
+    return avatarPathCache;
+  } catch {
+    // Сеть моргнула — показываем, что помним.
+    return avatarPathCache ?? null;
+  }
 }
 
 export async function syncMyEmailFromAuth(): Promise<void> {
@@ -162,4 +203,7 @@ await removeAllUserAvatars(user.id);
   if (updateError) {
     throw new Error(updateError.message);
   }
+
+  // Аватарки больше нет — чистим и памятку шапки.
+  avatarPathCache = null;
 }

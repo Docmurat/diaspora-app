@@ -40,6 +40,7 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import { linkifyText } from "../components/HelpPostCard";
 import {
   HelpAttachmentItem,
   HelpCommentItem,
@@ -340,8 +341,18 @@ export default function HelpPostScreen() {
     isHelpModerator().then(setIsModerator);
   }, []);
 
+  // Объявление от основателя (Веха 67): без комментариев, без
+  // архива и блокировки; удаляет только основатель (правила базы
+  // держат это железно, экран лишь не показывает лишнего).
+  const isAnnouncement = post?.postType === "announcement";
+
   // Меню есть у всех: модератор, автор, прочие (жалоба на пост).
-  const menuAvailable = !!post && (isModerator || post.isMine || !!post.author);
+  // У объявления — только у автора (основателя), пункт один: удалить.
+  const menuAvailable =
+    !!post &&
+    (isAnnouncement
+      ? post.isMine
+      : isModerator || post.isMine || !!post.author);
 
   // Жалоба на пост: небольшая форма под меню.
   const [reportOpen, setReportOpen] = useState(false);
@@ -594,7 +605,12 @@ export default function HelpPostScreen() {
   const discussionAllowed =
     !post?.commentsHidden || post?.isMine || specialist || comments.length > 0;
 
-  const canWrite = !!post && post.status === "active" && discussionAllowed;
+  const canWrite =
+    !!post &&
+    post.status === "active" &&
+    discussionAllowed &&
+    // У объявления поля ввода нет — комментарии запрещены (Веха 67).
+    post.postType !== "announcement";
 
   return (
     <KeyboardAvoidingView
@@ -645,8 +661,9 @@ export default function HelpPostScreen() {
             <Text style={styles.modMenuTitle}>МОДЕРАЦИЯ ПОСТА</Text>
           )}
 
-          {/* Блокировка — только модераторы */}
+          {/* Блокировка — только модераторы; объявление не блокируется */}
           {isModerator &&
+            !isAnnouncement &&
             (post.status !== "blocked" ? (
               <>
                 <TouchableOpacity
@@ -717,8 +734,11 @@ export default function HelpPostScreen() {
               </TouchableOpacity>
             ))}
 
-          {/* Архив: модератор — любой живой пост; автор — свой (и вернуть) */}
-          {(isModerator || post.isMine) && post.status === "active" && (
+          {/* Архив: модератор — любой живой пост; автор — свой (и
+              вернуть). Объявление в архив не уходит. */}
+          {!isAnnouncement &&
+            (isModerator || post.isMine) &&
+            post.status === "active" && (
             <TouchableOpacity
               style={styles.modMenuItem}
               disabled={modBusy}
@@ -746,8 +766,9 @@ export default function HelpPostScreen() {
             </TouchableOpacity>
           )}
 
-          {/* Удалить — модератор или автор */}
-          {(isModerator || post.isMine) && (
+          {/* Удалить — модератор или автор; объявление — ТОЛЬКО
+              основатель (он же автор), модераторам база откажет. */}
+          {(post.isMine || (isModerator && !isAnnouncement)) && (
             <TouchableOpacity
               style={styles.modMenuItem}
               disabled={modBusy}
@@ -778,8 +799,9 @@ export default function HelpPostScreen() {
             </TouchableOpacity>
           )}
 
-          {/* Пожаловаться на пост — участники (не автор, не модераторы) */}
-          {!post.isMine && !isModerator && !!post.author && (
+          {/* Пожаловаться на пост — участники (не автор, не модераторы);
+              на объявление основателя жалоба не подаётся. */}
+          {!isAnnouncement && !post.isMine && !isModerator && !!post.author && (
             <TouchableOpacity
               style={styles.modMenuItem}
               onPress={() => setReportOpen((v) => !v)}
@@ -843,7 +865,7 @@ export default function HelpPostScreen() {
             />
           )}
 
-          {isModerator && (
+          {isModerator && !isAnnouncement && (
             <Text style={styles.modMenuHint}>
               Блокировка: пост и обсуждение видят только автор и модераторы,
               автору приходит уведомление с причиной. Удаление — насовсем, в
@@ -912,6 +934,7 @@ export default function HelpPostScreen() {
                 style={[
                   styles.typeChip,
                   post.postType === "offer" && styles.typeChipOffer,
+                  isAnnouncement && styles.typeChipAnnouncement,
                   post.status === "archived" && styles.typeChipDone,
                 ]}
               >
@@ -919,6 +942,7 @@ export default function HelpPostScreen() {
                   style={[
                     styles.typeChipText,
                     post.postType === "offer" && styles.typeChipTextOffer,
+                    isAnnouncement && styles.typeChipTextAnnouncement,
                     post.status === "archived" && styles.typeChipTextDone,
                   ]}
                 >
@@ -930,9 +954,12 @@ export default function HelpPostScreen() {
             </View>
 
             <View style={styles.chipRow}>
-              <View style={styles.categoryChip}>
-                <Text style={styles.categoryChipText}>{post.category}</Text>
-              </View>
+              {/* У объявления категории нет — только дата */}
+              {!!post.category && (
+                <View style={styles.categoryChip}>
+                  <Text style={styles.categoryChipText}>{post.category}</Text>
+                </View>
+              )}
               <Text style={styles.dateText}>{formatWhen(post.createdAt)}</Text>
             </View>
 
@@ -965,7 +992,8 @@ export default function HelpPostScreen() {
               </View>
             )}
 
-            <Text style={styles.body}>{post.body}</Text>
+            {/* Ссылки в тексте — живые (Веха 67) */}
+            <Text style={styles.body}>{linkifyText(post.body, post.id)}</Text>
 
             {openPhotos.length > 0 && (
               <PhotoGrid
@@ -996,7 +1024,9 @@ export default function HelpPostScreen() {
                 </View>
 
                 {!!post.hiddenBody && (
-                  <Text style={styles.hiddenBody}>{post.hiddenBody}</Text>
+                  <Text style={styles.hiddenBody}>
+                    {linkifyText(post.hiddenBody, `${post.id}-h`)}
+                  </Text>
                 )}
 
                 {hiddenPhotos.length > 0 && (
@@ -1032,8 +1062,9 @@ export default function HelpPostScreen() {
               </View>
             )}
 
-            {/* Кнопка автора: завершить / вернуть. Вторым нажатием. */}
-            {post.isMine && post.status !== "blocked" && (
+            {/* Кнопка автора: завершить / вернуть. Вторым нажатием.
+                У объявления её нет — оно не архивируется. */}
+            {!isAnnouncement && post.isMine && post.status !== "blocked" && (
               <TouchableOpacity
                 style={[
                   styles.statusButton,
@@ -1076,7 +1107,11 @@ export default function HelpPostScreen() {
               </TouchableOpacity>
             )}
 
-            {/* ОБСУЖДЕНИЕ */}
+            {/* ОБСУЖДЕНИЕ. У объявления его нет вовсе — просто окно с
+                текстом (решение владельца); комментарий не примет и
+                база (триггер Вехи 67). */}
+            {!isAnnouncement && (
+              <>
             <View style={styles.commentsHeader}>
               <Text style={styles.commentsTitle}>{t("post.comments")}</Text>
               {comments.length > 0 && (
@@ -1203,6 +1238,8 @@ export default function HelpPostScreen() {
                   </View>
                 );
               })}
+              </>
+            )}
 
             {!!actionError && (
               <TouchableOpacity onPress={() => setActionError("")}>
@@ -1438,6 +1475,15 @@ const styles = StyleSheet.create({
     textAlign: "center",
     marginTop: 40,
     paddingHorizontal: 30,
+  },
+
+  // Чип «Объявление» — красноватый, как карточка в ленте (Веха 67).
+  typeChipAnnouncement: {
+    backgroundColor: "rgba(192,91,77,0.14)",
+  },
+
+  typeChipTextAnnouncement: {
+    color: "#A2543F",
   },
 
   authorRow: {

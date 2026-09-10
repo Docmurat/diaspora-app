@@ -31,11 +31,18 @@ export const HELP_CATEGORIES = [
 export const SENSITIVE_CATEGORIES = ["Медицина", "Юриспруденция"];
 
 // Тип поста: в базе по-английски, на экране по-русски.
-export type HelpPostType = "question" | "offer";
+// announcement — «Объявление от основателя» (Веха 67): только текст,
+// без категории и комментариев; создаёт и удаляет только основатель
+// (правила базы это держат железно).
+export type HelpPostType = "question" | "offer" | "announcement";
 
 export const POST_TYPE_LABELS: Record<HelpPostType, string> = {
   question: t("newPost.type.question"),
   offer: t("newPost.type.offer"),
+  // ⚠️ По-русски на всех языках — внести ключ в сводную таблицу
+  // переводов при следующей правке (как заглушки демо, Веха 66).
+  // Чип на карточке и экране — «Важно» (решение владельца 10.09).
+  announcement: "Важно",
 };
 
 export type HelpAuthor = {
@@ -146,7 +153,11 @@ export async function getHelpFeed(
     .limit(200);
 
   if (filterCategories && filterCategories.length > 0) {
-    query = query.in("category", filterCategories);
+    // Объявление основателя видно ВСЕГДА, какой бы фильтр ни стоял
+    // (решение владельца, 10.09.2026). Названия категорий берём в
+    // кавычки — в них есть пробелы.
+    const list = filterCategories.map((c) => `"${c}"`).join(",");
+    query = query.or(`post_type.eq.announcement,category.in.(${list})`);
   }
 
   const { data: posts, error } = await query;
@@ -255,7 +266,9 @@ async function enrichFeedItems(
 
   return posts.map((p: any) => ({
     id: p.id,
-    category: p.category,
+    // У объявления категории нет (в базе null) — отдаём пустую строку,
+    // карточка чип просто не показывает.
+    category: p.category || "",
     postType: p.post_type as HelpPostType,
     body: p.body,
     status: p.status,
@@ -547,7 +560,13 @@ export async function getUnseenHelpInfo(
     if (error) return { seenAt, categories: [] };
 
     const categories: string[] = Array.from(
-      new Set<string>((data || []).map((r: any) => String(r.category))),
+      new Set<string>(
+        (data || [])
+          // Объявления без категории — в строку «Новое в: …» не попадают
+          // (уведомление о них и так пришло всем).
+          .filter((r: any) => !!r.category)
+          .map((r: any) => String(r.category)),
+      ),
     );
 
     return { seenAt, categories };
@@ -621,20 +640,25 @@ export async function createHelpPost(input: {
     throw new Error(limitError);
   }
 
-  const hiddenText = input.hiddenBody.trim();
-  const hasHiddenFiles = input.files.some((f) => f.isHidden);
+  // Объявление основателя (Веха 67): только текст. Категория в базе —
+  // null (правило help_posts_category_rule), скрытого блока и
+  // комментариев нет. Правила базы всё это требуют и сами.
+  const isAnnouncement = input.postType === "announcement";
+
+  const hiddenText = isAnnouncement ? "" : input.hiddenBody.trim();
+  const hasHiddenFiles = !isAnnouncement && input.files.some((f) => f.isHidden);
   const hasHidden = !!hiddenText || hasHiddenFiles;
 
   const { data: post, error: postError } = await supabase
     .from("help_posts")
     .insert({
       author_id: myUserId,
-      category: input.category,
+      category: isAnnouncement ? null : input.category,
       post_type: input.postType,
       body: input.body.trim(),
       status: "active",
       has_hidden: hasHidden,
-      comments_hidden: input.commentsHidden,
+      comments_hidden: isAnnouncement ? false : input.commentsHidden,
     })
     .select("id")
     .single();
@@ -848,7 +872,8 @@ export async function getHelpPost(postId: string): Promise<HelpPostDetails> {
 
   return {
     id: p.id,
-    category: p.category,
+    // У объявления категории нет — пустая строка (экран чип не покажет).
+    category: p.category || "",
     postType: p.post_type as HelpPostType,
     body: p.body,
     status: p.status,
@@ -1078,6 +1103,22 @@ export async function isHelpModerator(): Promise<boolean> {
       .eq("id", myUserId)
       .single();
     return data?.role === "owner" || data?.role === "moderator";
+  } catch {
+    return false;
+  }
+}
+
+// Основатель ли я — для третьей кнопки «Объявление» в форме нового
+// поста (Веха 67). Экранная вежливость: настоящий запрет — в базе.
+export async function isOwner(): Promise<boolean> {
+  try {
+    const myUserId = await getCurrentUserId();
+    const { data } = await supabase
+      .from("users")
+      .select("role")
+      .eq("id", myUserId)
+      .single();
+    return data?.role === "owner";
   } catch {
     return false;
   }

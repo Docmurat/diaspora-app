@@ -18,7 +18,7 @@ import * as ImageManipulator from "expo-image-manipulator";
 import * as ImagePicker from "expo-image-picker";
 import { router } from "expo-router";
 import { StatusBar } from "expo-status-bar";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   ActivityIndicator,
   Image,
@@ -43,6 +43,7 @@ import {
   SENSITIVE_CATEGORIES,
   checkHelpFileLimits,
   createHelpPost,
+  isOwner,
 } from "../services/helpService";
 import { t, tCategory, useLanguage } from "../services/i18nService";
 
@@ -86,6 +87,15 @@ export default function NewHelpPostScreen() {
   });
 
   const [postType, setPostType] = useState<HelpPostType | null>(null);
+  // Третий тип «Объявление» — только у основателя (Веха 67). Экранная
+  // вежливость: настоящий запрет держит правило hp_insert в базе.
+  const [canAnnounce, setCanAnnounce] = useState(false);
+  useEffect(() => {
+    isOwner()
+      .then(setCanAnnounce)
+      .catch(() => {});
+  }, []);
+  const isAnnouncement = postType === "announcement";
   const [category, setCategory] = useState("");
   // Категории — выпадающим списком: капсула сверху, чипы по нажатию.
   const [categoryOpen, setCategoryOpen] = useState(false);
@@ -111,17 +121,20 @@ export default function NewHelpPostScreen() {
   // Галочка скрытого блока стоит, а сам блок пуст (ни текста, ни
   // файлов) — публиковать нельзя: либо наполнить, либо снять галочку.
   const hiddenBlockEmpty =
+    !isAnnouncement &&
     isSensitive &&
     hiddenEnabled &&
     !hiddenBody.trim() &&
     hiddenFiles.length === 0;
 
-  const canSubmit =
-    !!postType &&
-    !!category &&
-    body.trim().length > 0 &&
-    !hiddenBlockEmpty &&
-    !submitting;
+  // Объявлению нужен только текст: ни категории, ни вложений.
+  const canSubmit = isAnnouncement
+    ? body.trim().length > 0 && !submitting
+    : !!postType &&
+      !!category &&
+      body.trim().length > 0 &&
+      !hiddenBlockEmpty &&
+      !submitting;
 
   // Фото: можно выбрать сразу несколько; лишние сверх лимита отрезаем
   // и говорим об этом.
@@ -296,21 +309,33 @@ export default function NewHelpPostScreen() {
     setError("");
 
     try {
-      const { failedFiles } = await createHelpPost({
-        category,
-        postType,
-        body,
-        hiddenBody: isSensitive && hiddenEnabled ? hiddenBody : "",
-        // Есть скрытый блок → обсуждение автоматически только для
-        // допущенных (галочка одна, решение владельца).
-        commentsHidden: isSensitive && hiddenEnabled,
-        files:
-          isSensitive && hiddenEnabled
-            ? files.map(({ isImage, ...file }) => file)
-            : files
-                .filter((f) => !f.isHidden)
-                .map(({ isImage, ...file }) => file),
-      });
+      const { failedFiles } = await createHelpPost(
+        isAnnouncement
+          ? {
+              // Объявление основателя: только текст (Веха 67).
+              category: "",
+              postType: "announcement",
+              body,
+              hiddenBody: "",
+              commentsHidden: false,
+              files: [],
+            }
+          : {
+              category,
+              postType,
+              body,
+              hiddenBody: isSensitive && hiddenEnabled ? hiddenBody : "",
+              // Есть скрытый блок → обсуждение автоматически только для
+              // допущенных (галочка одна, решение владельца).
+              commentsHidden: isSensitive && hiddenEnabled,
+              files:
+                isSensitive && hiddenEnabled
+                  ? files.map(({ isImage, ...file }) => file)
+                  : files
+                      .filter((f) => !f.isHidden)
+                      .map(({ isImage, ...file }) => file),
+            },
+      );
 
       if (failedFiles.length > 0) {
         console.log("Не загрузились файлы:", failedFiles.join(", "));
@@ -402,7 +427,53 @@ export default function NewHelpPostScreen() {
           })}
         </View>
 
-        {/* Категория */}
+        {/* Объявление — третий тип, только у основателя (Веха 67):
+            широкая красноватая карточка под парой Вопрос/Предложение.
+            ⚠️ Тексты по-русски на всех языках — ключи в сводную
+            таблицу переводов при следующей правке. */}
+        {canAnnounce && (
+          <TouchableOpacity
+            style={[
+              styles.announceCard,
+              isAnnouncement && styles.announceCardActive,
+            ]}
+            activeOpacity={0.8}
+            onPress={() => {
+              setPostType("announcement");
+              setError("");
+            }}
+          >
+            <View style={styles.announceTitleRow}>
+              <Ionicons
+                name="megaphone-outline"
+                size={16}
+                color={isAnnouncement ? "#FFFFFF" : "#A2543F"}
+              />
+              <Text
+                style={[
+                  styles.typeCardTitle,
+                  !isAnnouncement && styles.announceTitle,
+                  isAnnouncement && styles.typeCardTitleActive,
+                ]}
+              >
+                Объявление
+              </Text>
+            </View>
+            <Text
+              style={[
+                styles.typeCardHint,
+                isAnnouncement && styles.typeCardHintActive,
+              ]}
+            >
+              Важная новость для всех участников: только текст, без
+              комментариев. Уведомление придёт каждому.
+            </Text>
+          </TouchableOpacity>
+        )}
+
+        {/* Категория — у объявления её нет */}
+        {!isAnnouncement && (
+          <>
         <Text style={styles.label}>{t("newPost.category")}</Text>
 
         <TouchableOpacity
@@ -445,6 +516,8 @@ export default function NewHelpPostScreen() {
             })}
           </View>
         )}
+          </>
+        )}
 
         {/* Текст */}
         <Text style={styles.label}>{t("newPost.text")}</Text>
@@ -461,6 +534,9 @@ export default function NewHelpPostScreen() {
           }}
         />
 
+        {/* Вложений и скрытого блока у объявления нет — только текст */}
+        {!isAnnouncement && (
+          <>
         {/* Открытые вложения: фото коллажем, файлы строками (Веха 55) */}
         <View style={styles.labelRow}>
           <Text style={styles.label}>{t("newPost.photosPublic")}</Text>
@@ -662,6 +738,8 @@ export default function NewHelpPostScreen() {
             )}
           </View>
         )}
+          </>
+        )}
 
         {!!error && <Text style={styles.errorText}>{error}</Text>}
 
@@ -774,6 +852,33 @@ const styles = StyleSheet.create({
 
   typeCardHintActive: {
     color: "rgba(255,255,255,0.9)",
+  },
+
+  // «Объявление» — широкая красноватая карточка (только у основателя).
+  announceCard: {
+    borderRadius: 16,
+    borderWidth: 0.75,
+    borderColor: "rgba(192,91,77,0.5)",
+    backgroundColor: "rgba(192,91,77,0.07)",
+    paddingVertical: 12,
+    paddingHorizontal: 12,
+    marginTop: 10,
+    ...(Platform.OS === "web" ? ({ cursor: "pointer" } as any) : {}),
+  },
+
+  announceCardActive: {
+    backgroundColor: "rgba(192,91,77,0.9)",
+    borderColor: "rgba(192,91,77,0.9)",
+  },
+
+  announceTitleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
+
+  announceTitle: {
+    color: "#A2543F",
   },
 
   catSelect: {

@@ -1,14 +1,25 @@
+// Вкладка «Знания» — пилюли Статьи · Афиша · Ресурсы, пока заглушки.
+// Правки 10.09.2026 (Веха 67, решения владельца):
+//  1) блок больше НЕ центрируется по вертикали — раньше при разной
+//     длине текста заголовок «прыгал» по высоте между пилюлями;
+//     теперь всё растёт от фиксированного верхнего уровня;
+//  2) внизу — розовый чип «Помогите проекту в развитии» (один в один
+//     стиль кнопки «Помочь проекту» с главной), ведёт на экран
+//     «О проекте и поддержка»: мягкий намёк, что проекту нужна помощь.
+
 import {
   Philosopher_400Regular,
   Philosopher_700Bold,
   useFonts,
 } from "@expo-google-fonts/philosopher";
+import { Ionicons } from "@expo/vector-icons";
+import { router } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { useState } from "react";
-import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { Platform, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 
 import TopBar from "../../components/TopBar";
-import { Tekmet } from "../../components/mingi";
+import { Glass, Tekmet } from "../../components/mingi";
 import { t, useLanguage } from "../../services/i18nService";
 
 const SECTIONS = [
@@ -70,6 +81,9 @@ export default function KnowledgeScreen() {
         })}
       </View>
 
+      {/* Раньше justifyContent:"center" ронял заголовок на разную
+          высоту (тексты у разделов разной длины). Теперь блок растёт
+          сверху — заголовок у всех трёх пилюль на одном уровне. */}
       <View style={styles.center}>
         <Text style={styles.title}>{t(current.label)}</Text>
         <Text style={styles.subtitle}>{t("know.soon")}</Text>
@@ -77,6 +91,30 @@ export default function KnowledgeScreen() {
         <Tekmet style={styles.tekmet} />
 
         <Text style={styles.text}>{t(current.text)}</Text>
+
+        {/* Розовый чип поддержки — как на главной, ведёт в
+            «О проекте и поддержка».
+            ⚠️ Текст по-русски на всех языках — ключ в сводную таблицу
+            переводов при следующей правке (как заглушки демо). */}
+        <TouchableOpacity
+          onPress={() => router.push("/about-project" as any)}
+          activeOpacity={0.85}
+          style={styles.supportButton}
+        >
+          <Glass
+            radius={999}
+            tintColor="rgba(247,205,216,0.55)"
+            borderColor="rgba(219,143,163,0.65)"
+            borderWidth={1}
+          >
+            <View style={styles.supportInner}>
+              <Ionicons name="heart-outline" size={16} color="#A85A72" />
+              <Text style={styles.supportText}>
+                Помогите проекту в развитии
+              </Text>
+            </View>
+          </Glass>
+        </TouchableOpacity>
       </View>
     </View>
   );
@@ -125,11 +163,13 @@ const styles = StyleSheet.create({
     color: "#FFFFFF",
   },
 
+  // Фиксированный верхний отступ вместо вертикального центрирования —
+  // заголовок всегда на одном уровне (решение владельца 10.09).
   center: {
     flex: 1,
     alignItems: "center",
-    justifyContent: "center",
     paddingHorizontal: 32,
+    paddingTop: 56,
     paddingBottom: 40,
   },
 
@@ -161,5 +201,27 @@ const styles = StyleSheet.create({
     color: "#7E988B",
     textAlign: "center",
     maxWidth: 340,
+  },
+
+  // Розовый чип поддержки — стиль кнопки «Помочь проекту» с главной.
+  supportButton: {
+    alignSelf: "center",
+    marginTop: 28,
+    ...(Platform.OS === "web" ? ({ cursor: "pointer" } as any) : {}),
+  },
+
+  supportInner: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 7,
+    paddingVertical: 9,
+    paddingHorizontal: 18,
+  },
+
+  supportText: {
+    color: "#A85A72",
+    fontSize: 14,
+    fontWeight: "600",
   },
 });

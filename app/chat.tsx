@@ -1273,9 +1273,11 @@ const styles = StyleSheet.create({
     minWidth: 0,
   },
 
+  // Имя — обычным шрифтом, как в списке чатов (Веха 66; окно диалога
+  // доведено в Вехе 67, решение владельца 10.09).
   headerName: {
-    fontFamily: "Philosopher_700Bold",
-    fontSize: 19,
+    fontSize: 16.5,
+    fontWeight: "600",
     color: "#3F6B5B",
   },
 

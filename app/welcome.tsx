@@ -12,6 +12,7 @@ import {
   Animated,
   Easing,
   Image,
+  Linking,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -150,8 +151,29 @@ function Glass({
 export default function WelcomeScreen() {
   const { width, height } = useWindowDimensions();
 
+  // Обратная связь для гостей (Веха 67, решение владельца 10.09):
+  // одна строка-ссылка «Связаться с нами», открывает почтовую
+  // программу с адресом оператора из политики ПДн. Гость пишет сам
+  // из своей почты — мы ничего не собираем и не храним.
+  // Перевод — прямо здесь по текущему языку; для карачаевского пока
+  // русский вариант. ⚠️ Владельцу: дать карачаевский перевод в
+  // сводную таблицу, при следующей правке переводов перенесём в
+  // словарь ключом.
+  const OWNER_EMAIL = "murat.kurdzhiev@yandex.ru";
+
   // Текущий язык: экран сам перерисуется при переключении.
   const lang = useLanguage();
+
+  // Текст ссылки обратной связи (см. пояснение выше у OWNER_EMAIL).
+  // Карачаевский вариант дал владелец 10.09.2026 — внести и в сводную
+  // таблицу переводов, при следующей правке переводов перенесём в
+  // словарь ключом.
+  const contactText =
+    lang === "en"
+      ? "Contact us"
+      : lang === "kb"
+        ? "Бизге джазыгъыз"
+        : "Связаться с нами";
 
   const [fontsLoaded] = useFonts({
     Philosopher_400Regular,
@@ -427,6 +449,18 @@ export default function WelcomeScreen() {
           <Text style={styles.ageBadge}>16+</Text>
         </View>
 
+        {/* Обратная связь для гостей: одна строка-ссылка, открывает
+            почтовую программу с адресом оператора (сам адрес напоказ
+            не выводим — решение владельца 10.09). */}
+        <View style={styles.contactRow}>
+          <TouchableOpacity
+            onPress={() => Linking.openURL(`mailto:${OWNER_EMAIL}`)}
+            hitSlop={{ top: 8, bottom: 8, left: 10, right: 10 }}
+          >
+            <Text style={styles.contactMail}>{contactText}</Text>
+          </TouchableOpacity>
+        </View>
+
         {/* Переключатель языка (Веха 64): выбор запоминается */}
         <View style={styles.langRow}>
           {(
@@ -604,6 +638,18 @@ const styles = StyleSheet.create({
     fontSize: 11.5,
     fontWeight: "700",
     color: "#96AC9E",
+  },
+
+  // Обратная связь для гостей (Веха 67): тихая строка-ссылка.
+  contactRow: {
+    alignItems: "center",
+    marginTop: 12,
+  },
+
+  contactMail: {
+    fontSize: 11.5,
+    color: "#7E988B",
+    textDecorationLine: "underline",
   },
 
   langRow: {

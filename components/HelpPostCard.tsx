@@ -5,14 +5,33 @@
 // «+N»), счётчики комментариев и фото. Карточка целиком открывает пост.
 
 import { Ionicons } from "@expo/vector-icons";
-import { Image, Platform, StyleSheet, Text, TouchableOpacity, View } from "react-native";
+import { Image, Linking, Platform, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 
 import { HelpFeedItem } from "../services/helpService";
 
 import { t, tCategory } from "../services/i18nService";
+// Живые ссылки в тексте (Веха 67, решение владельца 10.09): режем текст
+// по адресам http(s)://…, адресные куски — нажимаемые и подчёркнутые.
+// Общая для карточек ленты и экрана поста (экспорт — как formatPostDate).
+export function linkifyText(text: string, keyPrefix: string) {
+  const parts = text.split(/(https?:\/\/[^\s]+)/g);
+  return parts.map((part, i) =>
+    /^https?:\/\//.test(part) ? (
+      <Text
+        key={`${keyPrefix}-l${i}`}
+        style={styles.linkText}
+        onPress={() => Linking.openURL(part)}
+      >
+        {part}
+      </Text>
+    ) : (
+      part
+    ),
+  );
+}
+
 // «сегодня 14:05», «вчера», «12 авг»
-export function formatPostDate(iso: string): string {
-  const date = new Date(iso);
+export function formatPostDate(iso: string): string {  const date = new Date(iso);
   const now = new Date();
 
   const sameDay = date.toDateString() === now.toDateString();
@@ -54,6 +73,44 @@ export default function HelpPostCard({
 
   const isClosed = post.status === "archived";
   const isBlocked = post.status === "blocked"; // только у автора (Веха 57)
+  // Объявление от основателя (Веха 67): красноватая карточка у всех,
+  // без комментариев и категории; не архивируется и не блокируется.
+  const isAnnouncement = post.postType === "announcement";
+
+  // Объявление — «просто окно» (решение владельца 10.09): без автора и
+  // аватара, только чип «Важно» и дата; текст ПОЛНОСТЬЮ, ссылки в нём
+  // живые. Карточка НЕ открывает пост — нажимается только у самого
+  // основателя (post.isMine): это его единственный путь к удалению.
+  if (isAnnouncement) {
+    const Wrapper: any = post.isMine ? TouchableOpacity : View;
+    const wrapperProps = post.isMine
+      ? {
+          activeOpacity: 0.85,
+          onPress,
+        }
+      : {};
+
+    // Ссылки в тексте — живые (общая функция linkifyText).
+
+    return (
+      <Wrapper
+        style={[styles.card, styles.cardAnnouncement]}
+        {...wrapperProps}
+      >
+        <View style={styles.announceTopRow}>
+          <View style={styles.announceChip}>
+            <Ionicons name="megaphone-outline" size={12} color="#A2543F" />
+            {/* ⚠️ По-русски на всех языках — ключ в сводную таблицу
+                переводов при следующей правке (как заглушки демо). */}
+            <Text style={styles.announceChipText}>Важно</Text>
+          </View>
+          <Text style={styles.cardDate}>{formatPostDate(post.createdAt)}</Text>
+        </View>
+
+        <Text style={styles.cardBody}>{linkifyText(post.body, post.id)}</Text>
+      </Wrapper>
+    );
+  }
 
   return (
     <TouchableOpacity
@@ -119,9 +176,12 @@ export default function HelpPostCard({
       </View>
 
       <View style={styles.categoryRow}>
-        <View style={styles.categoryChip}>
-          <Text style={styles.categoryChipText}>{tCategory(post.category)}</Text>
-        </View>
+        {/* У объявления категории нет — чип не показываем */}
+        {!!post.category && (
+          <View style={styles.categoryChip}>
+            <Text style={styles.categoryChipText}>{tCategory(post.category)}</Text>
+          </View>
+        )}
 
         {isNew && (
           <View style={styles.newMark}>
@@ -139,7 +199,7 @@ export default function HelpPostCard({
       </View>
 
       <Text style={styles.cardBody} numberOfLines={4}>
-        {post.body}
+        {linkifyText(post.body, post.id)}
       </Text>
 
       {/* Миниатюры открытых фото — как в Threads: ряд до трёх,
@@ -204,6 +264,43 @@ const styles = StyleSheet.create({
   cardBlocked: {
     backgroundColor: "rgba(192,91,77,0.06)",
     borderColor: "rgba(192,91,77,0.35)",
+  },
+
+  // Объявление от основателя — красноватая карточка у всех (Веха 67);
+  // рамка заметнее блокировки, чтобы не путались.
+  cardAnnouncement: {
+    backgroundColor: "rgba(192,91,77,0.08)",
+    borderColor: "rgba(192,91,77,0.55)",
+  },
+
+  announceChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 12,
+    backgroundColor: "rgba(192,91,77,0.14)",
+  },
+
+  announceChipText: {
+    fontSize: 11.5,
+    fontWeight: "600",
+    color: "#A2543F",
+  },
+
+  // Верх объявления: чип «Важно» слева, дата справа.
+  announceTopRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+
+  // Живая ссылка в тексте объявления.
+  linkText: {
+    color: "#3F6B5B",
+    textDecorationLine: "underline",
+    ...(Platform.OS === "web" ? ({ cursor: "pointer" } as any) : {}),
   },
 
   blockedChip: {
