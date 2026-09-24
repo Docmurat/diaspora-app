@@ -13,10 +13,13 @@ import "react-native-reanimated";
 import AccountGuard from "../components/AccountGuard";
 import PushBridge from "../components/PushBridge";
 
-// ВРЕМЕННО (Веха 66, решение владельца): приложение не подчиняется
-// системному увеличению шрифта («режим для слабовидящих») — вёрстка
-// остаётся как нарисована. Позже можно разрешить умеренное увеличение
-// через maxFontSizeMultiplier.
+// Иммунитет к системному увеличению шрифта («режим для слабовидящих»):
+// вёрстка остаётся как нарисована (решение владельца, Веха 66).
+// ⚠️ ВАЖНО (Веха 68): приём ниже (defaultProps) УМЕР в React 19 —
+// телефон его игнорирует, вёрстка плыла (поймано на APK v2).
+// НАСТОЯЩИЙ замок теперь на уровне коробки: plugins/withFixedFontScale.js
+// (подключён в app.json) фиксирует масштаб шрифта в Android-активности.
+// Строки ниже оставлены как безвредная страховка на старых путях.
 // @ts-ignore — defaultProps для Text официально поддерживается в React Native
 Text.defaultProps = { ...(Text as any).defaultProps, allowFontScaling: false };
 // @ts-ignore
