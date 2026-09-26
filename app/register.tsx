@@ -11,9 +11,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Alert,
   Image,
-  KeyboardAvoidingView,
   Platform,
-  ScrollView,
   StyleSheet,
   Switch,
   Text,
@@ -21,6 +19,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import { KeyboardAwareScrollView } from "react-native-keyboard-controller";
 import AvatarCropModal, { prepareAvatarSource } from "../components/AvatarCrop";
 import {
   joinLocations,
@@ -30,6 +29,7 @@ import {
 } from "../components/locations";
 import { Glass, Tekmet } from "../components/mingi";
 import { supabase } from "../lib/supabase";
+import { useSmartKeyboard } from "../lib/useSmartKeyboard";
 import { registerUser } from "../services/authService";
 import { recordRegistrationConsents } from "../services/consentService";
 import { translateAuthError } from "../services/errorService";
@@ -96,6 +96,7 @@ const glassInputProps = {
 
 export default function RegisterScreen() {
   const lang = useLanguage(); // перерисовка при смене языка
+  useSmartKeyboard(); // Веха 69: «умная клавиатура» включена на этом экране
   const [fontsLoaded] = useFonts({
     Philosopher_400Regular,
     Philosopher_700Bold,
@@ -374,9 +375,7 @@ export default function RegisterScreen() {
     }
 
     if (!consentPdn || !consentTerms || !consentMemo) {
-      setError(
-        t("register.error.consents"),
-      );
+      setError(t("register.error.consents"));
       return;
     }
 
@@ -455,557 +454,572 @@ export default function RegisterScreen() {
     <View style={styles.screen}>
       <StatusBar style="dark" />
 
-      <KeyboardAvoidingView
+      {/* Веха 69 «Клавиатура-2»: одна прокрутка, которая сама следит за
+          клавиатурой (все три шага анкеты). Активное поле всегда видно
+          целиком вместе с рамкой — запас bottomOffset над клавиатурой;
+          при переходе между полями страница плавно доезжает сама. */}
+      <KeyboardAwareScrollView
         style={styles.keyboardWrap}
-        behavior={Platform.OS === "ios" ? "padding" : undefined}
-        keyboardVerticalOffset={Platform.OS === "ios" ? 20 : 0}
+        bottomOffset={24}
+        contentContainerStyle={styles.container}
+        keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
+        showsVerticalScrollIndicator={false}
       >
-        <ScrollView
-          contentContainerStyle={styles.container}
-          keyboardShouldPersistTaps="handled"
-          keyboardDismissMode="on-drag"
-          showsVerticalScrollIndicator={false}
-        >
-          <Text style={styles.title}>{t("register.title")}</Text>
-          <Text style={styles.subtitle}>{t("register.stepOf", { N: step })}</Text>
+        <Text style={styles.title}>{t("register.title")}</Text>
+        <Text style={styles.subtitle}>{t("register.stepOf", { N: step })}</Text>
 
-          <Tekmet style={styles.tekmet} />
+        <Tekmet style={styles.tekmet} />
 
-          {step !== 2 && (
-            <Text style={styles.requiredHint}>{t("register.requiredHint")}</Text>
-          )}
+        {step !== 2 && (
+          <Text style={styles.requiredHint}>{t("register.requiredHint")}</Text>
+        )}
 
-          {step === 1 && (
-            <>
-              <TouchableOpacity
-                style={styles.avatarPicker}
-                onPress={handlePickImage}
-                activeOpacity={0.85}
-              >
-                <Image
-                  source={
-                    avatarUri
-                      ? { uri: avatarUri }
-                      : require("../assets/default-avatar.png")
-                  }
-                  style={styles.avatarImage}
-                />
-              </TouchableOpacity>
+        {step === 1 && (
+          <>
+            <TouchableOpacity
+              style={styles.avatarPicker}
+              onPress={handlePickImage}
+              activeOpacity={0.85}
+            >
+              <Image
+                source={
+                  avatarUri
+                    ? { uri: avatarUri }
+                    : require("../assets/default-avatar.png")
+                }
+                style={styles.avatarImage}
+              />
+            </TouchableOpacity>
 
-              <Text style={styles.avatarHint}>{t("register.addPhoto")}</Text>
+            <Text style={styles.avatarHint}>{t("register.addPhoto")}</Text>
 
-              <Glass {...glassInputProps} style={styles.inputWrap}>
-                <TextInput
-                  placeholder={t("register.ph.email")}
-                  placeholderTextColor="#8FA79A"
-                  style={styles.input}
-                  value={email}
-                  onChangeText={(text) => {
-                    setEmail(text);
-                    setError("");
-                  }}
-                  autoCapitalize="none"
-                  keyboardType="email-address"
-                />
-              </Glass>
+            <Glass {...glassInputProps} style={styles.inputWrap}>
+              <TextInput
+                placeholder={t("register.ph.email")}
+                placeholderTextColor="#8FA79A"
+                style={styles.input}
+                value={email}
+                onChangeText={(text) => {
+                  setEmail(text);
+                  setError("");
+                }}
+                autoCapitalize="none"
+                keyboardType="email-address"
+              />
+            </Glass>
 
-              <Glass {...glassInputProps} style={styles.inputWrap}>
-                <TextInput
-                  placeholder={t("register.ph.password")}
-                  placeholderTextColor="#8FA79A"
-                  style={styles.input}
-                  value={password}
-                  onChangeText={(text) => {
-                    setPassword(text);
-                    setError("");
-                  }}
-                  secureTextEntry
-                />
-              </Glass>
+            <Glass {...glassInputProps} style={styles.inputWrap}>
+              <TextInput
+                placeholder={t("register.ph.password")}
+                placeholderTextColor="#8FA79A"
+                style={styles.input}
+                value={password}
+                onChangeText={(text) => {
+                  setPassword(text);
+                  setError("");
+                }}
+                secureTextEntry
+              />
+            </Glass>
 
-              <Glass {...glassInputProps} style={styles.inputWrap}>
-                <TextInput
-                  placeholder={t("register.ph.phone")}
-                  placeholderTextColor="#8FA79A"
-                  style={styles.input}
-                  value={phone}
-                  onChangeText={(text) => {
-                    setPhone(text);
-                    setError("");
-                  }}
-                  keyboardType="phone-pad"
-                />
-              </Glass>
+            <Glass {...glassInputProps} style={styles.inputWrap}>
+              <TextInput
+                placeholder={t("register.ph.phone")}
+                placeholderTextColor="#8FA79A"
+                style={styles.input}
+                value={phone}
+                onChangeText={(text) => {
+                  setPhone(text);
+                  setError("");
+                }}
+                keyboardType="phone-pad"
+              />
+            </Glass>
 
-              <Glass {...glassInputProps} style={styles.inputWrap}>
-                <View style={styles.switchRow}>
-                  <View style={styles.switchTextWrap}>
-                    <Text style={styles.switchTitle}>{t("register.phoneVisible.title")}</Text>
-                    <Text style={styles.switchHint}>{t("register.phoneVisible.hint")}</Text>
-                  </View>
-                  <Switch
-                    value={phoneVisible}
-                    onValueChange={setPhoneVisible}
-                    trackColor={{ false: "#D6E4DA", true: "#9FD4B4" }}
-                    thumbColor={phoneVisible ? "#69B78D" : "#FFFFFF"}
-                  />
+            <Glass {...glassInputProps} style={styles.inputWrap}>
+              <View style={styles.switchRow}>
+                <View style={styles.switchTextWrap}>
+                  <Text style={styles.switchTitle}>
+                    {t("register.phoneVisible.title")}
+                  </Text>
+                  <Text style={styles.switchHint}>
+                    {t("register.phoneVisible.hint")}
+                  </Text>
                 </View>
-              </Glass>
+                <Switch
+                  value={phoneVisible}
+                  onValueChange={setPhoneVisible}
+                  trackColor={{ false: "#D6E4DA", true: "#9FD4B4" }}
+                  thumbColor={phoneVisible ? "#69B78D" : "#FFFFFF"}
+                />
+              </View>
+            </Glass>
 
-              <Glass {...glassInputProps} style={styles.inputWrap}>
-                <View style={styles.switchRow}>
-                  <View style={styles.switchTextWrap}>
-                    <Text style={styles.switchTitle}>{t("register.whatsapp.title")}</Text>
-                    <Text style={styles.switchHint}>{t("register.whatsapp.hint")}</Text>
-                  </View>
-                  <Switch
-                    value={hasWhatsapp}
-                    onValueChange={setHasWhatsapp}
-                    trackColor={{ false: "#D6E4DA", true: "#9FD4B4" }}
-                    thumbColor={hasWhatsapp ? "#69B78D" : "#FFFFFF"}
-                  />
+            <Glass {...glassInputProps} style={styles.inputWrap}>
+              <View style={styles.switchRow}>
+                <View style={styles.switchTextWrap}>
+                  <Text style={styles.switchTitle}>
+                    {t("register.whatsapp.title")}
+                  </Text>
+                  <Text style={styles.switchHint}>
+                    {t("register.whatsapp.hint")}
+                  </Text>
                 </View>
-              </Glass>
-
-              <Glass {...glassInputProps} style={styles.inputWrap}>
-                <TextInput
-                  placeholder={t("register.ph.firstName")}
-                  placeholderTextColor="#8FA79A"
-                  style={styles.input}
-                  value={firstName}
-                  onChangeText={(text) => {
-                    setFirstName(text);
-                    setError("");
-                  }}
+                <Switch
+                  value={hasWhatsapp}
+                  onValueChange={setHasWhatsapp}
+                  trackColor={{ false: "#D6E4DA", true: "#9FD4B4" }}
+                  thumbColor={hasWhatsapp ? "#69B78D" : "#FFFFFF"}
                 />
-              </Glass>
+              </View>
+            </Glass>
 
-              <Glass {...glassInputProps} style={styles.inputWrap}>
-                <TextInput
-                  placeholder={t("register.ph.lastName")}
-                  placeholderTextColor="#8FA79A"
-                  style={styles.input}
-                  value={lastName}
-                  onChangeText={(text) => {
-                    setLastName(text);
-                    setError("");
-                  }}
-                />
-              </Glass>
-
-              <Glass {...glassInputProps} style={styles.inputWrap}>
-                <TextInput
-                  placeholder={t("register.ph.birthDate")}
-                  placeholderTextColor="#8FA79A"
-                  style={styles.input}
-                  value={birthDateInput}
-                  onChangeText={(text) => {
-                    setBirthDateInput(formatBirthDateInput(text));
-                    setError("");
-                  }}
-                  keyboardType="number-pad"
-                />
-              </Glass>
-
-              <LocationFields
-                pairs={locations}
-                onChange={(next) => {
-                  setLocations(next);
+            <Glass {...glassInputProps} style={styles.inputWrap}>
+              <TextInput
+                placeholder={t("register.ph.firstName")}
+                placeholderTextColor="#8FA79A"
+                style={styles.input}
+                value={firstName}
+                onChangeText={(text) => {
+                  setFirstName(text);
                   setError("");
                 }}
               />
+            </Glass>
 
-              {!!error && <Text style={styles.error}>{error}</Text>}
+            <Glass {...glassInputProps} style={styles.inputWrap}>
+              <TextInput
+                placeholder={t("register.ph.lastName")}
+                placeholderTextColor="#8FA79A"
+                style={styles.input}
+                value={lastName}
+                onChangeText={(text) => {
+                  setLastName(text);
+                  setError("");
+                }}
+              />
+            </Glass>
 
-              <TouchableOpacity
-                activeOpacity={0.85}
-                onPress={goToStepTwo}
-                disabled={checkingEmail || !step1Valid}
-                style={[
-                  styles.primaryShadow,
-                  (checkingEmail || !step1Valid) && styles.disabled,
-                ]}
+            <Glass {...glassInputProps} style={styles.inputWrap}>
+              <TextInput
+                placeholder={t("register.ph.birthDate")}
+                placeholderTextColor="#8FA79A"
+                style={styles.input}
+                value={birthDateInput}
+                onChangeText={(text) => {
+                  setBirthDateInput(formatBirthDateInput(text));
+                  setError("");
+                }}
+                keyboardType="number-pad"
+              />
+            </Glass>
+
+            <LocationFields
+              pairs={locations}
+              onChange={(next) => {
+                setLocations(next);
+                setError("");
+              }}
+            />
+
+            {!!error && <Text style={styles.error}>{error}</Text>}
+
+            <TouchableOpacity
+              activeOpacity={0.85}
+              onPress={goToStepTwo}
+              disabled={checkingEmail || !step1Valid}
+              style={[
+                styles.primaryShadow,
+                (checkingEmail || !step1Valid) && styles.disabled,
+              ]}
+            >
+              <Glass
+                radius={18}
+                tintColor="rgba(105,183,141,0.92)"
+                borderColor="rgba(255,255,255,0.85)"
               >
-                <Glass
-                  radius={18}
-                  tintColor="rgba(105,183,141,0.92)"
-                  borderColor="rgba(255,255,255,0.85)"
-                >
-                  <View style={styles.buttonInner}>
-                    <Text style={styles.primaryButtonText}>
-                      {checkingEmail ? t("register.code.sending") : t("common.next")}
-                    </Text>
-                  </View>
-                </Glass>
-              </TouchableOpacity>
-            </>
-          )}
-
-          {step === 2 && (
-            <>
-              <Text style={styles.codeText}>
-                {t("register.code.sentTo")}{"\n"}
-                <Text style={styles.codeEmail}>{email.trim()}</Text>
-              </Text>
-
-              <Glass {...glassInputProps} style={styles.inputWrap}>
-                <TextInput
-                  placeholder={t("register.code.placeholder")}
-                  placeholderTextColor="#8FA79A"
-                  style={[styles.input, styles.codeInput]}
-                  value={codeInput}
-                  onChangeText={(text) => {
-                    setCodeInput(text.replace(/[^0-9]/g, ""));
-                    setError("");
-                  }}
-                  keyboardType="number-pad"
-                  maxLength={6}
-                />
+                <View style={styles.buttonInner}>
+                  <Text style={styles.primaryButtonText}>
+                    {checkingEmail
+                      ? t("register.code.sending")
+                      : t("common.next")}
+                  </Text>
+                </View>
               </Glass>
+            </TouchableOpacity>
+          </>
+        )}
 
-              <Text style={styles.hintCentered}>{t("register.code.hint")}</Text>
+        {step === 2 && (
+          <>
+            <Text style={styles.codeText}>
+              {t("register.code.sentTo")}
+              {"\n"}
+              <Text style={styles.codeEmail}>{email.trim()}</Text>
+            </Text>
 
-              {!!error && <Text style={styles.error}>{error}</Text>}
+            <Glass {...glassInputProps} style={styles.inputWrap}>
+              <TextInput
+                placeholder={t("register.code.placeholder")}
+                placeholderTextColor="#8FA79A"
+                style={[styles.input, styles.codeInput]}
+                value={codeInput}
+                onChangeText={(text) => {
+                  setCodeInput(text.replace(/[^0-9]/g, ""));
+                  setError("");
+                }}
+                keyboardType="number-pad"
+                maxLength={6}
+              />
+            </Glass>
 
-              <TouchableOpacity
-                activeOpacity={0.85}
-                onPress={handleVerifyCode}
-                disabled={verifyingCode || codeInput.length !== 6}
+            <Text style={styles.hintCentered}>{t("register.code.hint")}</Text>
+
+            {!!error && <Text style={styles.error}>{error}</Text>}
+
+            <TouchableOpacity
+              activeOpacity={0.85}
+              onPress={handleVerifyCode}
+              disabled={verifyingCode || codeInput.length !== 6}
+              style={[
+                styles.primaryShadow,
+                (verifyingCode || codeInput.length !== 6) && styles.disabled,
+              ]}
+            >
+              <Glass
+                radius={18}
+                tintColor="rgba(105,183,141,0.92)"
+                borderColor="rgba(255,255,255,0.85)"
+              >
+                <View style={styles.buttonInner}>
+                  <Text style={styles.primaryButtonText}>
+                    {verifyingCode
+                      ? t("common.checking")
+                      : t("register.code.confirm")}
+                  </Text>
+                </View>
+              </Glass>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              onPress={handleResendCode}
+              disabled={resendIn > 0 || checkingEmail}
+              activeOpacity={0.8}
+            >
+              <Text style={[styles.link, resendIn > 0 && styles.linkMuted]}>
+                {resendIn > 0
+                  ? t("register.code.resendIn", { N: resendIn })
+                  : checkingEmail
+                    ? t("common.sending")
+                    : t("register.code.resend")}
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              onPress={() => {
+                setStep(1);
+                setCodeInput("");
+                setError("");
+              }}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.link}>{t("register.code.changeEmail")}</Text>
+            </TouchableOpacity>
+          </>
+        )}
+
+        {step === 3 && (
+          <>
+            <Glass {...glassInputProps} style={styles.inputWrap}>
+              <TextInput
+                placeholder={t("register.ph.category")}
+                placeholderTextColor="#8FA79A"
+                style={styles.input}
+                value={category}
+                onChangeText={(text) => {
+                  setCategory(text);
+                  setShowCategoryOptions(true);
+                  setError("");
+                }}
+                onFocus={() => setShowCategoryOptions(true)}
+              />
+            </Glass>
+
+            {showCategoryOptions && filteredCategories.length > 0 && (
+              <Glass {...glassInputProps} style={styles.optionsBox}>
+                {filteredCategories.map((item, index) => (
+                  <TouchableOpacity
+                    key={item}
+                    style={[
+                      styles.optionItem,
+                      index === filteredCategories.length - 1 &&
+                        styles.optionItemLast,
+                    ]}
+                    onPress={() => {
+                      setCategory(item);
+                      setShowCategoryOptions(false);
+                      setError("");
+                    }}
+                  >
+                    <Text style={styles.optionText}>{tCategory(item)}</Text>
+                  </TouchableOpacity>
+                ))}
+              </Glass>
+            )}
+
+            <Glass {...glassInputProps} style={styles.inputWrap}>
+              <TextInput
+                placeholder={t("register.ph.profession")}
+                placeholderTextColor="#8FA79A"
+                style={styles.input}
+                value={profession}
+                onChangeText={(text) => {
+                  setProfession(text);
+                  setShowProfessionSuggestions(true);
+                  setError("");
+                }}
+                onFocus={() => setShowProfessionSuggestions(true)}
+              />
+            </Glass>
+
+            {showProfessionSuggestions && filteredProfessions.length > 0 && (
+              <Glass {...glassInputProps} style={styles.optionsBox}>
+                {filteredProfessions.map((item, index) => (
+                  <TouchableOpacity
+                    key={item}
+                    style={[
+                      styles.optionItem,
+                      index === filteredProfessions.length - 1 &&
+                        styles.optionItemLast,
+                    ]}
+                    onPress={() => {
+                      setProfession(item);
+                      setShowProfessionSuggestions(false);
+                    }}
+                  >
+                    <Text style={styles.optionText}>{item}</Text>
+                  </TouchableOpacity>
+                ))}
+              </Glass>
+            )}
+
+            <Glass {...glassInputProps} style={styles.inputWrap}>
+              <TextInput
+                placeholder={t("register.ph.bio")}
+                placeholderTextColor="#8FA79A"
+                style={[styles.input, styles.textArea]}
+                value={bio}
+                onChangeText={(text) => {
+                  setBio(text);
+                  setError("");
+                }}
+                multiline
+              />
+            </Glass>
+
+            <Glass {...glassInputProps} style={styles.inputWrap}>
+              <TextInput
+                placeholder={t("register.ph.telegram")}
+                placeholderTextColor="#8FA79A"
+                style={styles.input}
+                value={telegram}
+                onChangeText={(text) => {
+                  setTelegram(text);
+                  setError("");
+                }}
+                autoCapitalize="none"
+              />
+            </Glass>
+
+            <Glass {...glassInputProps} style={styles.inputWrap}>
+              <TextInput
+                placeholder={t("register.ph.instagram")}
+                placeholderTextColor="#8FA79A"
+                style={styles.input}
+                value={instagram}
+                onChangeText={(text) => {
+                  setInstagram(text);
+                  setError("");
+                }}
+                autoCapitalize="none"
+              />
+            </Glass>
+
+            <TouchableOpacity
+              style={styles.consentRow}
+              activeOpacity={0.8}
+              onPress={() => {
+                setConsentPdn((v) => !v);
+                setError("");
+              }}
+            >
+              <View
                 style={[
-                  styles.primaryShadow,
-                  (verifyingCode || codeInput.length !== 6) && styles.disabled,
+                  styles.consentBox,
+                  consentPdn && styles.consentBoxChecked,
                 ]}
               >
-                <Glass
-                  radius={18}
-                  tintColor="rgba(105,183,141,0.92)"
-                  borderColor="rgba(255,255,255,0.85)"
+                {consentPdn && (
+                  <Ionicons name="checkmark" size={15} color="#FFFFFF" />
+                )}
+              </View>
+              <Text style={styles.consentText}>
+                {lang === "en"
+                  ? "I consent to the processing of my personal data "
+                  : "Я даю согласие на обработку моих персональных данных "}
+                <Text
+                  style={styles.consentLink}
+                  onPress={() => router.push("/consent" as any)}
                 >
-                  <View style={styles.buttonInner}>
-                    <Text style={styles.primaryButtonText}>
-                      {verifyingCode ? t("common.checking") : t("register.code.confirm")}
-                    </Text>
-                  </View>
-                </Glass>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                onPress={handleResendCode}
-                disabled={resendIn > 0 || checkingEmail}
-                activeOpacity={0.8}
-              >
-                <Text style={[styles.link, resendIn > 0 && styles.linkMuted]}>
-                  {resendIn > 0
-                    ? t("register.code.resendIn", { N: resendIn })
-                    : checkingEmail
-                      ? t("common.sending")
-                      : t("register.code.resend")}
+                  {lang === "en" ? "(consent text)" : "(текст согласия)"}
                 </Text>
-              </TouchableOpacity>
+              </Text>
+            </TouchableOpacity>
 
+            <TouchableOpacity
+              style={styles.consentRow}
+              activeOpacity={0.8}
+              onPress={() => {
+                setConsentTerms((v) => !v);
+                setError("");
+              }}
+            >
+              <View
+                style={[
+                  styles.consentBox,
+                  consentTerms && styles.consentBoxChecked,
+                ]}
+              >
+                {consentTerms && (
+                  <Ionicons name="checkmark" size={15} color="#FFFFFF" />
+                )}
+              </View>
+              <Text style={styles.consentText}>
+                {lang === "en" ? "I accept the " : "Принимаю "}
+                <Text
+                  style={styles.consentLink}
+                  onPress={() => router.push("/terms" as any)}
+                >
+                  {lang === "en"
+                    ? "Terms of Use"
+                    : "Пользовательское соглашение"}
+                </Text>
+                {lang === "en" ? " and have read the " : " и ознакомлен(а) с "}
+                <Text
+                  style={styles.consentLink}
+                  onPress={() => router.push("/privacy" as any)}
+                >
+                  {lang === "en"
+                    ? "Privacy Policy"
+                    : "Политикой конфиденциальности"}
+                </Text>
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.consentRow}
+              activeOpacity={0.8}
+              onPress={() => {
+                if (consentMemo) {
+                  // Снять принятие: галочка гаснет, кнопка отправки тухнет
+                  setConsentMemo(false);
+                  setMemorandumAccepted(false);
+                } else {
+                  router.push("/memorandum?mode=accept" as any);
+                }
+              }}
+            >
+              <View
+                style={[
+                  styles.consentBox,
+                  consentMemo && styles.consentBoxChecked,
+                ]}
+              >
+                {consentMemo && (
+                  <Ionicons name="checkmark" size={15} color="#FFFFFF" />
+                )}
+              </View>
+              <Text style={styles.consentText}>
+                {consentMemo ? (
+                  t("register.consent.memoDone")
+                ) : (
+                  <>
+                    {lang === "en"
+                      ? "The Mingi-Tau Memorandum — "
+                      : "Меморандум «Минги-Тау» — "}
+                    <Text style={styles.consentLink}>
+                      {lang === "en"
+                        ? "read and accept"
+                        : "прочитать и принять"}
+                    </Text>
+                  </>
+                )}
+              </Text>
+            </TouchableOpacity>
+
+            {!!error && <Text style={styles.error}>{error}</Text>}
+
+            <View style={styles.buttonsRow}>
               <TouchableOpacity
+                activeOpacity={0.85}
                 onPress={() => {
                   setStep(1);
-                  setCodeInput("");
                   setError("");
                 }}
-                activeOpacity={0.8}
+                style={styles.secondaryWrap}
               >
-                <Text style={styles.link}>{t("register.code.changeEmail")}</Text>
-              </TouchableOpacity>
-            </>
-          )}
-
-          {step === 3 && (
-            <>
-              <Glass {...glassInputProps} style={styles.inputWrap}>
-                <TextInput
-                  placeholder={t("register.ph.category")}
-                  placeholderTextColor="#8FA79A"
-                  style={styles.input}
-                  value={category}
-                  onChangeText={(text) => {
-                    setCategory(text);
-                    setShowCategoryOptions(true);
-                    setError("");
-                  }}
-                  onFocus={() => setShowCategoryOptions(true)}
-                />
-              </Glass>
-
-              {showCategoryOptions && filteredCategories.length > 0 && (
-                <Glass {...glassInputProps} style={styles.optionsBox}>
-                  {filteredCategories.map((item, index) => (
-                    <TouchableOpacity
-                      key={item}
-                      style={[
-                        styles.optionItem,
-                        index === filteredCategories.length - 1 &&
-                          styles.optionItemLast,
-                      ]}
-                      onPress={() => {
-                        setCategory(item);
-                        setShowCategoryOptions(false);
-                        setError("");
-                      }}
-                    >
-                      <Text style={styles.optionText}>{tCategory(item)}</Text>
-                    </TouchableOpacity>
-                  ))}
+                <Glass
+                  radius={18}
+                  tintColor="rgba(255,255,255,0.5)"
+                  borderColor="rgba(93,140,120,0.45)"
+                  borderWidth={0.75}
+                >
+                  <View style={styles.buttonInner}>
+                    <Text style={styles.secondaryButtonText}>
+                      {t("common.back")}
+                    </Text>
+                  </View>
                 </Glass>
-              )}
-
-              <Glass {...glassInputProps} style={styles.inputWrap}>
-                <TextInput
-                  placeholder={t("register.ph.profession")}
-                  placeholderTextColor="#8FA79A"
-                  style={styles.input}
-                  value={profession}
-                  onChangeText={(text) => {
-                    setProfession(text);
-                    setShowProfessionSuggestions(true);
-                    setError("");
-                  }}
-                  onFocus={() => setShowProfessionSuggestions(true)}
-                />
-              </Glass>
-
-              {showProfessionSuggestions && filteredProfessions.length > 0 && (
-                <Glass {...glassInputProps} style={styles.optionsBox}>
-                  {filteredProfessions.map((item, index) => (
-                    <TouchableOpacity
-                      key={item}
-                      style={[
-                        styles.optionItem,
-                        index === filteredProfessions.length - 1 &&
-                          styles.optionItemLast,
-                      ]}
-                      onPress={() => {
-                        setProfession(item);
-                        setShowProfessionSuggestions(false);
-                      }}
-                    >
-                      <Text style={styles.optionText}>{item}</Text>
-                    </TouchableOpacity>
-                  ))}
-                </Glass>
-              )}
-
-              <Glass {...glassInputProps} style={styles.inputWrap}>
-                <TextInput
-                  placeholder={t("register.ph.bio")}
-                  placeholderTextColor="#8FA79A"
-                  style={[styles.input, styles.textArea]}
-                  value={bio}
-                  onChangeText={(text) => {
-                    setBio(text);
-                    setError("");
-                  }}
-                  multiline
-                />
-              </Glass>
-
-              <Glass {...glassInputProps} style={styles.inputWrap}>
-                <TextInput
-                  placeholder={t("register.ph.telegram")}
-                  placeholderTextColor="#8FA79A"
-                  style={styles.input}
-                  value={telegram}
-                  onChangeText={(text) => {
-                    setTelegram(text);
-                    setError("");
-                  }}
-                  autoCapitalize="none"
-                />
-              </Glass>
-
-              <Glass {...glassInputProps} style={styles.inputWrap}>
-                <TextInput
-                  placeholder={t("register.ph.instagram")}
-                  placeholderTextColor="#8FA79A"
-                  style={styles.input}
-                  value={instagram}
-                  onChangeText={(text) => {
-                    setInstagram(text);
-                    setError("");
-                  }}
-                  autoCapitalize="none"
-                />
-              </Glass>
-
-              <TouchableOpacity
-                style={styles.consentRow}
-                activeOpacity={0.8}
-                onPress={() => {
-                  setConsentPdn((v) => !v);
-                  setError("");
-                }}
-              >
-                <View
-                  style={[
-                    styles.consentBox,
-                    consentPdn && styles.consentBoxChecked,
-                  ]}
-                >
-                  {consentPdn && (
-                    <Ionicons name="checkmark" size={15} color="#FFFFFF" />
-                  )}
-                </View>
-                <Text style={styles.consentText}>
-                  {lang === "en"
-                    ? "I consent to the processing of my personal data "
-                    : "Я даю согласие на обработку моих персональных данных "}
-                  <Text
-                    style={styles.consentLink}
-                    onPress={() => router.push("/consent" as any)}
-                  >
-                    {lang === "en" ? "(consent text)" : "(текст согласия)"}
-                  </Text>
-                </Text>
               </TouchableOpacity>
 
               <TouchableOpacity
-                style={styles.consentRow}
-                activeOpacity={0.8}
-                onPress={() => {
-                  setConsentTerms((v) => !v);
-                  setError("");
-                }}
-              >
-                <View
-                  style={[
-                    styles.consentBox,
-                    consentTerms && styles.consentBoxChecked,
-                  ]}
-                >
-                  {consentTerms && (
-                    <Ionicons name="checkmark" size={15} color="#FFFFFF" />
-                  )}
-                </View>
-                <Text style={styles.consentText}>
-                  {lang === "en" ? "I accept the " : "Принимаю "}
-                  <Text
-                    style={styles.consentLink}
-                    onPress={() => router.push("/terms" as any)}
-                  >
-                    {lang === "en"
-                      ? "Terms of Use"
-                      : "Пользовательское соглашение"}
-                  </Text>
-                  {lang === "en" ? " and have read the " : " и ознакомлен(а) с "}
-                  <Text
-                    style={styles.consentLink}
-                    onPress={() => router.push("/privacy" as any)}
-                  >
-                    {lang === "en"
-                      ? "Privacy Policy"
-                      : "Политикой конфиденциальности"}
-                  </Text>
-                </Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={styles.consentRow}
-                activeOpacity={0.8}
-                onPress={() => {
-                  if (consentMemo) {
-                    // Снять принятие: галочка гаснет, кнопка отправки тухнет
-                    setConsentMemo(false);
-                    setMemorandumAccepted(false);
-                  } else {
-                    router.push("/memorandum?mode=accept" as any);
-                  }
-                }}
-              >
-                <View
-                  style={[
-                    styles.consentBox,
-                    consentMemo && styles.consentBoxChecked,
-                  ]}
-                >
-                  {consentMemo && (
-                    <Ionicons name="checkmark" size={15} color="#FFFFFF" />
-                  )}
-                </View>
-                <Text style={styles.consentText}>
-                  {consentMemo ? (
-                    t("register.consent.memoDone")
-                  ) : (
-                    <>
-                      {lang === "en"
-                        ? "The Mingi-Tau Memorandum — "
-                        : "Меморандум «Минги-Тау» — "}
-                      <Text style={styles.consentLink}>
-                        {lang === "en"
-                          ? "read and accept"
-                          : "прочитать и принять"}
-                      </Text>
-                    </>
-                  )}
-                </Text>
-              </TouchableOpacity>
-
-              {!!error && <Text style={styles.error}>{error}</Text>}
-
-              <View style={styles.buttonsRow}>
-                <TouchableOpacity
-                  activeOpacity={0.85}
-                  onPress={() => {
-                    setStep(1);
-                    setError("");
-                  }}
-                  style={styles.secondaryWrap}
-                >
-                  <Glass
-                    radius={18}
-                    tintColor="rgba(255,255,255,0.5)"
-                    borderColor="rgba(93,140,120,0.45)"
-                    borderWidth={0.75}
-                  >
-                    <View style={styles.buttonInner}>
-                      <Text style={styles.secondaryButtonText}>{t("common.back")}</Text>
-                    </View>
-                  </Glass>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  activeOpacity={0.85}
-                  onPress={handleRegister}
-                  disabled={
-                    submitting ||
+                activeOpacity={0.85}
+                onPress={handleRegister}
+                disabled={
+                  submitting ||
+                  !step2Valid ||
+                  !consentPdn ||
+                  !consentTerms ||
+                  !consentMemo
+                }
+                style={[
+                  styles.primaryShadow,
+                  styles.primaryHalf,
+                  (submitting ||
                     !step2Valid ||
                     !consentPdn ||
                     !consentTerms ||
-                    !consentMemo
-                  }
-                  style={[
-                    styles.primaryShadow,
-                    styles.primaryHalf,
-                    (submitting ||
-                      !step2Valid ||
-                      !consentPdn ||
-                      !consentTerms ||
-                      !consentMemo) &&
-                      styles.disabled,
-                  ]}
+                    !consentMemo) &&
+                    styles.disabled,
+                ]}
+              >
+                <Glass
+                  radius={18}
+                  tintColor="rgba(105,183,141,0.92)"
+                  borderColor="rgba(255,255,255,0.85)"
                 >
-                  <Glass
-                    radius={18}
-                    tintColor="rgba(105,183,141,0.92)"
-                    borderColor="rgba(255,255,255,0.85)"
-                  >
-                    <View style={styles.buttonInner}>
-                      <Text style={styles.primaryButtonText}>
-                        {submitting ? t("common.sending") : t("common.done")}
-                      </Text>
-                    </View>
-                  </Glass>
-                </TouchableOpacity>
-              </View>
-            </>
-          )}
-        </ScrollView>
-      </KeyboardAvoidingView>
+                  <View style={styles.buttonInner}>
+                    <Text style={styles.primaryButtonText}>
+                      {submitting ? t("common.sending") : t("common.done")}
+                    </Text>
+                  </View>
+                </Glass>
+              </TouchableOpacity>
+            </View>
+          </>
+        )}
+      </KeyboardAwareScrollView>
 
       {cropSource && (
         <AvatarCropModal
