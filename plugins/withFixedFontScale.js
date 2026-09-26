@@ -1,46 +1,100 @@
-// Минги-Тау · Иммунитет к системному увеличению шрифта — НА УРОВНЕ
-// КОРОБКИ (Веха 68, 11.09.2026).
+// Минги-Тау · Иммунитет к системным настройкам масштаба — НА УРОВНЕ
+// КОРОБКИ (Веха 68; усилен 12.09 и 26.09 после прогонов владельца).
 //
-// История: в Вехе 66 иммунитет ставили старым приёмом
-// (Text.defaultProps.allowFontScaling = false в app/_layout.tsx), но
-// React 19 убрал поддержку defaultProps — телефон приём игнорирует,
-// и при крупном системном шрифте вёрстка плыла (поймано владельцем
-// на APK v2). Этот плагин чинит на уровень ниже: при сборке коробки
-// Expo впишет в Android-активность замок, и приложение всегда будет
-// видеть масштаб шрифта = 1, что бы ни стояло в спецвозможностях.
-// Работает только в собранном APK; на сайт не влияет и не нужен.
-const { withMainActivity } = require("expo/config-plugins");
+// У Android ДВЕ ручки в спецвозможностях, и запирать надо обе:
+//   • «Размер шрифта» (fontScale) — растит только тексты;
+//   • «Размер изображения на экране» (densityDpi) — растит ВСЁ:
+//     кнопки, отступы, картинки — от неё «плывёт дизайн».
+// История: приём Вехи 66 (Text.defaultProps.allowFontScaling=false)
+// умер в React 19. Первая версия плагина запирала fontScale только в
+// MainActivity — движку RN мало: метрики он берёт из контекста
+// ПРИЛОЖЕНИЯ. Вторая заперла шрифт в Application (сработало — тексты
+// держатся, прогон 26.09), но экранный масштаб оставался. Теперь оба
+// замка стоят в трёх местах:
+//   1) MainApplication.attachBaseContext — главный;
+//   2) MainApplication.onConfigurationChanged — смена настроек на лету;
+//   3) MainActivity.attachBaseContext — страховка на уровне экрана.
+// densityDpi запирается на DENSITY_DEVICE_STABLE — родную плотность
+// устройства, какой бы масштаб ни выбрал человек в настройках.
+// Работает только в собранном APK; сайту не нужен и не мешает.
+const {
+  withMainActivity,
+  withMainApplication,
+} = require("expo/config-plugins");
 
-const METHOD = `
-  // Минги-Тау: замок на системный масштаб шрифта (см. plugins/withFixedFontScale.js)
+const ACTIVITY_METHOD = `
+  // Минги-Тау: замок масштаба шрифта и экрана (plugins/withFixedFontScale.js)
   override fun attachBaseContext(newBase: android.content.Context) {
-    super.attachBaseContext(newBase)
-    val fontLock = android.content.res.Configuration(newBase.resources.configuration)
-    fontLock.fontScale = 1.0f
-    applyOverrideConfiguration(fontLock)
+    val scaleLock = android.content.res.Configuration(newBase.resources.configuration)
+    scaleLock.fontScale = 1.0f
+    scaleLock.densityDpi = android.util.DisplayMetrics.DENSITY_DEVICE_STABLE
+    super.attachBaseContext(newBase.createConfigurationContext(scaleLock))
   }
 `;
 
-function addFontScaleLock(src) {
-  // Уже вписан (повторный prebuild) — ничего не делаем.
-  if (src.includes("applyOverrideConfiguration")) return src;
+const APPLICATION_METHOD = `
+  // Минги-Тау: замок масштаба шрифта и экрана (plugins/withFixedFontScale.js)
+  override fun attachBaseContext(base: android.content.Context) {
+    val scaleLock = android.content.res.Configuration(base.resources.configuration)
+    scaleLock.fontScale = 1.0f
+    scaleLock.densityDpi = android.util.DisplayMetrics.DENSITY_DEVICE_STABLE
+    super.attachBaseContext(base.createConfigurationContext(scaleLock))
+  }
+`;
 
-  const anchor = /class MainActivity : ReactActivity\(\) \{/;
-  if (!anchor.test(src)) {
+function insertAfter(src, anchorRe, method, where) {
+  if (!anchorRe.test(src)) {
     throw new Error(
-      "withFixedFontScale: не нашёл 'class MainActivity : ReactActivity() {' — " +
-        "шаблон Expo изменился, плагин нужно поправить",
+      `withFixedFontScale: не нашёл ${where} — шаблон Expo изменился, плагин нужно поправить`,
     );
   }
-  return src.replace(anchor, (m) => `${m}\n${METHOD}`);
+  return src.replace(anchorRe, (m) => `${m}\n${method}`);
 }
 
 module.exports = function withFixedFontScale(config) {
-  return withMainActivity(config, (cfg) => {
+  config = withMainApplication(config, (cfg) => {
+    if (cfg.modResults.language !== "kt") {
+      throw new Error("withFixedFontScale: ожидал MainApplication на Kotlin");
+    }
+    let src = cfg.modResults.contents;
+
+    if (!src.includes("createConfigurationContext")) {
+      // Замок 1: контекст всего приложения.
+      src = insertAfter(
+        src,
+        /class MainApplication : Application\(\), ReactApplication \{/,
+        APPLICATION_METHOD,
+        "'class MainApplication : Application(), ReactApplication {'",
+      );
+
+      // Замок 2: смена настроек на лету — гасим масштабы в приходящей
+      // конфигурации. Если шаблон без этого метода — пропускаем,
+      // замков 1 и 3 достаточно.
+      src = src.replace(
+        /override fun onConfigurationChanged\(newConfig: Configuration\) \{/,
+        (m) =>
+          `${m}\n    newConfig.fontScale = 1.0f\n    newConfig.densityDpi = android.util.DisplayMetrics.DENSITY_DEVICE_STABLE`,
+      );
+    }
+
+    cfg.modResults.contents = src;
+    return cfg;
+  });
+
+  config = withMainActivity(config, (cfg) => {
     if (cfg.modResults.language !== "kt") {
       throw new Error("withFixedFontScale: ожидал MainActivity на Kotlin");
     }
-    cfg.modResults.contents = addFontScaleLock(cfg.modResults.contents);
+    if (!cfg.modResults.contents.includes("createConfigurationContext")) {
+      cfg.modResults.contents = insertAfter(
+        cfg.modResults.contents,
+        /class MainActivity : ReactActivity\(\) \{/,
+        ACTIVITY_METHOD,
+        "'class MainActivity : ReactActivity() {'",
+      );
+    }
     return cfg;
   });
+
+  return config;
 };
