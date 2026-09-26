@@ -7,7 +7,6 @@ import { router } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { useState } from "react";
 import {
-  KeyboardAvoidingView,
   Platform,
   StyleSheet,
   Text,
@@ -15,7 +14,9 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import { KeyboardAwareScrollView } from "react-native-keyboard-controller";
 import { Glass, Tekmet } from "../components/mingi";
+import { useSmartKeyboard } from "../lib/useSmartKeyboard";
 import { translateAuthError } from "../services/errorService";
 import { getCurrentProfile, signInUser } from "../services/sessionService";
 
@@ -29,6 +30,7 @@ const glassInputProps = {
 
 export default function LoginScreen() {
   const lang = useLanguage(); // перерисовка при смене языка
+  useSmartKeyboard(); // Веха 69: «умная клавиатура» включена на этом экране
   const [fontsLoaded] = useFonts({
     Philosopher_400Regular,
     Philosopher_700Bold,
@@ -94,9 +96,17 @@ export default function LoginScreen() {
     <View style={styles.container}>
       <StatusBar style="dark" />
 
-      <KeyboardAvoidingView
+      {/* Веха 69 «Клавиатура-2»: вместо старой обёртки — прокрутка,
+          которая сама следит за клавиатурой. Пока клавиатура открыта,
+          блок входа стоит по центру СВОБОДНОГО места над ней, а поле
+          ввода всегда видно целиком вместе с рамкой (запас bottomOffset).
+          На маленьком экране блок можно прокрутить пальцем. */}
+      <KeyboardAwareScrollView
         style={styles.keyboardWrap}
-        behavior={Platform.OS === "ios" ? "padding" : undefined}
+        contentContainerStyle={styles.scrollContent}
+        bottomOffset={24}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
       >
         <View style={styles.content}>
           <Text style={styles.title}>{t("login.title")}</Text>
@@ -146,7 +156,9 @@ export default function LoginScreen() {
               borderColor="rgba(255,255,255,0.85)"
             >
               <View style={styles.buttonInner}>
-                <Text style={styles.primaryButtonText}>{t("common.continue")}</Text>
+                <Text style={styles.primaryButtonText}>
+                  {t("common.continue")}
+                </Text>
               </View>
             </Glass>
           </TouchableOpacity>
@@ -155,7 +167,7 @@ export default function LoginScreen() {
             <Text style={styles.link}>{t("login.noAccountLink")}</Text>
           </TouchableOpacity>
         </View>
-      </KeyboardAvoidingView>
+      </KeyboardAwareScrollView>
     </View>
   );
 }
@@ -170,10 +182,14 @@ const styles = StyleSheet.create({
     flex: 1,
   },
 
-  content: {
-    flex: 1,
+  scrollContent: {
+    flexGrow: 1,
     justifyContent: "center",
+  },
+
+  content: {
     paddingHorizontal: 28,
+    paddingVertical: 24,
   },
 
   title: {
