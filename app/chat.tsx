@@ -13,7 +13,6 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Image,
-  KeyboardAvoidingView,
   Linking,
   Platform,
   ScrollView,
@@ -23,6 +22,11 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import {
+  KeyboardAvoidingView,
+  useReanimatedKeyboardAnimation,
+} from "react-native-keyboard-controller";
+import Reanimated, { useAnimatedStyle } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Svg, {
   Defs,
@@ -34,6 +38,7 @@ import Svg, {
 } from "react-native-svg";
 
 import { supabase } from "../lib/supabase";
+import { useSmartKeyboard } from "../lib/useSmartKeyboard";
 import { getOrCreateDirectChat } from "../services/chatService";
 import { subscribeToChanges } from "../services/liveService";
 import {
@@ -69,6 +74,7 @@ function formatSize(bytes?: number | null) {
 
 export default function ChatScreen() {
   const lang = useLanguage(); // перерисовка при смене языка
+  useSmartKeyboard(); // Веха 69: «умная клавиатура» включена на этом экране
   const params = useLocalSearchParams();
   const paramName = String(params.name || "");
   const otherUserId = String(params.userId || "");
@@ -78,6 +84,16 @@ export default function ChatScreen() {
     Philosopher_700Bold,
   });
   const insets = useSafeAreaInsets();
+
+  // Веха 69 «Клавиатура-2» (как в Telegram): капсула ввода едет вместе с
+  // клавиатурой и садится ровно на её верхний край. Пока клавиатура
+  // закрыта, под капсулой — запас под системную полоску; с открытой
+  // клавиатурой он плавно исчезает (иначе между капсулой и клавиатурой
+  // висела бы пустая щель).
+  const { progress: keyboardProgress } = useReanimatedKeyboardAnimation();
+  const dockSpacerStyle = useAnimatedStyle(() => ({
+    height: insets.bottom * (1 - keyboardProgress.value),
+  }));
 
   const scrollViewRef = useRef<ScrollView>(null);
   const unsubscribeRef = useRef<null | (() => void)>(null);
@@ -96,6 +112,10 @@ export default function ChatScreen() {
   const loadingOlderRef = useRef(false);
   const scrollOffsetRef = useRef(0);
   const contentHeightRef = useRef(0);
+  // Лента стоит у последнего сообщения? Тогда при открытии клавиатуры
+  // держим низ переписки на виду (как в Telegram), иначе не трогаем —
+  // человек читает историю.
+  const nearBottomRef = useRef(true);
   const pendingRestoreRef = useRef<null | {
     prevHeight: number;
     prevOffset: number;
@@ -667,11 +687,7 @@ export default function ChatScreen() {
   const canWrite = !blocked && !otherUnavailable;
 
   return (
-    <KeyboardAvoidingView
-      style={styles.container}
-      behavior={Platform.OS === "ios" ? "padding" : undefined}
-      keyboardVerticalOffset={Platform.OS === "ios" ? 12 : 0}
-    >
+    <View style={styles.container}>
       <StatusBar style="dark" />
 
       <View style={[styles.header, { paddingTop: insets.top + 10 }]}>
@@ -811,6 +827,13 @@ export default function ChatScreen() {
         </>
       )}
 
+      {/* Веха 69: всё под шапкой поджимается над клавиатурой — лента
+          становится короче, капсула встаёт на край клавиатуры, шапка
+          остаётся на месте. */}
+      <KeyboardAvoidingView behavior="padding" style={styles.keyboardBody}>
+      {/* Внутренняя рамка: капсула прижата к ЕЁ низу, а рамка
+          кончается ровно над клавиатурой. */}
+      <View style={styles.keyboardBody}>
       <View style={styles.messagesArea}>
         {/* Фоновая фактура ленты: двуглавый Эльбрус + текмет, тонкая
             линия фирменной зелени. Узор неподвижен — сообщения
@@ -860,9 +883,20 @@ export default function ChatScreen() {
           contentContainerStyle={styles.messagesContainer}
           showsVerticalScrollIndicator={false}
           scrollEventThrottle={16}
+          keyboardShouldPersistTaps="handled"
+          onLayout={() => {
+            // Окно ленты сжалось (выехала клавиатура) — если были внизу,
+            // остаёмся внизу: последние сообщения видны над капсулой.
+            if (nearBottomRef.current) {
+              scrollViewRef.current?.scrollToEnd({ animated: false });
+            }
+          }}
           onScroll={(e) => {
             const y = e.nativeEvent.contentOffset.y;
             scrollOffsetRef.current = y;
+            const { layoutMeasurement, contentSize } = e.nativeEvent;
+            nearBottomRef.current =
+              y + layoutMeasurement.height >= contentSize.height - 120;
             // Доехали до верха — тихо просим более раннюю страницу.
             if (y < 60) {
               loadOlderMessages();
@@ -1024,7 +1058,7 @@ export default function ChatScreen() {
       {canWrite && (
         <View
           pointerEvents="box-none"
-          style={[styles.inputDock, { paddingBottom: insets.bottom + 14 }]}
+          style={styles.inputDock}
         >
           {/* Дымка под капсулой: белый снизу → прозрачный сверху
               (образец MingiTabBar, Веха 36; свой id градиента). */}
@@ -1149,9 +1183,14 @@ export default function ChatScreen() {
               <Text style={styles.sendButtonText}>{sending ? "…" : "→"}</Text>
             </TouchableOpacity>
           </View>
+
+          {/* Запас под системную полоску — тает, когда выезжает клавиатура */}
+          <Reanimated.View style={dockSpacerStyle} />
         </View>
       )}
-    </KeyboardAvoidingView>
+      </View>
+      </KeyboardAvoidingView>
+    </View>
   );
 }
 
@@ -1559,6 +1598,14 @@ const styles = StyleSheet.create({
     bottom: 0,
     paddingTop: 26,
     paddingHorizontal: 16,
+    // Отступ от края клавиатуры / низа экрана; запас под системную
+    // полоску добавляет тающая прокладка (Веха 69).
+    paddingBottom: 14,
+  },
+
+  // Всё под шапкой: лента + капсула (Веха 69).
+  keyboardBody: {
+    flex: 1,
   },
 
   inputCapsule: {

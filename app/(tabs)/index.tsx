@@ -19,13 +19,13 @@ import {
   Easing,
   Image,
   Platform,
-  ScrollView,
   StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
   View
 } from "react-native";
+import { KeyboardAwareScrollView } from "react-native-keyboard-controller";
 
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
@@ -45,6 +45,7 @@ import { getMyProfile } from "../../services/profileService";
 import { getAgeFromBirthDate } from "../../store/user";
 
 import { t, useLanguage } from "../../services/i18nService";
+import { useSmartKeyboard } from "../../lib/useSmartKeyboard";
 type PreparedUser = DirectoryUser & {
   fullName: string;
 };
@@ -67,6 +68,7 @@ function ScreenBackground({
 
 export default function HomeScreen() {
   const lang = useLanguage(); // перерисовка при смене языка
+  useSmartKeyboard(); // Веха 69: «умная клавиатура» включена на этом экране
   const insets = useSafeAreaInsets();
   const [fontsLoaded] = useFonts({
     Philosopher_400Regular,
@@ -393,7 +395,11 @@ export default function HomeScreen() {
 
       {showList && <View style={styles.listHeader}>{searchBar}</View>}
 
-      <ScrollView
+      {/* Веха 69: прокрутка сама следит за клавиатурой. На главной
+          строка поиска поднимается над клавиатурой; в списке можно
+          докрутить до последней карточки при открытой клавиатуре. */}
+      <KeyboardAwareScrollView
+        bottomOffset={16}
         contentContainerStyle={[
           styles.container,
           showList && styles.containerList,
@@ -498,7 +504,7 @@ export default function HomeScreen() {
             <Text style={styles.founder}>{t("welcome.founder")}</Text>
           )}
         </View>
-      </ScrollView>
+      </KeyboardAwareScrollView>
 
       {showList && !isDemo && (
         <TouchableOpacity

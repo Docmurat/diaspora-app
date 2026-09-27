@@ -8,7 +8,6 @@ import { StatusBar } from "expo-status-bar";
 import { useState } from "react";
 import {
   ActivityIndicator,
-  KeyboardAvoidingView,
   Platform,
   StyleSheet,
   Text,
@@ -16,11 +15,13 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import { KeyboardAwareScrollView } from "react-native-keyboard-controller";
 import { Glass, Tekmet } from "../components/mingi";
 import { translateInviteError } from "../services/errorService";
 import { validateInviteCode } from "../services/inviteService";
 
 import { t, useLanguage } from "../services/i18nService";
+import { useSmartKeyboard } from "../lib/useSmartKeyboard";
 const glassInputProps = {
   radius: 16,
   tintColor: "rgba(255,255,255,0.95)",
@@ -30,6 +31,7 @@ const glassInputProps = {
 
 export default function InviteScreen() {
   const lang = useLanguage(); // перерисовка при смене языка
+  useSmartKeyboard(); // Веха 69: «умная клавиатура» включена на этом экране
   const [fontsLoaded] = useFonts({
     Philosopher_400Regular,
     Philosopher_700Bold,
@@ -73,9 +75,16 @@ export default function InviteScreen() {
     <View style={styles.container}>
       <StatusBar style="dark" />
 
-      <KeyboardAvoidingView
+      {/* Веха 69 «Клавиатура-2»: прокрутка сама следит за клавиатурой —
+          блок стоит по центру свободного места над ней, рамки полей
+          видны целиком, клавиатура не прячется при прокрутке, тап по
+          пустому месту — прячет. */}
+      <KeyboardAwareScrollView
         style={styles.keyboardWrap}
-        behavior={Platform.OS === "ios" ? "padding" : undefined}
+        contentContainerStyle={styles.scrollContent}
+        bottomOffset={24}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
       >
         <View style={styles.content}>
           <Text style={styles.title}>{t("invite.title")}</Text>
@@ -131,7 +140,7 @@ export default function InviteScreen() {
             <Text style={styles.link}>{t("invite.leaveRequest")}</Text>
           </TouchableOpacity>
         </View>
-      </KeyboardAvoidingView>
+      </KeyboardAwareScrollView>
     </View>
   );
 }
@@ -146,10 +155,14 @@ const styles = StyleSheet.create({
     flex: 1,
   },
 
-  content: {
-    flex: 1,
+  scrollContent: {
+    flexGrow: 1,
     justifyContent: "center",
+  },
+
+  content: {
     paddingHorizontal: 28,
+    paddingVertical: 24,
   },
 
   title: {

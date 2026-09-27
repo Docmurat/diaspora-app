@@ -9,7 +9,6 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
-  KeyboardAvoidingView,
   Platform,
   ScrollView,
   StyleSheet,
@@ -18,6 +17,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import { KeyboardAwareScrollView } from "react-native-keyboard-controller";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Glass, Tekmet } from "../components/mingi";
 import { supabase } from "../lib/supabase";
@@ -26,6 +26,7 @@ import { sendAppealMessage } from "../services/moderationService";
 import { getMyProfile } from "../services/profileService";
 
 import { t, useLanguage } from "../services/i18nService";
+import { useSmartKeyboard } from "../lib/useSmartKeyboard";
 const glassInputProps = {
   radius: 16,
   tintColor: "rgba(255,255,255,0.95)",
@@ -35,6 +36,7 @@ const glassInputProps = {
 
 export default function ContactAdminScreen() {
   const lang = useLanguage(); // перерисовка при смене языка
+  useSmartKeyboard(); // Веха 69: «умная клавиатура» включена на этом экране
   const insets = useSafeAreaInsets(); // «Назад» на одном уровне со всеми экранами
   const [fontsLoaded] = useFonts({
     Philosopher_400Regular,
@@ -363,13 +365,15 @@ export default function ContactAdminScreen() {
         </TouchableOpacity>
       )}
 
-      <KeyboardAvoidingView
-        style={styles.keyboardWrap}
-        behavior={Platform.OS === "ios" ? "padding" : undefined}
-      >
-        <ScrollView
+      {/* Веха 69 «Клавиатура-2»: прокрутка сама следит за клавиатурой —
+          блок стоит по центру свободного места над ней, рамки полей
+          видны целиком, клавиатура не прячется при прокрутке, тап по
+          пустому месту — прячет. */}
+      <KeyboardAwareScrollView
           ref={scrollRef}
+          style={styles.keyboardWrap}
           contentContainerStyle={styles.container}
+          bottomOffset={24}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
@@ -483,8 +487,7 @@ export default function ContactAdminScreen() {
             </Glass>
           </TouchableOpacity>
 
-        </ScrollView>
-      </KeyboardAvoidingView>
+      </KeyboardAwareScrollView>
     </View>
   );
 }

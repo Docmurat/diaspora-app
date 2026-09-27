@@ -17,18 +17,19 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Platform,
-  ScrollView,
   StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
+import { KeyboardAwareScrollView } from "react-native-keyboard-controller";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import HelpPostCard from "../components/HelpPostCard";
 import { Tekmet } from "../components/mingi";
 import { t, tCategory, useLanguage } from "../services/i18nService";
+import { useSmartKeyboard } from "../lib/useSmartKeyboard";
 import {
   HELP_CATEGORIES,
   HelpFeedItem,
@@ -37,6 +38,7 @@ import {
 
 export default function HelpArchiveScreen() {
   const lang = useLanguage(); // перерисовка при смене языка
+  useSmartKeyboard(); // Веха 69: «умная клавиатура» включена на этом экране
   const insets = useSafeAreaInsets();
   const [fontsLoaded] = useFonts({
     Philosopher_400Regular,
@@ -154,7 +156,10 @@ export default function HelpArchiveScreen() {
         </TouchableOpacity>
       </View>
 
-      <ScrollView
+      {/* Веха 69: список сам добавляет место под клавиатуру — при
+          открытом поиске можно докрутить до самой нижней карточки. */}
+      <KeyboardAwareScrollView
+        style={{ flex: 1 }}
         contentContainerStyle={styles.container}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
@@ -235,7 +240,7 @@ export default function HelpArchiveScreen() {
           ))}
 
         {!loading && posts.length > 0 && <Tekmet style={styles.footerTekmet} />}
-      </ScrollView>
+      </KeyboardAwareScrollView>
     </View>
   );
 }

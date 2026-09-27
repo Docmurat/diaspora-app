@@ -7,7 +7,6 @@ import { router } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { useState } from "react";
 import {
-  KeyboardAvoidingView,
   Platform,
   StyleSheet,
   Text,
@@ -15,10 +14,12 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import { KeyboardAwareScrollView } from "react-native-keyboard-controller";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Glass, Tekmet } from "../components/mingi";
 import { supabase } from "../lib/supabase";
 import { t, useLanguage } from "../services/i18nService";
+import { useSmartKeyboard } from "../lib/useSmartKeyboard";
 
 function getChangeEmailErrorMessage(message?: string) {
   if (!message) {
@@ -63,6 +64,7 @@ const glassInputProps = {
 
 export default function ChangeEmailScreen() {
   const lang = useLanguage(); // перерисовка при смене языка
+  useSmartKeyboard(); // Веха 69: «умная клавиатура» включена на этом экране
   const insets = useSafeAreaInsets(); // «Назад» на одном уровне со всеми экранами
   const [fontsLoaded] = useFonts({
     Philosopher_400Regular,
@@ -132,10 +134,16 @@ export default function ChangeEmailScreen() {
         </TouchableOpacity>
       )}
 
-      <KeyboardAvoidingView
+      {/* Веха 69 «Клавиатура-2»: прокрутка сама следит за клавиатурой —
+          блок стоит по центру свободного места над ней, рамки полей
+          видны целиком, клавиатура не прячется при прокрутке, тап по
+          пустому месту — прячет. */}
+      <KeyboardAwareScrollView
         style={styles.keyboardWrap}
-        behavior={Platform.OS === "ios" ? "padding" : undefined}
-        keyboardVerticalOffset={Platform.OS === "ios" ? 20 : 0}
+        contentContainerStyle={styles.scrollContent}
+        bottomOffset={24}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
       >
         <View style={styles.content}>
           <Text style={styles.title}>{t("mail.title")}</Text>
@@ -189,7 +197,7 @@ export default function ChangeEmailScreen() {
           </TouchableOpacity>
 
         </View>
-      </KeyboardAvoidingView>
+      </KeyboardAwareScrollView>
     </View>
   );
 }
@@ -216,10 +224,14 @@ const styles = StyleSheet.create({
     flex: 1,
   },
 
-  content: {
-    flex: 1,
+  scrollContent: {
+    flexGrow: 1,
     justifyContent: "center",
+  },
+
+  content: {
     paddingHorizontal: 28,
+    paddingVertical: 24,
   },
 
   title: {

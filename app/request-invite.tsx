@@ -7,20 +7,20 @@ import { router } from "expo-router";
 import { useState } from "react";
 import {
   Alert,
-  KeyboardAvoidingView,
   Platform,
-  ScrollView,
   StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
+import { KeyboardAwareScrollView } from "react-native-keyboard-controller";
 import { StatusBar } from "expo-status-bar";
 import { Glass, Tekmet } from "../components/mingi";
 import { createInviteRequest } from "../services/inviteRequestService";
 
 import { t, useLanguage } from "../services/i18nService";
+import { useSmartKeyboard } from "../lib/useSmartKeyboard";
 const glassInputProps = {
   radius: 16,
   tintColor: "rgba(255,255,255,0.95)",
@@ -30,6 +30,7 @@ const glassInputProps = {
 
 export default function RequestInviteScreen() {
   const lang = useLanguage(); // перерисовка при смене языка
+  useSmartKeyboard(); // Веха 69: «умная клавиатура» включена на этом экране
   const [fontsLoaded] = useFonts({
     Philosopher_400Regular,
     Philosopher_700Bold,
@@ -74,11 +75,12 @@ export default function RequestInviteScreen() {
     <View style={styles.screen}>
       <StatusBar style="dark" />
 
-      <KeyboardAvoidingView
-        style={styles.keyboardWrap}
-        behavior={Platform.OS === "ios" ? "padding" : undefined}
-      >
-        <ScrollView
+      {/* Веха 69 «Клавиатура-2»: прокрутка сама следит за клавиатурой —
+          активное поле видно целиком с рамкой; клавиатура не прячется
+          при прокрутке, тап по пустому месту — прячет. */}
+      <KeyboardAwareScrollView
+          style={styles.keyboardWrap}
+          bottomOffset={24}
           contentContainerStyle={styles.container}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
@@ -160,8 +162,7 @@ export default function RequestInviteScreen() {
               <Text style={styles.link}>{t("common.back")}</Text>
             </TouchableOpacity>
           )}
-        </ScrollView>
-      </KeyboardAvoidingView>
+      </KeyboardAwareScrollView>
     </View>
   );
 }

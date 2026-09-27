@@ -11,9 +11,7 @@ import {
   ActivityIndicator,
   Alert,
   Image,
-  KeyboardAvoidingView,
   Platform,
-  ScrollView,
   StyleSheet,
   Switch,
   Text,
@@ -21,6 +19,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import { KeyboardAwareScrollView } from "react-native-keyboard-controller";
 
 import AvatarCropModal, {
   prepareAvatarSource,
@@ -34,6 +33,7 @@ import {
 } from "../components/locations";
 import { Tekmet } from "../components/mingi";
 import { supabase } from "../lib/supabase";
+import { useSmartKeyboard } from "../lib/useSmartKeyboard";
 import {
   normalizeHandle,
   normalizePhone,
@@ -71,6 +71,8 @@ export default function ModerationEditProfileScreen() {
     Philosopher_400Regular,
     Philosopher_700Bold,
   });
+
+  useSmartKeyboard(); // Веха 69: «умная клавиатура» включена на этом экране
 
   const params = useLocalSearchParams();
   const userId = String(params.userId || "");
@@ -302,14 +304,14 @@ export default function ModerationEditProfileScreen() {
     <View style={styles.screen}>
       <StatusBar style="dark" />
 
-      <KeyboardAvoidingView
-        style={styles.keyboardWrap}
-        behavior={Platform.OS === "ios" ? "padding" : undefined}
-      >
-        <ScrollView
+      {/* Веха 69 «Клавиатура-2»: прокрутка сама следит за клавиатурой —
+          активное поле видно целиком с рамкой; клавиатура не прячется
+          при прокрутке, тап по пустому месту — прячет. */}
+      <KeyboardAwareScrollView
+          style={styles.keyboardWrap}
+          bottomOffset={24}
           contentContainerStyle={styles.container}
           keyboardShouldPersistTaps="handled"
-          keyboardDismissMode="on-drag"
           showsVerticalScrollIndicator={false}
         >
           <Text style={styles.title}>Редактирование</Text>
@@ -570,8 +572,7 @@ export default function ModerationEditProfileScreen() {
           >
             <Text style={styles.secondaryButtonText}>Отмена</Text>
           </TouchableOpacity>
-        </ScrollView>
-      </KeyboardAvoidingView>
+      </KeyboardAwareScrollView>
 
       {cropSource && (
         <AvatarCropModal

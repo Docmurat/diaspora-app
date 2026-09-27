@@ -26,7 +26,6 @@ import {
   ActivityIndicator,
   FlatList,
   Image,
-  KeyboardAvoidingView,
   Linking,
   Modal,
   Platform,
@@ -38,6 +37,11 @@ import {
   View,
   useWindowDimensions,
 } from "react-native";
+import {
+  KeyboardAvoidingView,
+  useReanimatedKeyboardAnimation,
+} from "react-native-keyboard-controller";
+import Reanimated, { useAnimatedStyle } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { linkifyText } from "../components/HelpPostCard";
@@ -62,6 +66,7 @@ import {
   reportHelpPost,
   unblockHelpPost,
 } from "../services/helpService";
+import { useSmartKeyboard } from "../lib/useSmartKeyboard";
 import { subscribeToChanges } from "../services/liveService";
 
 import { t, tCategory, useLanguage } from "../services/i18nService";
@@ -291,7 +296,22 @@ function FileRow({ file }: { file: HelpAttachmentItem }) {
 
 export default function HelpPostScreen() {
   const lang = useLanguage(); // перерисовка при смене языка
+  useSmartKeyboard(); // Веха 69: «умная клавиатура» включена на этом экране
   const insets = useSafeAreaInsets();
+
+  // Веха 69 «Клавиатура-2» (как в Telegram): поле комментария едет вместе
+  // с клавиатурой и садится на её верхний край. Запас под системную
+  // полоску плавно тает, когда клавиатура открыта (без пустой щели).
+  const { progress: keyboardProgress } = useReanimatedKeyboardAnimation();
+  const bottomGap = Math.max(insets.bottom, 10);
+  const dockSpacerStyle = useAnimatedStyle(() => ({
+    height: 10 + (bottomGap - 10) * (1 - keyboardProgress.value),
+  }));
+  // Обсуждение прокручено до конца? Тогда при открытии клавиатуры
+  // держим последние комментарии на виду.
+  const nearBottomRef = useRef(false);
+  // «Ответить» сразу ставит курсор в поле (как в Telegram).
+  const inputRef = useRef<TextInput>(null);
   const params = useLocalSearchParams();
   const postId = String(params.id || "");
 
@@ -613,11 +633,7 @@ export default function HelpPostScreen() {
     post.postType !== "announcement";
 
   return (
-    <KeyboardAvoidingView
-      style={styles.screen}
-      behavior={Platform.OS === "ios" ? "padding" : undefined}
-      keyboardVerticalOffset={Platform.OS === "ios" ? 12 : 0}
-    >
+    <View style={styles.screen}>
       <StatusBar style="dark" />
 
       <View style={[styles.header, { paddingTop: insets.top + 10 }]}>
@@ -889,12 +905,28 @@ export default function HelpPostScreen() {
       {!loading && !!error && <Text style={styles.errorText}>{error}</Text>}
 
       {!loading && post && (
-        <>
+        // Веха 69: пост с обсуждением поджимается над клавиатурой, поле
+        // комментария встаёт на её край, шапка остаётся на месте.
+        <KeyboardAvoidingView behavior="padding" style={{ flex: 1 }}>
           <ScrollView
             ref={scrollViewRef}
             style={{ flex: 1 }}
             contentContainerStyle={styles.container}
             showsVerticalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
+            scrollEventThrottle={16}
+            onScroll={(e) => {
+              const { contentOffset, layoutMeasurement, contentSize } =
+                e.nativeEvent;
+              nearBottomRef.current =
+                contentOffset.y + layoutMeasurement.height >=
+                contentSize.height - 80;
+            }}
+            onLayout={() => {
+              if (nearBottomRef.current) {
+                scrollViewRef.current?.scrollToEnd({ animated: false });
+              }
+            }}
           >
             <View style={styles.authorRow}>
               {/* Автор: нажатие ведёт в его профиль */}
@@ -1211,6 +1243,7 @@ export default function HelpPostScreen() {
                             onPress={() => {
                               setReplyTo(comment);
                               setDeleteArmedId(null);
+                              inputRef.current?.focus();
                             }}
                           >
                             <Text style={styles.commentActionText}>{t("post.reply")}</Text>
@@ -1250,12 +1283,7 @@ export default function HelpPostScreen() {
 
           {/* Поле ввода — только если писать можно */}
           {canWrite && (
-            <View
-              style={[
-                styles.inputDock,
-                { paddingBottom: Math.max(insets.bottom, 10) + 6 },
-              ]}
-            >
+            <View style={styles.inputDock}>
               {replyTo && (
                 <View style={styles.replyBar}>
                   <Ionicons
@@ -1277,6 +1305,7 @@ export default function HelpPostScreen() {
 
               <View style={styles.inputCapsule}>
                 <TextInput
+                  ref={inputRef}
                   placeholder={replyTo ? t("post.replyPh") : t("post.commentPh")}
                   placeholderTextColor="#8FA79A"
                   style={styles.input}
@@ -1301,9 +1330,12 @@ export default function HelpPostScreen() {
                   </Text>
                 </TouchableOpacity>
               </View>
+
+              {/* Запас под системную полоску — тает с клавиатурой */}
+              <Reanimated.View style={dockSpacerStyle} />
             </View>
           )}
-        </>
+        </KeyboardAvoidingView>
       )}
 
       {viewer && (
@@ -1313,7 +1345,7 @@ export default function HelpPostScreen() {
           onClose={() => setViewer(null)}
         />
       )}
-    </KeyboardAvoidingView>
+    </View>
   );
 }
 
@@ -1958,6 +1990,8 @@ const styles = StyleSheet.create({
   inputDock: {
     paddingTop: 8,
     paddingHorizontal: 16,
+    // Нижний отступ — «тающая» прокладка под капсулой (Веха 69).
+    paddingBottom: 6,
     backgroundColor: "#FFFFFF",
   },
 

@@ -22,15 +22,14 @@ import { useEffect, useState } from "react";
 import {
   ActivityIndicator,
   Image,
-  KeyboardAvoidingView,
   Platform,
-  ScrollView,
   StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
+import { KeyboardAwareScrollView } from "react-native-keyboard-controller";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import {
@@ -46,6 +45,7 @@ import {
   isOwner,
 } from "../services/helpService";
 import { t, tCategory, useLanguage } from "../services/i18nService";
+import { useSmartKeyboard } from "../lib/useSmartKeyboard";
 
 // Размер файла человеческим языком: «2,4 МБ» / «310 КБ».
 function formatSize(bytes: number | null): string {
@@ -80,6 +80,7 @@ type PickedFile = NewHelpFile & { isImage: boolean };
 
 export default function NewHelpPostScreen() {
   const lang = useLanguage(); // перерисовка при смене языка
+  useSmartKeyboard(); // Веха 69: «умная клавиатура» включена на этом экране
   const insets = useSafeAreaInsets();
   const [fontsLoaded] = useFonts({
     Philosopher_400Regular,
@@ -354,10 +355,7 @@ export default function NewHelpPostScreen() {
   }
 
   return (
-    <KeyboardAvoidingView
-      style={styles.screen}
-      behavior={Platform.OS === "ios" ? "padding" : undefined}
-    >
+    <View style={styles.screen}>
       <StatusBar style="dark" />
 
       <View style={[styles.header, { paddingTop: insets.top + 10 }]}>
@@ -378,7 +376,12 @@ export default function NewHelpPostScreen() {
         <View style={styles.backButton} />
       </View>
 
-      <ScrollView
+      {/* Веха 69 «Клавиатура-2»: прокрутка сама следит за клавиатурой —
+          активное поле видно целиком с рамкой; клавиатура не прячется
+          при прокрутке, тап по пустому месту — прячет. */}
+      <KeyboardAwareScrollView
+        style={{ flex: 1 }}
+        bottomOffset={24}
         contentContainerStyle={styles.container}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
@@ -761,8 +764,8 @@ export default function NewHelpPostScreen() {
         </TouchableOpacity>
 
         <Text style={styles.requiredHint}>{t("register.requiredHint")}</Text>
-      </ScrollView>
-    </KeyboardAvoidingView>
+      </KeyboardAwareScrollView>
+    </View>
   );
 }
 

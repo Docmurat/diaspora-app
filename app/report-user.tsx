@@ -7,20 +7,20 @@ import { router, useLocalSearchParams } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { useState } from "react";
 import {
-  KeyboardAvoidingView,
   Platform,
-  ScrollView,
   StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
+import { KeyboardAwareScrollView } from "react-native-keyboard-controller";
 
 import { Glass, Tekmet } from "../components/mingi";
 import { createComplaint } from "../services/complaintsService";
 
 import { t, useLanguage } from "../services/i18nService";
+import { useSmartKeyboard } from "../lib/useSmartKeyboard";
 const glassInputProps = {
   radius: 16,
   tintColor: "rgba(255,255,255,0.95)",
@@ -30,6 +30,7 @@ const glassInputProps = {
 
 export default function ReportUserScreen() {
   const lang = useLanguage(); // перерисовка при смене языка
+  useSmartKeyboard(); // Веха 69: «умная клавиатура» включена на этом экране
   const [fontsLoaded] = useFonts({
     Philosopher_400Regular,
     Philosopher_700Bold,
@@ -108,11 +109,12 @@ export default function ReportUserScreen() {
     <View style={styles.screen}>
       <StatusBar style="dark" />
 
-      <KeyboardAvoidingView
-        style={styles.keyboardWrap}
-        behavior={Platform.OS === "ios" ? "padding" : undefined}
-      >
-        <ScrollView
+      {/* Веха 69 «Клавиатура-2»: прокрутка сама следит за клавиатурой —
+          активное поле видно целиком с рамкой; клавиатура не прячется
+          при прокрутке, тап по пустому месту — прячет. */}
+      <KeyboardAwareScrollView
+          style={styles.keyboardWrap}
+          bottomOffset={24}
           contentContainerStyle={styles.container}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
@@ -185,8 +187,7 @@ export default function ReportUserScreen() {
           </TouchableOpacity>
 
           <Text style={styles.privacyNote}>{t("report.privacyNote")}</Text>
-        </ScrollView>
-      </KeyboardAvoidingView>
+      </KeyboardAwareScrollView>
     </View>
   );
 }

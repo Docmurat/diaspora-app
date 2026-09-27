@@ -19,8 +19,10 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import { KeyboardAwareScrollView } from "react-native-keyboard-controller";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { supabase } from "../lib/supabase";
+import { useSmartKeyboard } from "../lib/useSmartKeyboard";
 import { formatPhone } from "../services/contactsService";
 import { subscribeToChanges } from "../services/liveService";
 import {
@@ -158,6 +160,7 @@ export default function ModerationScreen() {
   // Отступ под чёлку/статус-бар: шапка у самого верха (образец Вехи 32).
   // Хук обязан стоять ДО ранних выходов — иначе падение.
   const insets = useSafeAreaInsets();
+  useSmartKeyboard(); // Веха 69: «умная клавиатура» включена на этом экране
 
   const [activeTab, setActiveTab] = useState<QueueTab>("new");
   // Фильтр по виду заявки внутри вкладки «Новое»
@@ -2593,13 +2596,20 @@ export default function ModerationScreen() {
               </TouchableOpacity>
             </View>
           )}
-        <ScrollView ref={scrollRef} contentContainerStyle={styles.container}>
+        {/* Веха 69: список сам следит за клавиатурой — поле ответа на
+            обращение видно целиком; кнопки срабатывают с первого нажатия. */}
+        <KeyboardAwareScrollView
+          ref={scrollRef}
+          bottomOffset={24}
+          keyboardShouldPersistTaps="handled"
+          contentContainerStyle={styles.container}
+        >
           {unifiedItems.length === 0 ? (
             <Text style={styles.emptyText}>Список пуст</Text>
           ) : (
             unifiedItems.map(renderUnifiedCard)
           )}
-        </ScrollView>
+        </KeyboardAwareScrollView>
       </View>
 
       <Modal

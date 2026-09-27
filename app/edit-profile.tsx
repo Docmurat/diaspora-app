@@ -11,9 +11,7 @@ import {
   ActivityIndicator,
   Alert,
   Image,
-  KeyboardAvoidingView,
   Platform,
-  ScrollView,
   StyleSheet,
   Switch,
   Text,
@@ -21,6 +19,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import { KeyboardAwareScrollView } from "react-native-keyboard-controller";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import AvatarCropModal, { prepareAvatarSource } from "../components/AvatarCrop";
 import {
@@ -36,6 +35,7 @@ import {
 } from "../components/locations";
 import { Glass, Tekmet } from "../components/mingi";
 import { supabase } from "../lib/supabase";
+import { useSmartKeyboard } from "../lib/useSmartKeyboard";
 import { t, tCategory, useLanguage } from "../services/i18nService";
 import {
   DbUserProfile,
@@ -80,6 +80,7 @@ const glassInputProps = {
 
 export default function EditProfileScreen() {
   const lang = useLanguage(); // перерисовка при смене языка
+  useSmartKeyboard(); // Веха 69: «умная клавиатура» включена на этом экране
   const insets = useSafeAreaInsets(); // «Назад» на одном уровне со всеми экранами
   const [fontsLoaded] = useFonts({
     Philosopher_400Regular,
@@ -379,15 +380,14 @@ export default function EditProfileScreen() {
     <View style={styles.screen}>
       <StatusBar style="dark" />
 
-      <KeyboardAvoidingView
-        style={styles.keyboardWrap}
-        behavior={Platform.OS === "ios" ? "padding" : undefined}
-        keyboardVerticalOffset={Platform.OS === "ios" ? 20 : 0}
-      >
-        <ScrollView
+      {/* Веха 69 «Клавиатура-2»: прокрутка сама следит за клавиатурой —
+          активное поле видно целиком с рамкой; клавиатура НЕ прячется
+          при прокрутке (как в регистрации), тап по пустому месту — прячет. */}
+      <KeyboardAwareScrollView
+          style={styles.keyboardWrap}
+          bottomOffset={24}
           contentContainerStyle={[styles.container, { paddingTop: insets.top + 10 }]}
           keyboardShouldPersistTaps="handled"
-          keyboardDismissMode="on-drag"
           showsVerticalScrollIndicator={false}
         >
           {Platform.OS === "web" && (
@@ -761,8 +761,7 @@ export default function EditProfileScreen() {
               </Glass>
             </TouchableOpacity>
           </View>
-        </ScrollView>
-      </KeyboardAvoidingView>
+      </KeyboardAwareScrollView>
 
       {cropSource && (
         <AvatarCropModal

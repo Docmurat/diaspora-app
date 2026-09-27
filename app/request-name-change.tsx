@@ -8,21 +8,21 @@ import { StatusBar } from "expo-status-bar";
 import { useCallback, useState } from "react";
 import {
   ActivityIndicator,
-  KeyboardAvoidingView,
   Platform,
-  ScrollView,
   StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
+import { KeyboardAwareScrollView } from "react-native-keyboard-controller";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { Glass, Tekmet } from "../components/mingi";
 import { createNameChangeRequest } from "../services/nameChangeService";
 import { DbUserProfile, getMyProfile } from "../services/profileService";
 import { t, useLanguage } from "../services/i18nService";
+import { useSmartKeyboard } from "../lib/useSmartKeyboard";
 
 const glassInputProps = {
   radius: 16,
@@ -33,6 +33,7 @@ const glassInputProps = {
 
 export default function RequestNameChangeScreen() {
   const lang = useLanguage(); // перерисовка при смене языка
+  useSmartKeyboard(); // Веха 69: «умная клавиатура» включена на этом экране
   const insets = useSafeAreaInsets(); // «Назад» на одном уровне со всеми экранами
   const [fontsLoaded] = useFonts({
     Philosopher_400Regular,
@@ -179,11 +180,12 @@ export default function RequestNameChangeScreen() {
     <View style={styles.screen}>
       <StatusBar style="dark" />
 
-      <KeyboardAvoidingView
-        style={styles.flex}
-        behavior={Platform.OS === "ios" ? "padding" : undefined}
-      >
-        <ScrollView
+      {/* Веха 69 «Клавиатура-2»: прокрутка сама следит за клавиатурой —
+          активное поле видно целиком с рамкой; клавиатура не прячется
+          при прокрутке, тап по пустому месту — прячет. */}
+      <KeyboardAwareScrollView
+          style={styles.flex}
+          bottomOffset={24}
           contentContainerStyle={[styles.container, { paddingTop: insets.top + 10 }]}
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
@@ -293,8 +295,7 @@ export default function RequestNameChangeScreen() {
               </Glass>
             </TouchableOpacity>
           </View>
-        </ScrollView>
-      </KeyboardAvoidingView>
+      </KeyboardAwareScrollView>
     </View>
   );
 }

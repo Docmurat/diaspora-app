@@ -7,19 +7,20 @@ import { router, useFocusEffect } from "expo-router";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
-  ScrollView,
   StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
+import { KeyboardAwareScrollView } from "react-native-keyboard-controller";
 import { Glass, MingiBackground, Tekmet } from "../components/mingi";
 import { supabase } from "../lib/supabase";
 import { getMyProfile } from "../services/profileService";
 import { signOutUser } from "../services/sessionService";
 
 import { t, useLanguage } from "../services/i18nService";
+import { useSmartKeyboard } from "../lib/useSmartKeyboard";
 const glassCardProps = {
   radius: 18,
   tintColor: "rgba(255,255,255,0.55)",
@@ -36,6 +37,7 @@ const glassInputProps = {
 
 export default function PendingApprovalScreen() {
   const lang = useLanguage(); // перерисовка при смене языка
+  useSmartKeyboard(); // Веха 69: «умная клавиатура» включена на этом экране
   const [fontsLoaded] = useFonts({
     Philosopher_400Regular,
     Philosopher_700Bold,
@@ -311,7 +313,11 @@ export default function PendingApprovalScreen() {
 
   return (
     <MingiBackground idPrefix="pa">
-      <ScrollView
+      {/* Веха 69 «Клавиатура-2»: прокрутка сама следит за клавиатурой —
+          активное поле видно целиком с рамкой; клавиатура не прячется
+          при прокрутке, тап по пустому месту — прячет. */}
+      <KeyboardAwareScrollView
+        bottomOffset={24}
         contentContainerStyle={styles.container}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
@@ -447,7 +453,7 @@ export default function PendingApprovalScreen() {
         >
           <Text style={styles.link}>{t("common.logout")}</Text>
         </TouchableOpacity>
-      </ScrollView>
+      </KeyboardAwareScrollView>
     </MingiBackground>
   );
 }
