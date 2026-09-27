@@ -1311,9 +1311,21 @@ export default function HelpPostScreen() {
                   style={styles.input}
                   value={input}
                   onChangeText={setInput}
-                  onSubmitEditing={handleSend}
-                  returnKeyType="send"
+                  multiline
                   editable={!sending}
+                  onKeyPress={(e: any) => {
+                    // На сайте Enter отправляет, Shift+Enter — перенос.
+                    // На телефоне Enter — перенос, отправка — кнопкой
+                    // (как в чате).
+                    if (
+                      Platform.OS === "web" &&
+                      e.nativeEvent.key === "Enter" &&
+                      !e.nativeEvent.shiftKey
+                    ) {
+                      e.preventDefault?.();
+                      handleSend();
+                    }
+                  }}
                 />
 
                 <TouchableOpacity
@@ -2016,7 +2028,8 @@ const styles = StyleSheet.create({
 
   inputCapsule: {
     flexDirection: "row",
-    alignItems: "center",
+    // Поле растёт вверх — кнопка остаётся внизу, у последней строки.
+    alignItems: "flex-end",
     backgroundColor: "#FFFFFF",
     borderRadius: 30,
     borderWidth: 0.75,
@@ -2031,16 +2044,21 @@ const styles = StyleSheet.create({
     elevation: 8,
   },
 
+  // Поле растёт вместе с текстом до 4 строк, дальше текст крутится
+  // внутри поля (как в Instagram). 4 строки × 20 + отступы 22 = 102.
   input: {
     flex: 1,
     minHeight: 44,
-    maxHeight: 100,
+    maxHeight: 102,
     backgroundColor: "transparent",
     borderRadius: 22,
     paddingHorizontal: 14,
-    paddingVertical: 11,
+    paddingTop: 11,
+    paddingBottom: 11,
     fontSize: 15,
+    lineHeight: 20,
     color: "#2F4A3C",
+    textAlignVertical: "center",
   },
 
   sendButton: {

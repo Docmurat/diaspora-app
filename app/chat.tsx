@@ -1610,7 +1610,8 @@ const styles = StyleSheet.create({
 
   inputCapsule: {
     flexDirection: "row",
-    alignItems: "center",
+    // Поле растёт вверх — скрепка и кнопка остаются внизу.
+    alignItems: "flex-end",
     backgroundColor: "#FFFFFF",
     borderRadius: 30,
     borderWidth: 0.75,
@@ -1625,17 +1626,21 @@ const styles = StyleSheet.create({
     elevation: 8,
   },
 
+  // Поле растёт вместе с текстом до 4 строк, дальше текст крутится
+  // внутри поля (как в Instagram). 4 строки × 20 + отступы 22 = 102.
   input: {
     flex: 1,
     minHeight: 44,
-    // растёт до трёх строк, дальше текст крутится внутри поля
-    maxHeight: 84,
+    maxHeight: 102,
     backgroundColor: "transparent",
     borderRadius: 22,
     paddingHorizontal: 14,
-    paddingVertical: 11,
+    paddingTop: 11,
+    paddingBottom: 11,
     fontSize: 15,
+    lineHeight: 20,
     color: "#2F4A3C",
+    textAlignVertical: "center",
   },
 
   sendButton: {
