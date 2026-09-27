@@ -37,6 +37,12 @@ import Svg, {
   Stop,
 } from "react-native-svg";
 
+import {
+  readDialogCache,
+  removeDialogCache,
+  saveDialogCache,
+} from "../lib/chatCache";
+import { useOnline } from "../lib/offline";
 import { supabase } from "../lib/supabase";
 import { useSmartKeyboard } from "../lib/useSmartKeyboard";
 import { getOrCreateDirectChat } from "../services/chatService";
@@ -144,6 +150,12 @@ export default function ChatScreen() {
   const [attachMenuOpen, setAttachMenuOpen] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [attachError, setAttachError] = useState("");
+  // Веха 70: переписка показана из памяти телефона (без сети).
+  const [fromCache, setFromCache] = useState(false);
+  const fromCacheRef = useRef(false);
+  // Счётчик повторной загрузки, когда вернулась сеть.
+  const [reconnectTick, setReconnectTick] = useState(0);
+  const isOnline = useOnline();
 
   const headerName = useMemo(() => {
     const full = `${otherProfile?.first_name || ""} ${
@@ -248,6 +260,20 @@ export default function ChatScreen() {
     });
   };
 
+  // Веха 70: запомнить диалог на телефоне (последние 50 сообщений).
+  const otherProfileRef = useRef<OtherProfile | null>(null);
+  const otherUnavailableRef = useRef(false);
+  const persistDialog = (list: ChatMessage[]) => {
+    if (!chatIdRef.current || !otherUserId) return;
+    saveDialogCache(otherUserId, {
+      chatId: chatIdRef.current,
+      otherProfile: otherProfileRef.current,
+      otherUnavailable: otherUnavailableRef.current,
+      clearedAt: clearedAtRef.current,
+      messages: list,
+    });
+  };
+
   // Тихая перезагрузка ХВОСТА ленты (образец Вехи 42): без крутилки,
   // при ошибке сети список не сбрасывается. Уже подгруженную старую
   // историю НЕ выбрасываем — подклеиваем свежий хвост к ней.
@@ -272,7 +298,9 @@ export default function ChatScreen() {
             new Date(m.created_at).getTime() < freshOldest,
         );
 
-        return [...keptOlder, ...fresh];
+        const merged = [...keptOlder, ...fresh];
+        persistDialog(merged);
+        return merged;
       });
 
       await markChatAsRead(id);
@@ -327,8 +355,26 @@ export default function ChatScreen() {
 
   useEffect(() => {
     const initChat = async () => {
+      // Веха 70: сначала — переписка из памяти телефона. Показываем её
+      // сразу (и без сети тоже), а свежую догружаем с сервера поверх.
+      const cached = fromCacheRef.current ? null : await readDialogCache(otherUserId);
+      if (cached) {
+        myUserIdRef.current = cached.userId;
+        chatIdRef.current = cached.chatId;
+        clearedAtRef.current = cached.clearedAt;
+        otherProfileRef.current = cached.otherProfile;
+        otherUnavailableRef.current = cached.otherUnavailable;
+        setOtherProfile(cached.otherProfile);
+        setOtherUnavailable(cached.otherUnavailable);
+        setMessages(cached.messages);
+        hasMoreRef.current = false; // без сети глубже не листаем
+        fromCacheRef.current = true;
+        setFromCache(true);
+        setLoading(false);
+      }
+
       try {
-        setLoading(true);
+        if (!fromCacheRef.current) setLoading(true);
         setScreenError("");
 
         if (!otherUserId) {
@@ -359,14 +405,18 @@ export default function ChatScreen() {
 
           if (other) {
             setOtherProfile(other as OtherProfile);
+            otherProfileRef.current = other as OtherProfile;
             if ((other as OtherProfile).is_deleted) {
               setOtherUnavailable(true);
+              otherUnavailableRef.current = true;
             }
           } else {
             setOtherUnavailable(true);
+            otherUnavailableRef.current = true;
           }
         } catch {
           setOtherUnavailable(true);
+          otherUnavailableRef.current = true;
         }
 
         // Личная блокировка: поле ввода пропадает без пояснений
@@ -380,6 +430,11 @@ export default function ChatScreen() {
           const isFounder = myProfile?.role === "owner";
 
           if (relation?.isAnyBlocked && !isFounder) {
+            // Блокировка — переписку с телефона тоже убираем.
+            removeDialogCache(otherUserId);
+            setMessages([]);
+            fromCacheRef.current = false;
+            setFromCache(false);
             setBlocked(true);
             setLoading(false);
             return;
@@ -411,6 +466,10 @@ export default function ChatScreen() {
         setMessages(initialMessages);
         // Ровно полная страница — на сервере, скорее всего, есть ещё.
         hasMoreRef.current = initialMessages.length >= MESSAGES_PAGE;
+        // Свежая переписка с сервера — запоминаем, память больше не нужна.
+        fromCacheRef.current = false;
+        setFromCache(false);
+        persistDialog(initialMessages);
 
         await markChatAsRead(directChatId);
         await muteThisChatNotifications();
@@ -438,8 +497,12 @@ export default function ChatScreen() {
           },
         );
       } catch (e) {
-        const message = e instanceof Error ? e.message : t("chat.error.open");
-        setScreenError(message);
+        // Переписка из памяти уже на экране — остаёмся на ней молча
+        // (о сети скажет плашка «Нет соединения»).
+        if (!fromCacheRef.current) {
+          const message = e instanceof Error ? e.message : t("chat.error.open");
+          setScreenError(message);
+        }
       } finally {
         setLoading(false);
       }
@@ -452,7 +515,14 @@ export default function ChatScreen() {
         unsubscribeRef.current();
       }
     };
-  }, [otherUserId]);
+  }, [otherUserId, reconnectTick]);
+
+  // Сеть вернулась, а на экране переписка из памяти — догружаем свежую.
+  useEffect(() => {
+    if (isOnline && fromCacheRef.current) {
+      setReconnectTick((n) => n + 1);
+    }
+  }, [isOnline]);
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -495,6 +565,7 @@ export default function ChatScreen() {
         clearedAtRef.current = stamp;
         setMessages([]);
         hasMoreRef.current = false; // старше отметки очистки не показываем
+        persistDialog([]);
       }
     } catch {
       // не получилось — сообщения просто остаются на месте
@@ -685,6 +756,18 @@ export default function ChatScreen() {
   }
 
   const canWrite = !blocked && !otherUnavailable;
+
+  // Вложение в переписке из памяти (без сети): ссылки нет — честно
+  // говорим, что оно откроется при подключении (а не «удалено»).
+  // ⚠️ Перевод пока здесь; карачаевский — от владельца, потом в словарь.
+  const offlineAttachText = (kind: "photo" | "file") =>
+    lang === "en"
+      ? kind === "photo"
+        ? "📷 Photo — available when online"
+        : "Available when online"
+      : kind === "photo"
+        ? "📷 Фото — доступно при подключении"
+        : "Доступно при подключении";
 
   return (
     <View style={styles.container}>
@@ -978,7 +1061,9 @@ export default function ChatScreen() {
                           styles.deletedText,
                         ]}
                       >
-                        {t("chat.attach.photoGone")}
+                        {fromCache
+                          ? offlineAttachText("photo")
+                          : t("chat.attach.photoGone")}
                       </Text>
                     )
                   ) : message.attachment_type === "file" ? (
@@ -1025,7 +1110,9 @@ export default function ChatScreen() {
                               ]
                                 .filter(Boolean)
                                 .join(" · ")
-                            : t("chat.attach.fileGone")}
+                            : fromCache
+                              ? offlineAttachText("file")
+                              : t("chat.attach.fileGone")}
                         </Text>
                       </View>
                     </TouchableOpacity>

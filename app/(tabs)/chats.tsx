@@ -18,6 +18,8 @@ import {
 
 import TopBar from "../../components/TopBar";
 import { Glass, Tekmet } from "../../components/mingi";
+import { readChatsCache, saveChatsCache } from "../../lib/chatCache";
+import { useOnline } from "../../lib/offline";
 import { ChatListItem, getMyChats } from "../../services/chatService";
 import { subscribeToChanges } from "../../services/liveService";
 
@@ -84,31 +86,55 @@ export default function ChatsScreen() {
   const [loading, setLoading] = useState(true);
   const [screenError, setScreenError] = useState("");
   const loadedOnceRef = useRef(false);
+  // Веха 70: список показан из памяти телефона (сервер ещё не ответил
+  // или сети нет). Тогда ошибка сети НЕ закрывает список заглушкой.
+  const shownFromCacheRef = useRef(false);
+  const isOnline = useOnline();
 
   const loadChats = async () => {
     try {
       // Полноэкранная крутилка — только при САМОМ ПЕРВОМ открытии.
       // При возвратах с диалога список уже на экране — обновляем тихо,
       // без занавеса (образец Вехи 42): ощущение мгновенного возврата.
-      if (!loadedOnceRef.current) {
-        setLoading(true);
+      // Веха 70: при первом открытии сперва — список из памяти
+      // телефона (мгновенно, и без сети тоже), потом — свежий с сервера.
+      if (!loadedOnceRef.current && !shownFromCacheRef.current) {
+        const cached = await readChatsCache();
+        if (cached && cached.length > 0) {
+          setChats(cached);
+          shownFromCacheRef.current = true;
+          setLoading(false);
+        } else {
+          setLoading(true);
+        }
       }
       setScreenError("");
 
       const data = await getMyChats();
       setChats(data);
       loadedOnceRef.current = true;
+      saveChatsCache(data);
     } catch (e) {
+      // Список уже на экране (с сервера или из памяти) — оставляем его,
+      // о сети скажет плашка «Нет соединения».
+      if (loadedOnceRef.current || shownFromCacheRef.current) return;
+
       const message =
         e instanceof Error ? e.message : t("chats.loadError");
       setScreenError(message);
-      if (!loadedOnceRef.current) {
-        setChats([]);
-      }
+      setChats([]);
     } finally {
       setLoading(false);
     }
   };
+
+  // Сеть вернулась — тихо освежаем список.
+  useEffect(() => {
+    if (isOnline && (loadedOnceRef.current || shownFromCacheRef.current)) {
+      reloadChatsQuiet();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOnline]);
 
   // Тихая перезагрузка для живого обновления (образец Вехи 42):
   // без крутилки, при ошибке сети текущий список не сбрасывается.
@@ -116,6 +142,8 @@ export default function ChatsScreen() {
     try {
       const data = await getMyChats();
       setChats(data);
+      loadedOnceRef.current = true;
+      saveChatsCache(data);
     } catch {
       // живое обновление само повторит при следующем событии
     }
