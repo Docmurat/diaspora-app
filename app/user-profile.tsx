@@ -25,6 +25,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { firstCity, formatLocations } from "../components/locations";
 import { Glass, Tekmet } from "../components/mingi";
+import { getDemoUser } from "../lib/demoData";
 import { supabase } from "../lib/supabase";
 import { formatPhone, whatsappDigits } from "../services/contactsService";
 import {
@@ -154,6 +155,26 @@ export default function UserProfileScreen() {
         const nameParts = String(params.name || "")
           .trim()
           .split(" ");
+        // Придуманный участник витрины: анкета целиком из lib/demoData
+        // (из чата сюда приходят только id и имя).
+        const demoUser = getDemoUser(targetUserId);
+        if (demoUser) {
+          setUser({
+            ...demoUser,
+            instagram: null,
+            phone: null,
+            phone_visible: false,
+            has_whatsapp: false,
+          } as any);
+          setMe(myFirst);
+          setBlockState({
+            iBlockedUser: false,
+            userBlockedMe: false,
+            isAnyBlocked: false,
+          });
+          setIsFavorite(false);
+          return;
+        }
         setUser({
           id: targetUserId,
           first_name: nameParts[0] || "",

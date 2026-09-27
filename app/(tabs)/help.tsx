@@ -54,6 +54,7 @@ import {
 } from "../../services/helpService";
 import { subscribeToChanges } from "../../services/liveService";
 import { readFeedCache, saveFeedCache } from "../../lib/chatCache";
+import { amIDemo, getDemoFeed } from "../../lib/demoData";
 import { useOnline } from "../../lib/offline";
 
 import { t, tCategory, useLanguage } from "../../services/i18nService";
@@ -105,6 +106,19 @@ export default function HelpScreen() {
   const isOnline = useOnline();
 
   const loadFeed = useCallback(async (categories: string[]) => {
+    // Демо-аккаунт: придуманная витрина вместо настоящей ленты
+    // (lib/demoData). Метки «новое» не ставим.
+    if (await amIDemo()) {
+      seenRef.current = new Date().toISOString();
+      seenLoadedRef.current = true;
+      setUnseenCats([]);
+      setPosts(getDemoFeed(categories));
+      setFromCache(false);
+      shownRef.current = true;
+      setLoading(false);
+      return;
+    }
+
     // 1) Сама лента. Не пришла — остаёмся на том, что уже видно, или
     //    показываем сохранённые на телефоне посты.
     let feed: HelpFeedItem[];
@@ -194,7 +208,7 @@ export default function HelpScreen() {
         let categories = filterRef.current;
 
         // Первый заход: сразу — сохранённые посты, потом свежие.
-        if (!shownRef.current) {
+        if (!shownRef.current && !(await amIDemo())) {
           const cached = await readFeedCache();
           if (alive && cached && cached.length > 0 && !shownRef.current) {
             setPosts(cached);

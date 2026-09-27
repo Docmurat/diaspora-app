@@ -42,6 +42,12 @@ import {
   removeDialogCache,
   saveDialogCache,
 } from "../lib/chatCache";
+import {
+  DEMO_ME_ID,
+  getDemoMessages,
+  getDemoUser,
+  isDemoId,
+} from "../lib/demoData";
 import { useOnline } from "../lib/offline";
 import { supabase } from "../lib/supabase";
 import { useSmartKeyboard } from "../lib/useSmartKeyboard";
@@ -84,6 +90,13 @@ export default function ChatScreen() {
   const params = useLocalSearchParams();
   const paramName = String(params.name || "");
   const otherUserId = String(params.userId || "");
+  // Придуманный собеседник витрины демо-режима (lib/demoData):
+  // переписка только для чтения, на сервер ничего не уходит.
+  const isDemoDialog = isDemoId(otherUserId);
+  const demoOffText =
+    lang === "en"
+      ? "Sending is turned off in demo mode"
+      : "В демо-режиме отправка отключена";
 
   const [fontsLoaded] = useFonts({
     Philosopher_400Regular,
@@ -355,6 +368,31 @@ export default function ChatScreen() {
 
   useEffect(() => {
     const initChat = async () => {
+      if (isDemoId(otherUserId)) {
+        const demoUser = getDemoUser(otherUserId);
+        myUserIdRef.current = DEMO_ME_ID;
+        const profile: OtherProfile | null = demoUser
+          ? {
+              id: demoUser.id,
+              first_name: demoUser.first_name,
+              last_name: demoUser.last_name,
+              avatar_path: demoUser.avatar_path,
+              is_deleted: false,
+              // Азамат «в сети», остальные заходили пару часов назад.
+              last_seen_at: new Date(
+                Date.now() -
+                  (otherUserId === "demo-u01" ? 0 : 2 * 60 * 60 * 1000),
+              ).toISOString(),
+            }
+          : null;
+        setOtherProfile(profile);
+        otherProfileRef.current = profile;
+        setMessages(getDemoMessages(otherUserId));
+        hasMoreRef.current = false;
+        setLoading(false);
+        return;
+      }
+
       // Веха 70: сначала — переписка из памяти телефона. Показываем её
       // сразу (и без сети тоже), а свежую догружаем с сервера поверх.
       const cached = fromCacheRef.current ? null : await readDialogCache(otherUserId);
@@ -576,6 +614,10 @@ export default function ChatScreen() {
   };
 
   const handleSend = async () => {
+    if (isDemoDialog) {
+      setAttachError(demoOffText);
+      return;
+    }
     if (sending || uploading || !chatId || !input.trim()) {
       return;
     }
@@ -823,13 +865,17 @@ export default function ChatScreen() {
           </Text>
         </TouchableOpacity>
 
-        <TouchableOpacity
-          style={styles.menuButton}
-          activeOpacity={0.7}
-          onPress={() => setMenuOpen((v) => !v)}
-        >
-          <Text style={styles.menuButtonText}>⋮</Text>
-        </TouchableOpacity>
+        {isDemoDialog ? (
+          <View style={styles.menuButton} />
+        ) : (
+          <TouchableOpacity
+            style={styles.menuButton}
+            activeOpacity={0.7}
+            onPress={() => setMenuOpen((v) => !v)}
+          >
+            <Text style={styles.menuButtonText}>⋮</Text>
+          </TouchableOpacity>
+        )}
       </View>
 
       {menuOpen && (
@@ -1226,7 +1272,11 @@ export default function ChatScreen() {
               style={styles.attachButton}
               activeOpacity={0.7}
               disabled={uploading || sending}
-              onPress={() => setAttachMenuOpen((v) => !v)}
+              onPress={() =>
+                isDemoDialog
+                  ? setAttachError(demoOffText)
+                  : setAttachMenuOpen((v) => !v)
+              }
             >
               {uploading ? (
                 <ActivityIndicator size="small" color="#69B78D" />

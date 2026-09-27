@@ -45,6 +45,7 @@ import {
 import { getAgeFromBirthDate } from "../../store/user";
 
 import { readPeopleCache, savePeopleCache } from "../../lib/chatCache";
+import { DEMO_USERS, amIDemo } from "../../lib/demoData";
 import { useOnline } from "../../lib/offline";
 import { useSmartKeyboard } from "../../lib/useSmartKeyboard";
 import { t, useLanguage } from "../../services/i18nService";
@@ -93,6 +94,23 @@ export default function HomeScreen() {
   const isOnline = useOnline();
 
   const loadUsers = useCallback(async () => {
+    // Демо-аккаунт: вместо настоящих участников — придуманная витрина
+    // (lib/demoData). Сервер и память телефона не трогаем.
+    if (await amIDemo()) {
+      setIsDemo(true);
+      setUsers(
+        DEMO_USERS.map((user) => ({
+          ...user,
+          fullName: `${user.first_name} ${user.last_name}`,
+        })),
+      );
+      setTotal(DEMO_USERS.length);
+      setFromCache(false);
+      shownRef.current = true;
+      setLoading(false);
+      return;
+    }
+
     try {
       // Первый показ: сразу — сохранённые на телефоне, потом свежие.
       if (!shownRef.current) {
@@ -237,6 +255,14 @@ export default function HomeScreen() {
 
   const toggleFavorite = async (user: PreparedUser) => {
     const isFav = favoriteIds.includes(user.id);
+
+    // Демо: закладка живёт только на экране, на сервер не уходит.
+    if (isDemo) {
+      setFavoriteIds((prev) =>
+        isFav ? prev.filter((id) => id !== user.id) : [...prev, user.id],
+      );
+      return;
+    }
 
     // Сначала мгновенно меняем закладку на экране, потом сообщаем серверу.
     // Если сервер откажет — возвращаем как было.

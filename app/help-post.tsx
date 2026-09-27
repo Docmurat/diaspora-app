@@ -66,6 +66,7 @@ import {
   reportHelpPost,
   unblockHelpPost,
 } from "../services/helpService";
+import { getDemoComments, getDemoPost, isDemoId } from "../lib/demoData";
 import { useSmartKeyboard } from "../lib/useSmartKeyboard";
 import { subscribeToChanges } from "../services/liveService";
 
@@ -314,6 +315,8 @@ export default function HelpPostScreen() {
   const inputRef = useRef<TextInput>(null);
   const params = useLocalSearchParams();
   const postId = String(params.id || "");
+  // Придуманный пост витрины демо-режима (lib/demoData): только чтение.
+  const isDemoPost = isDemoId(postId);
 
   const [fontsLoaded] = useFonts({
     Philosopher_400Regular,
@@ -370,6 +373,7 @@ export default function HelpPostScreen() {
   // У объявления — только у автора (основателя), пункт один: удалить.
   const menuAvailable =
     !!post &&
+    !isDemoPost &&
     (isAnnouncement
       ? post.isMine
       : isModerator || post.isMine || !!post.author);
@@ -438,6 +442,15 @@ export default function HelpPostScreen() {
         return;
       }
 
+      if (isDemoId(postId)) {
+        const demo = getDemoPost(postId);
+        setPost(demo);
+        setComments(getDemoComments(postId));
+        setError(demo ? "" : t("post.error.notFound"));
+        setLoading(false);
+        return;
+      }
+
       try {
         const details = await getHelpPost(postId);
         setPost(details);
@@ -472,7 +485,7 @@ export default function HelpPostScreen() {
   // Тихо перечитать ТОЛЬКО комментарии — сам пост (и его фото) не
   // трогаем, чтобы экран не мигал при каждом новом комментарии.
   const reloadComments = useCallback(async () => {
-    if (!postId) return;
+    if (!postId || isDemoId(postId)) return;
     try {
       const list = await getHelpComments(postId);
       setComments(list);
@@ -627,6 +640,7 @@ export default function HelpPostScreen() {
 
   const canWrite =
     !!post &&
+    !isDemoPost &&
     post.status === "active" &&
     discussionAllowed &&
     // У объявления поля ввода нет — комментарии запрещены (Веха 67).

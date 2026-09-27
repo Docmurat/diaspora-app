@@ -19,6 +19,7 @@ import {
 import TopBar from "../../components/TopBar";
 import { Glass, Tekmet } from "../../components/mingi";
 import { readChatsCache, saveChatsCache } from "../../lib/chatCache";
+import { amIDemo, getDemoChats } from "../../lib/demoData";
 import { useOnline } from "../../lib/offline";
 import { ChatListItem, getMyChats } from "../../services/chatService";
 import { subscribeToChanges } from "../../services/liveService";
@@ -92,6 +93,15 @@ export default function ChatsScreen() {
   const isOnline = useOnline();
 
   const loadChats = async () => {
+    // Демо-аккаунт: придуманная переписка вместо настоящей (lib/demoData).
+    if (await amIDemo()) {
+      setChats(getDemoChats());
+      setScreenError("");
+      loadedOnceRef.current = true;
+      setLoading(false);
+      return;
+    }
+
     try {
       // Полноэкранная крутилка — только при САМОМ ПЕРВОМ открытии.
       // При возвратах с диалога список уже на экране — обновляем тихо,
@@ -139,6 +149,7 @@ export default function ChatsScreen() {
   // Тихая перезагрузка для живого обновления (образец Вехи 42):
   // без крутилки, при ошибке сети текущий список не сбрасывается.
   const reloadChatsQuiet = async () => {
+    if (await amIDemo()) return;
     try {
       const data = await getMyChats();
       setChats(data);
