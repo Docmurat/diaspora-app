@@ -23,7 +23,7 @@ import {
   Text,
   TextInput,
   TouchableOpacity,
-  View
+  View,
 } from "react-native";
 import { KeyboardAwareScrollView } from "react-native-keyboard-controller";
 
@@ -37,15 +37,15 @@ import {
   getMyFavorites,
   removeFavoriteFromDb,
 } from "../../services/favoritesService";
+import { getMyProfile } from "../../services/profileService";
 import {
   DirectoryUser,
   getApprovedUsers,
 } from "../../services/userDirectoryService";
-import { getMyProfile } from "../../services/profileService";
 import { getAgeFromBirthDate } from "../../store/user";
 
-import { t, useLanguage } from "../../services/i18nService";
 import { useSmartKeyboard } from "../../lib/useSmartKeyboard";
+import { t, useLanguage } from "../../services/i18nService";
 type PreparedUser = DirectoryUser & {
   fullName: string;
 };
@@ -499,10 +499,6 @@ export default function HomeScreen() {
           )}
 
           {showList && <Tekmet style={styles.footerTekmet} />}
-
-          {!showList && (
-            <Text style={styles.founder}>{t("welcome.founder")}</Text>
-          )}
         </View>
       </KeyboardAwareScrollView>
 
@@ -806,16 +802,6 @@ const styles = StyleSheet.create({
     marginBottom: 4,
     fontSize: 11,
     color: "#BC93A2",
-    textAlign: "center",
-    paddingHorizontal: 24,
-  },
-
-  founder: {
-    marginTop: "auto",
-    paddingTop: 18,
-    marginBottom: -24,
-    fontSize: 12.5,
-    color: "#8FA79A",
     textAlign: "center",
     paddingHorizontal: 24,
   },
