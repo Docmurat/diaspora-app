@@ -6,6 +6,7 @@ import { KeyboardProvider } from "react-native-keyboard-controller";
 import "react-native-reanimated";
 
 import AccountGuard from "../components/AccountGuard";
+import OfflineBanner from "../components/OfflineBanner";
 import PushBridge from "../components/PushBridge";
 
 // Иммунитет к системному увеличению шрифта («режим для слабовидящих»):
@@ -91,6 +92,8 @@ export default function RootLayout() {
             <Stack.Screen name="privacy" />
           </Stack>
         </AppFrame>
+        {/* Веха 70: плашка «Нет соединения» поверх всех экранов */}
+        <OfflineBanner />
         <StatusBar style="dark" />
       </ThemeProvider>
     </KeyboardProvider>
