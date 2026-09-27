@@ -42,12 +42,12 @@ function AppFrame({ children }: { children: React.ReactNode }) {
 
 export default function RootLayout() {
   // KeyboardProvider — библиотека «умной клавиатуры» (Веха 69 «Клавиатура-2»).
-  // Стартует ВЫКЛЮЧЕННОЙ (enabled={false}): все экраны пока работают
-  // по-старому (pan из app.json). Переделанный экран включает её на время
-  // своего показа через useSmartKeyboard() из lib/useSmartKeyboard.ts.
-  // В конце вехи — включить для всего приложения и убрать помощника.
+  // ВКЛЮЧЕНА ДЛЯ ВСЕГО ПРИЛОЖЕНИЯ (финал вехи): все экраны ввода переделаны
+  // (KeyboardAwareScrollView / KeyboardAvoidingView из библиотеки), режим
+  // окна в app.json — "resize" (старый "pan" убран). Вызовы
+  // useSmartKeyboard() в экранах остались, но помощник теперь пустой.
   return (
-    <KeyboardProvider enabled={false}>
+    <KeyboardProvider>
       <ThemeProvider value={DefaultTheme}>
         <AccountGuard />
         <PushBridge />

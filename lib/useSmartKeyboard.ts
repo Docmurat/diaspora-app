@@ -1,37 +1,13 @@
-import { useFocusEffect } from "expo-router";
-import { useCallback } from "react";
-import { Platform } from "react-native";
-import { useKeyboardController } from "react-native-keyboard-controller";
-
-// «Умная клавиатура» (Веха 69 «Клавиатура-2»).
+// «Умная клавиатура» (Веха 69 «Клавиатура-2») — ПУСТОЙ помощник.
 //
-// Библиотека react-native-keyboard-controller подключена в app/_layout.tsx
-// ВЫКЛЮЧЕННОЙ: пока она выключена, телефон ведёт себя по-старому (pan).
-// Экран, который уже переделан под новую клавиатуру (поле липнет к
-// клавиатуре, как в Telegram), вызывает useSmartKeyboard() — и библиотека
-// включается, пока этот экран на виду, и выключается, когда с него ушли.
-//
-// Счётчик нужен на случай перехода с одного «умного» экрана на другой:
-// порядок событий «ушли / пришли» не гарантирован, поэтому выключаем
-// только тогда, когда на виду не осталось ни одного «умного» экрана.
-//
-// Временная конструкция: в конце вехи библиотека включается для всего
-// приложения, а этот помощник удаляется вместе с вызовами.
-
-let activeSmartScreens = 0;
+// Пока шёл поэкранный переход, этот помощник включал библиотеку
+// react-native-keyboard-controller только на переделанных экранах.
+// В финале вехи библиотека включена для ВСЕГО приложения (app/_layout.tsx),
+// поэтому помощник больше ничего не делает. Его вызовы в экранах
+// оставлены, чтобы не трогать заново проверенные файлы; при следующей
+// правке любого такого экрана строку useSmartKeyboard() и импорт можно
+// просто удалить.
 
 export function useSmartKeyboard() {
-  const { setEnabled } = useKeyboardController();
-
-  useFocusEffect(
-    useCallback(() => {
-      if (Platform.OS === "web") return;
-      activeSmartScreens += 1;
-      setEnabled(true);
-      return () => {
-        activeSmartScreens = Math.max(0, activeSmartScreens - 1);
-        setEnabled(activeSmartScreens > 0);
-      };
-    }, [setEnabled]),
-  );
+  // намеренно пусто
 }
