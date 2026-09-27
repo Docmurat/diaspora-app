@@ -44,6 +44,8 @@ import {
 } from "../../services/userDirectoryService";
 import { getAgeFromBirthDate } from "../../store/user";
 
+import { readPeopleCache, savePeopleCache } from "../../lib/chatCache";
+import { useOnline } from "../../lib/offline";
 import { useSmartKeyboard } from "../../lib/useSmartKeyboard";
 import { t, useLanguage } from "../../services/i18nService";
 type PreparedUser = DirectoryUser & {
@@ -83,44 +85,81 @@ export default function HomeScreen() {
   const [mode, setMode] = useState<"all" | "saved">("all");
   const [loading, setLoading] = useState(true);
   const [favoriteIds, setFavoriteIds] = useState<string[]>([]);
+  // Веха 70: сколько всего людей («Нас уже N») и показан ли список из
+  // памяти телефона (без сети — первые 50 + закладки).
+  const [total, setTotal] = useState(0);
+  const [fromCache, setFromCache] = useState(false);
+  const shownRef = useRef(false);
+  const isOnline = useOnline();
+
+  const loadUsers = useCallback(async () => {
+    try {
+      // Первый показ: сразу — сохранённые на телефоне, потом свежие.
+      if (!shownRef.current) {
+        const cached = await readPeopleCache();
+        if (cached && cached.users.length > 0) {
+          setUsers(
+            cached.users.map((user) => ({
+              ...user,
+              fullName: `${user.first_name} ${user.last_name}`,
+            })),
+          );
+          setFavoriteIds(cached.favoriteIds);
+          setTotal(cached.total);
+          setFromCache(true);
+          shownRef.current = true;
+          setLoading(false);
+        } else {
+          setLoading(true);
+        }
+      }
+
+      const [usersData, favoritesData, myProfile] = await Promise.all([
+        getApprovedUsers(),
+        getMyFavorites(),
+        getMyProfile().catch(() => null),
+      ]);
+
+      setIsDemo(!!myProfile?.is_demo);
+
+      const prepared: PreparedUser[] = usersData.map((user) => ({
+        ...user,
+        fullName: `${user.first_name} ${user.last_name}`,
+      }));
+
+      const favoriteUserIds = (favoritesData || []).map(
+        (item: any) => item.favorite_user_id,
+      );
+
+      setUsers(prepared);
+      setFavoriteIds(favoriteUserIds);
+      setTotal(prepared.length);
+      setFromCache(false);
+      shownRef.current = true;
+      savePeopleCache(usersData, favoriteUserIds);
+    } catch (e) {
+      console.log("Ошибка загрузки пользователей:", e);
+      // Список уже на экране (свежий или из памяти) — не стираем его.
+      if (!shownRef.current) {
+        setUsers([]);
+        setFavoriteIds([]);
+      }
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
   useFocusEffect(
     useCallback(() => {
-      const loadUsers = async () => {
-        try {
-          setLoading(true);
-
-          const [usersData, favoritesData, myProfile] = await Promise.all([
-            getApprovedUsers(),
-            getMyFavorites(),
-            getMyProfile().catch(() => null),
-          ]);
-
-          setIsDemo(!!myProfile?.is_demo);
-
-          const prepared: PreparedUser[] = usersData.map((user) => ({
-            ...user,
-            fullName: `${user.first_name} ${user.last_name}`,
-          }));
-
-          const favoriteUserIds = (favoritesData || []).map(
-            (item: any) => item.favorite_user_id,
-          );
-
-          setUsers(prepared);
-          setFavoriteIds(favoriteUserIds);
-        } catch (e) {
-          console.log("Ошибка загрузки пользователей:", e);
-          setUsers([]);
-          setFavoriteIds([]);
-        } finally {
-          setLoading(false);
-        }
-      };
-
       loadUsers();
-    }, []),
+    }, [loadUsers]),
   );
+
+  // Сеть вернулась, а на экране сохранённый список — освежаем.
+  useEffect(() => {
+    if (isOnline && fromCache) loadUsers();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOnline]);
 
   // Нажатие на вкладку «Люди» сразу открывает список.
   // Главный экран остаётся при запуске приложения и после «Сбросить поиск».
@@ -424,8 +463,18 @@ export default function HomeScreen() {
               <Text style={styles.counterLabel}>
                 {t("people.counterLabel")}
               </Text>
-              <Text style={styles.counterValue}>{users.length}</Text>
+              <Text style={styles.counterValue}>
+                {total || users.length}
+              </Text>
             </View>
+          )}
+
+          {showList && fromCache && (
+            <Text style={styles.offlineNote}>
+              {lang === "en"
+                ? "Offline — showing saved members"
+                : "Без сети — показаны сохранённые участники"}
+            </Text>
           )}
 
           {showList &&
@@ -830,5 +879,13 @@ const styles = StyleSheet.create({
 
   disabled: {
     opacity: 0.7,
+  },
+
+  // Веха 70: тихая подпись «без сети — показано сохранённое».
+  offlineNote: {
+    fontSize: 12,
+    color: "#96AC9E",
+    textAlign: "center",
+    marginBottom: 10,
   },
 });

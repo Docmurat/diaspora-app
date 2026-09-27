@@ -78,7 +78,7 @@ export default function PrivacyScreen() {
               </Text>
               <Text style={styles.text}>
                 {
-                  "2.1. Data provided at registration and in the profile: last name, first name, patronymic; phone number; email address; date of birth; country (countries) and city (cities) of residence; photograph (avatar); field of work and profession; Telegram; information in the “About me” section.\n\n2.2. Content created while using the Service: private messages between members; correspondence with the administration (requests); posts in the sections of the Service as such sections become available.\n\n2.3. Technical data: session (sign-in) information necessary for the operation and security of the Service. The web version uses the browser's local storage to keep the user signed in; no advertising or third-party analytics trackers are used. To allow use without a network connection, the mobile application stores the list of conversations and the latest messages in the memory of the user's device; this data is deleted when the user signs out of the account.\n\n2.4. Special categories of personal data and biometric personal data are not collected or processed; the photograph is used solely as a profile image."
+                  "2.1. Data provided at registration and in the profile: last name, first name, patronymic; phone number; email address; date of birth; country (countries) and city (cities) of residence; photograph (avatar); field of work and profession; Telegram; information in the “About me” section.\n\n2.2. Content created while using the Service: private messages between members; correspondence with the administration (requests); posts in the sections of the Service as such sections become available.\n\n2.3. Technical data: session (sign-in) information necessary for the operation and security of the Service. The web version uses the browser's local storage to keep the user signed in; no advertising or third-party analytics trackers are used. To allow use without a network connection, the mobile application stores a limited amount of the most recent data in the memory of the user's device — the list of conversations and the latest messages, part of the list of members, and the latest posts of the Help Wall; this data is deleted when the user signs out of the account.\n\n2.4. Special categories of personal data and biometric personal data are not collected or processed; the photograph is used solely as a profile image."
                 }
               </Text>
             </View>
@@ -197,8 +197,10 @@ export default function PrivacyScreen() {
                 браузера для поддержания входа; рекламные и сторонние
                 аналитические трекеры не используются. Для работы без
                 подключения к сети в памяти устройства пользователя (мобильное
-                приложение) сохраняются список переписок и последние сообщения;
-                эти данные удаляются при выходе из учётной записи.{"\n\n"}2.4.
+                приложение) сохраняется ограниченный объём последних данных —
+                список переписок и последние сообщения, часть списка
+                участников и последние публикации Стены помощи; эти данные
+                удаляются при выходе из учётной записи.{"\n\n"}2.4.
                 Специальные категории персональных данных и биометрические
                 персональные данные не собираются и не обрабатываются;
                 фотография используется исключительно как изображение профиля.

@@ -53,6 +53,8 @@ import {
   saveMyHelpNotifySettings,
 } from "../../services/helpService";
 import { subscribeToChanges } from "../../services/liveService";
+import { readFeedCache, saveFeedCache } from "../../lib/chatCache";
+import { useOnline } from "../../lib/offline";
 
 import { t, tCategory, useLanguage } from "../../services/i18nService";
 export default function HelpScreen() {
@@ -97,10 +99,39 @@ export default function HelpScreen() {
   const filterRef = useRef<string[]>([]);
   filterRef.current = filter;
 
+  // Веха 70: лента показана из памяти телефона (последние 20 постов).
+  const [fromCache, setFromCache] = useState(false);
+  const shownRef = useRef(false);
+  const isOnline = useOnline();
+
   const loadFeed = useCallback(async (categories: string[]) => {
+    // 1) Сама лента. Не пришла — остаёмся на том, что уже видно, или
+    //    показываем сохранённые на телефоне посты.
+    let feed: HelpFeedItem[];
     try {
-      const feed = await getHelpFeed(categories);
-      setPosts(feed);
+      feed = await getHelpFeed(categories);
+    } catch (e) {
+      console.log("Ошибка загрузки Стены помощи:", e);
+      if (!shownRef.current) {
+        const cached = await readFeedCache();
+        if (cached && cached.length > 0) {
+          setPosts(cached);
+          setFromCache(true);
+          shownRef.current = true;
+        } else {
+          setPosts([]);
+        }
+      }
+      setLoading(false);
+      return;
+    }
+
+    setPosts(feed);
+    setFromCache(false);
+    shownRef.current = true;
+    saveFeedCache(feed);
+
+    try {
 
       // Где новое (по важным категориям), затем — умное гашение точки:
       // гасим только если текущий фильтр показывает ВСЕ категории с новым.
@@ -141,12 +172,18 @@ export default function HelpScreen() {
         markHelpSeen();
       }
     } catch (e) {
-      console.log("Ошибка загрузки Стены помощи:", e);
-      setPosts([]);
+      // «Где новое» не посчиталось — лента всё равно на экране.
+      console.log("Стена помощи: «где новое» не посчиталось:", e);
     } finally {
       setLoading(false);
     }
   }, []);
+
+  // Сеть вернулась, а на экране сохранённая лента — освежаем.
+  useEffect(() => {
+    if (isOnline && fromCache) loadFeed(filterRef.current);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOnline]);
 
   // При входе на вкладку: гасим точку, тянем фильтр и ленту.
   useFocusEffect(
@@ -155,6 +192,17 @@ export default function HelpScreen() {
 
       (async () => {
         let categories = filterRef.current;
+
+        // Первый заход: сразу — сохранённые посты, потом свежие.
+        if (!shownRef.current) {
+          const cached = await readFeedCache();
+          if (alive && cached && cached.length > 0 && !shownRef.current) {
+            setPosts(cached);
+            setFromCache(true);
+            shownRef.current = true;
+            setLoading(false);
+          }
+        }
 
         if (!filterLoaded) {
           try {
@@ -485,6 +533,14 @@ export default function HelpScreen() {
             </Text>
             <Ionicons name="arrow-forward" size={15} color="#3F6B5B" />
           </TouchableOpacity>
+        )}
+
+        {fromCache && !loading && (
+          <Text style={styles.offlineNote}>
+            {lang === "en"
+              ? "Offline — showing the latest saved posts"
+              : "Без сети — показаны последние сохранённые посты"}
+          </Text>
         )}
 
         {loading && (
@@ -848,5 +904,13 @@ const styles = StyleSheet.create({
     height: 52,
     alignItems: "center",
     justifyContent: "center",
+  },
+
+  // Веха 70: тихая подпись «без сети — показано сохранённое».
+  offlineNote: {
+    fontSize: 12,
+    color: "#96AC9E",
+    textAlign: "center",
+    marginBottom: 10,
   },
 });

@@ -1,9 +1,12 @@
-// Переписка без сети (Веха 70, шаг 2).
+// Работа без сети (Веха 70, шаги 2–3): переписка, люди, Стена помощи.
 //
-// На ТЕЛЕФОНЕ (не на сайте) храним:
+// На ТЕЛЕФОНЕ (не на сайте) храним ОГРАНИЧЕННЫЙ объём последнего
+// (решение владельца: «не всё, а последнее»):
 //  • список чатов — как его в последний раз отдал сервер;
 //  • по каждому из 30 последних открытых диалогов — последние 50
-//    сообщений, имя и аватар собеседника, отметку «очистить чат».
+//    сообщений, имя и аватар собеседника, отметку «очистить чат»;
+//  • люди — первые 50 из списка + закладки «Мои» (до 50), без почты;
+//  • Стена помощи — последние 20 постов ленты, без ссылок на фото.
 // Без сети экраны показывают это сразу; с сетью — всё перечитывается
 // с сервера и память перезаписывается (удаления, очистка, блокировка
 // учитываются сами). Ссылки на фото/файлы НЕ храним (живут 1 час) —
@@ -17,12 +20,20 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Platform } from "react-native";
 
 import type { ChatListItem } from "../services/chatService";
+import type { HelpFeedItem } from "../services/helpService";
+import type { DirectoryUser } from "../services/userDirectoryService";
 import type { ChatMessage } from "../services/messageService";
 import { readLaunchMemory } from "./offline";
 
 const ENABLED = Platform.OS !== "web";
 
 const CHATS_PREFIX = "mingi.chats.v1:";
+const PEOPLE_PREFIX = "mingi.people.v1:";
+const FEED_PREFIX = "mingi.feed.v1:";
+
+const MAX_PEOPLE = 50;
+const MAX_SAVED_PEOPLE = 50;
+const MAX_POSTS = 20;
 const DIALOG_PREFIX = "mingi.dialog.v1:";
 const DIALOG_INDEX_PREFIX = "mingi.dialogs.v1:";
 
@@ -152,6 +163,81 @@ export async function removeDialogCache(otherUserId: string): Promise<void> {
 }
 
 // ─────────────────────────────────────────────────────────────────────
+// ЛЮДИ
+export type CachedPeople = {
+  users: DirectoryUser[];
+  favoriteIds: string[];
+  total: number; // сколько всего в сообществе (для «Нас уже N»)
+};
+
+export async function readPeopleCache(): Promise<CachedPeople | null> {
+  try {
+    const uid = await myId();
+    if (!uid) return null;
+    const raw = await AsyncStorage.getItem(PEOPLE_PREFIX + uid);
+    return raw ? (JSON.parse(raw) as CachedPeople) : null;
+  } catch {
+    return null;
+  }
+}
+
+export async function savePeopleCache(
+  allUsers: DirectoryUser[],
+  favoriteIds: string[],
+): Promise<void> {
+  try {
+    const uid = await myId();
+    if (!uid) return;
+
+    // Первые 50 по порядку списка + закладки (до 50), без повторов.
+    const first = allUsers.slice(0, MAX_PEOPLE);
+    const firstIds = new Set(first.map((u) => u.id));
+    const saved = allUsers
+      .filter((u) => favoriteIds.includes(u.id) && !firstIds.has(u.id))
+      .slice(0, MAX_SAVED_PEOPLE);
+
+    // Почту на телефон не кладём — в списке она не нужна.
+    const users = [...first, ...saved].map((u) => ({ ...u, email: null }));
+
+    const value: CachedPeople = {
+      users,
+      favoriteIds: favoriteIds.slice(0, MAX_SAVED_PEOPLE * 2),
+      total: allUsers.length,
+    };
+    await AsyncStorage.setItem(PEOPLE_PREFIX + uid, JSON.stringify(value));
+  } catch {
+    // память — удобство
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// СТЕНА ПОМОЩИ
+export async function readFeedCache(): Promise<HelpFeedItem[] | null> {
+  try {
+    const uid = await myId();
+    if (!uid) return null;
+    const raw = await AsyncStorage.getItem(FEED_PREFIX + uid);
+    return raw ? (JSON.parse(raw) as HelpFeedItem[]) : null;
+  } catch {
+    return null;
+  }
+}
+
+export async function saveFeedCache(posts: HelpFeedItem[]): Promise<void> {
+  try {
+    const uid = await myId();
+    if (!uid) return;
+    // Последние 20; миниатюры фото — это ссылки, которые протухают.
+    const value = posts
+      .slice(0, MAX_POSTS)
+      .map((p) => ({ ...p, thumbUrls: [] }));
+    await AsyncStorage.setItem(FEED_PREFIX + uid, JSON.stringify(value));
+  } catch {
+    // память — удобство
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────
 // ПОЛНАЯ ОЧИСТКА — при выходе из аккаунта.
 export async function clearChatCache(): Promise<void> {
   if (!ENABLED) return;
@@ -160,6 +246,8 @@ export async function clearChatCache(): Promise<void> {
     const ours = keys.filter(
       (k) =>
         k.startsWith(CHATS_PREFIX) ||
+        k.startsWith(PEOPLE_PREFIX) ||
+        k.startsWith(FEED_PREFIX) ||
         k.startsWith(DIALOG_PREFIX) ||
         k.startsWith(DIALOG_INDEX_PREFIX),
     );
