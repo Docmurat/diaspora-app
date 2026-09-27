@@ -462,8 +462,10 @@ export default function RegisterScreen() {
         style={styles.keyboardWrap}
         bottomOffset={24}
         contentContainerStyle={styles.container}
+        // Клавиатура НЕ прячется при прокрутке (решение владельца 27.09):
+        // можно листать анкету к следующему полю, не теряя клавиатуру.
+        // Тап по пустому месту (не по полю и не по кнопке) — прячет её.
         keyboardShouldPersistTaps="handled"
-        keyboardDismissMode="on-drag"
         showsVerticalScrollIndicator={false}
       >
         <Text style={styles.title}>{t("register.title")}</Text>
