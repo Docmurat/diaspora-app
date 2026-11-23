@@ -20,6 +20,10 @@ const MIN_ZOOM = 1;
 const MAX_ZOOM = 3;
 const ZOOM_STEP = 0.25;
 
+// Широкая картинка ресурса: стороны 3:1, на выходе 900×300.
+const WIDE_RATIO = 3;
+const WIDE_OUT_WIDTH = 900;
+
 // До какого размера сразу уменьшаем выбранное фото (длинная сторона, px),
 // чтобы не держать в памяти многомегабайтные оригиналы
 const MAX_SOURCE_SIDE = 1600;
@@ -80,16 +84,32 @@ export default function AvatarCropModal({
   imageHeight,
   onCancel,
   onDone,
+  title,
+  hint,
+  square,
+  allowWide,
 }: {
   visible: boolean;
   uri: string;
   imageWidth?: number;
   imageHeight?: number;
   onCancel: () => void;
-  onDone: (croppedUri: string) => void;
+  onDone: (croppedUri: string, wide?: boolean) => void;
+  // Веха 71: окно служит и картинке ресурса. Без этих настроек
+  // всё работает как раньше (фото профиля, круг).
+  title?: string;
+  hint?: string;
+  square?: boolean; // рамка — квадрат со скруглением, а не круг
+  allowWide?: boolean; // переключатель «Квадрат / Широкая» (3:1)
 }) {
   const { width: screenWidth } = useWindowDimensions();
   const S = Math.min(screenWidth - 88, 300);
+
+  // Широкая рамка 3:1 — для горизонтальных логотипов (картинка
+  // ресурса). W × H — размер рамки на экране; у квадрата W = H = S.
+  const [wide, setWide] = useState(false);
+  const W = S;
+  const H = wide ? Math.round(S / WIDE_RATIO) : S;
 
   const [dims, setDims] = useState({ w: 0, h: 0 });
   const [zoom, setZoom] = useState(1);
@@ -100,11 +120,11 @@ export default function AvatarCropModal({
   const zoomRef = useRef(zoom);
   const dimsRef = useRef(dims);
   const offsetRef = useRef(offset);
-  const sizeRef = useRef(S);
+  const sizeRef = useRef({ w: W, h: H });
   zoomRef.current = zoom;
   dimsRef.current = dims;
   offsetRef.current = offset;
-  sizeRef.current = S;
+  sizeRef.current = { w: W, h: H };
 
   useEffect(() => {
     if (!visible) return;
@@ -112,6 +132,7 @@ export default function AvatarCropModal({
     setZoom(1);
     setOffset({ x: 0, y: 0 });
     setProcessing(false);
+    setWide(false);
 
     if (imageWidth && imageHeight) {
       setDims({ w: imageWidth, h: imageHeight });
@@ -129,9 +150,11 @@ export default function AvatarCropModal({
     const s = sizeRef.current;
     if (!d.w || !d.h) return { x: 0, y: 0 };
 
-    const base = s / Math.min(d.w, d.h);
-    const maxX = Math.max(0, (d.w * base * z - s) / 2);
-    const maxY = Math.max(0, (d.h * base * z - s) / 2);
+    // Картинка всегда закрывает рамку целиком (у квадрата это то же,
+    // что прежнее s / min(w, h)).
+    const base = Math.max(s.w / d.w, s.h / d.h);
+    const maxX = Math.max(0, (d.w * base * z - s.w) / 2);
+    const maxY = Math.max(0, (d.h * base * z - s.h) / 2);
 
     return {
       x: Math.min(maxX, Math.max(-maxX, x)),
@@ -172,33 +195,43 @@ export default function AvatarCropModal({
     setOffset(clampOffset(o.x, o.y, next));
   };
 
+  // Смена формы рамки — кадр начинаем заново (старый сдвиг не годится).
+  const changeShape = (nextWide: boolean) => {
+    if (nextWide === wide) return;
+    setWide(nextWide);
+    setZoom(1);
+    setOffset({ x: 0, y: 0 });
+  };
+
   const handleDone = async () => {
     if (processing) return;
 
     if (!dims.w || !dims.h) {
-      onDone(uri);
+      onDone(uri, wide);
       return;
     }
 
     try {
       setProcessing(true);
 
-      const base = S / Math.min(dims.w, dims.h);
+      const base = Math.max(W / dims.w, H / dims.h);
       const scale = base * zoom;
       const dispW = dims.w * scale;
       const dispH = dims.h * scale;
-      const vx = S / 2 - dispW / 2 + offset.x;
-      const vy = S / 2 - dispH / 2 + offset.y;
+      const vx = W / 2 - dispW / 2 + offset.x;
+      const vy = H / 2 - dispH / 2 + offset.y;
 
-      let cropSize = Math.floor(S / scale);
-      cropSize = Math.min(cropSize, dims.w, dims.h);
+      const cropW = Math.min(Math.floor(W / scale), dims.w);
+      const cropH = Math.min(Math.floor(H / scale), dims.h);
 
       let originX = Math.round(-vx / scale);
       let originY = Math.round(-vy / scale);
-      originX = Math.min(Math.max(0, originX), Math.max(0, dims.w - cropSize));
-      originY = Math.min(Math.max(0, originY), Math.max(0, dims.h - cropSize));
+      originX = Math.min(Math.max(0, originX), Math.max(0, dims.w - cropW));
+      originY = Math.min(Math.max(0, originY), Math.max(0, dims.h - cropH));
 
-      const outSize = Math.min(512, cropSize);
+      // Квадрат — 512×512 (как было), широкая — 900×300.
+      const outW = Math.min(wide ? WIDE_OUT_WIDTH : 512, cropW);
+      const outH = Math.max(1, Math.round((outW * cropH) / cropW));
 
       const result = await ImageManipulator.manipulateAsync(
         uri,
@@ -207,30 +240,30 @@ export default function AvatarCropModal({
             crop: {
               originX,
               originY,
-              width: cropSize,
-              height: cropSize,
+              width: cropW,
+              height: cropH,
             },
           },
-          { resize: { width: outSize, height: outSize } },
+          { resize: { width: outW, height: outH } },
         ],
         { compress: 0.85, format: ImageManipulator.SaveFormat.JPEG },
       );
 
-      onDone(result.uri);
+      onDone(result.uri, wide);
     } catch (e) {
       console.log("crop error:", e);
       // Если обрезать не получилось — используем исходное фото
-      onDone(uri);
+      onDone(uri, wide);
     } finally {
       setProcessing(false);
     }
   };
 
-  const base = dims.w && dims.h ? S / Math.min(dims.w, dims.h) : 1;
+  const base = dims.w && dims.h ? Math.max(W / dims.w, H / dims.h) : 1;
   const dispW = dims.w * base * zoom;
   const dispH = dims.h * base * zoom;
-  const vx = S / 2 - dispW / 2 + offset.x;
-  const vy = S / 2 - dispH / 2 + offset.y;
+  const vx = W / 2 - dispW / 2 + offset.x;
+  const vy = H / 2 - dispH / 2 + offset.y;
 
   return (
     <Modal
@@ -241,14 +274,48 @@ export default function AvatarCropModal({
     >
       <View style={styles.backdrop}>
         <View style={styles.card}>
-          <Text style={styles.title}>Фото профиля</Text>
+          <Text style={styles.title}>{title || "Фото профиля"}</Text>
           <Text style={styles.hint}>
-            Перетащите фото и подберите масштаб — в аватар попадёт область
-            внутри круга
+            {hint ||
+              "Перетащите фото и подберите масштаб — в аватар попадёт область внутри круга"}
           </Text>
 
+          {allowWide && (
+            <View style={styles.shapeRow}>
+              <TouchableOpacity
+                style={[styles.shapePill, !wide && styles.shapePillActive]}
+                onPress={() => changeShape(false)}
+                activeOpacity={0.85}
+              >
+                <Text
+                  style={[
+                    styles.shapePillText,
+                    !wide && styles.shapePillTextActive,
+                  ]}
+                >
+                  Квадрат
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.shapePill, wide && styles.shapePillActive]}
+                onPress={() => changeShape(true)}
+                activeOpacity={0.85}
+              >
+                <Text
+                  style={[
+                    styles.shapePillText,
+                    wide && styles.shapePillTextActive,
+                  ]}
+                >
+                  Широкая
+                </Text>
+              </TouchableOpacity>
+            </View>
+          )}
+
           <View
-            style={[styles.viewport, { width: S, height: S }]}
+            style={[styles.viewport, { width: W, height: H }]}
             {...responder.panHandlers}
           >
             {!!uri && dims.w > 0 && dims.h > 0 && (
@@ -269,7 +336,11 @@ export default function AvatarCropModal({
               pointerEvents="none"
               style={[
                 styles.circle,
-                { width: S, height: S, borderRadius: S / 2 },
+                {
+                  width: W,
+                  height: H,
+                  borderRadius: square || wide ? 20 : S / 2,
+                },
               ]}
             />
           </View>
@@ -353,6 +424,38 @@ const styles = StyleSheet.create({
     textAlign: "center",
     marginTop: 6,
     marginBottom: 16,
+  },
+
+  // Переключатель формы рамки — пилюли, как на вкладке «Знания».
+  shapeRow: {
+    flexDirection: "row",
+    justifyContent: "center",
+    gap: 8,
+    marginBottom: 14,
+  },
+
+  shapePill: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 999,
+    borderWidth: 0.75,
+    borderColor: "rgba(93,140,120,0.45)",
+    backgroundColor: "#FFFFFF",
+  },
+
+  shapePillActive: {
+    backgroundColor: "rgba(105,183,141,0.92)",
+    borderColor: "rgba(255,255,255,0.85)",
+  },
+
+  shapePillText: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: "#3F6B5B",
+  },
+
+  shapePillTextActive: {
+    color: "#FFFFFF",
   },
 
   viewport: {

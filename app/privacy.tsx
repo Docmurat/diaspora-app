@@ -58,8 +58,8 @@ export default function PrivacyScreen() {
 
         <Text style={styles.updated}>
           {en
-            ? "Version 2.0. Effective date: 1 October 2026"
-            : "Версия 2.0. Дата вступления в силу: 01.10.2026"}
+            ? "Version 2.0. Effective date: 24 November 2026"
+            : "Версия 2.0. Дата вступления в силу: 24.11.2026"}
         </Text>
 
         {en ? (
@@ -68,7 +68,7 @@ export default function PrivacyScreen() {
               <Text style={styles.sectionTitle}>{"1. General Provisions"}</Text>
               <Text style={styles.text}>
                 {
-                  "1.1. This Privacy Policy (hereinafter — the Policy) establishes the procedure for the processing and protection of the personal data of users of the Mingi-Tau service — a private community available through a mobile application and a web version (hereinafter — the Service).\n\n1.2. Personal data operator (data controller): Murat Aliy-Sultanovich Kurdzhiev, a natural person; contact address: murat.kurdzhiev@yandex.ru (hereinafter — the Operator). Information about the Operator is included in the register of operators maintained by Roskomnadzor (the Russian supervisory authority for communications, information technology, and mass media).\n\n1.3. The Policy has been developed in accordance with Federal Law No. 152-FZ of 27 July 2006 “On Personal Data”. By using the Service, the user confirms that they have read the Policy; the data is processed on the basis of separately given consent."
+                  "1.1. This Privacy Policy (hereinafter — the Policy) establishes the procedure for the processing and protection of the personal data of users of the Mingi-Tau service — a private community available through a mobile application and a web version (hereinafter — the Service).\n\n1.2. Personal data operator (data controller): Murat Aliy-Sultanovich Kurdzhiev, a natural person; contact address: murat.kurdzhiev@yandex.ru (hereinafter — the Operator). The Operator is included in the register of personal data operators maintained by Roskomnadzor (the Russian supervisory authority for communications, information technology, and mass media), registration number 26-26-055759.\n\n1.3. The Policy has been developed in accordance with Federal Law No. 152-FZ of 27 July 2006 “On Personal Data”. By using the Service, the user confirms that they have read the Policy; the data is processed on the basis of separately given consent."
                 }
               </Text>
             </View>
@@ -169,8 +169,9 @@ export default function PrivacyScreen() {
                 доступного через мобильное приложение и веб-версию (далее —
                 Сервис).{"\n\n"}1.2. Оператор персональных данных: Курджиев
                 Мурат Алий-Султанович, физическое лицо, адрес для обращений:
-                murat.kurdzhiev@yandex.ru (далее — Оператор). Сведения об
-                Операторе включаются в реестр операторов Роскомнадзора.
+                murat.kurdzhiev@yandex.ru (далее — Оператор). Оператор включён в
+                реестр операторов, осуществляющих обработку персональных данных
+                (Роскомнадзор), регистрационный номер 26-26-055759.
                 {"\n\n"}1.3. Политика разработана в соответствии с Федеральным
                 законом от 27.07.2006 № 152-ФЗ «О персональных данных».
                 Используя Сервис, пользователь подтверждает ознакомление с
@@ -198,12 +199,12 @@ export default function PrivacyScreen() {
                 аналитические трекеры не используются. Для работы без
                 подключения к сети в памяти устройства пользователя (мобильное
                 приложение) сохраняется ограниченный объём последних данных —
-                список переписок и последние сообщения, часть списка
-                участников и последние публикации Стены помощи; эти данные
-                удаляются при выходе из учётной записи.{"\n\n"}2.4.
-                Специальные категории персональных данных и биометрические
-                персональные данные не собираются и не обрабатываются;
-                фотография используется исключительно как изображение профиля.
+                список переписок и последние сообщения, часть списка участников
+                и последние публикации Стены помощи; эти данные удаляются при
+                выходе из учётной записи.{"\n\n"}2.4. Специальные категории
+                персональных данных и биометрические персональные данные не
+                собираются и не обрабатываются; фотография используется
+                исключительно как изображение профиля.
               </Text>
             </View>
 

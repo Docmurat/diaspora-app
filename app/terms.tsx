@@ -57,7 +57,7 @@ export default function TermsScreen() {
         <Tekmet style={styles.tekmet} />
 
         <Text style={styles.updated}>
-          {en ? "Version 2.0. Effective date: 1 October 2026" : "Версия 2.0. Дата вступления в силу: 01.10.2026"}
+          {en ? "Version 2.0. Effective date: 24 November 2026" : "Версия 2.0. Дата вступления в силу: 24.11.2026"}
         </Text>
 
         {en ? (

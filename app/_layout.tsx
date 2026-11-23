@@ -83,6 +83,8 @@ export default function RootLayout() {
             <Stack.Screen name="profile-deleted" />
             <Stack.Screen name="contact-admin" />
             <Stack.Screen name="report-user" />
+            <Stack.Screen name="suggest-resource" />
+            <Stack.Screen name="resource-edit" />
             <Stack.Screen name="moderation" />
             <Stack.Screen name="moderation-case-details" />
             <Stack.Screen name="moderation-edit-profile" />
